@@ -1,5 +1,7 @@
-# Local dev stack (Build Guide Phase 7). Run .\scripts\local-sql.ps1 to start SQL and load the scripts.
-# LOCAL_SA_PASSWORD comes from the git-ignored .env file, which local-sql.ps1 generates (ADR-005).
+# Local dev stack (Build Guide Phase 7). Run .\scripts\local-sql.ps1 to start SQL, load the scripts and create the
+# app's database user; then `docker compose up -d --build orders` starts the order service on http://127.0.0.1:8000.
+# LOCAL_SA_PASSWORD comes from the git-ignored .env file and the app's password from the git-ignored
+# .local/secret.txt; local-sql.ps1 generates both (ADR-005, ADR-012).
 services:
   sql:
     image: mcr.microsoft.com/mssql/server:2022-latest
@@ -10,3 +12,16 @@ services:
       MSSQL_MEMORY_LIMIT_MB: "2048"
     ports: ["127.0.0.1:1433:1433"]
     volumes: ["./sql:/sql:ro"]
+  orders:
+    build: src/order-service
+    ports: ["127.0.0.1:8000:8000"]
+    environment:
+      # A local file stands in for Key Vault (ADR-012)
+      SECRET_SOURCE: file:/run/livefire/secret.txt
+      SECRET_REFRESH_SECONDS: "2"
+      SQL_SERVER_FQDN: sql
+      SQL_DB_NAME: orders
+      SQL_USER: order_app
+      SQL_TRUST_CERT: "yes"
+    volumes: ["./.local:/run/livefire"]
+    depends_on: [sql]
