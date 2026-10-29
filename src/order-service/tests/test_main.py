@@ -268,6 +268,70 @@ def test_api_read_returns_503_when_secret_unavailable(client, monkeypatch):
     assert response.status_code == 503
 
 
+# ---- input validation and error hygiene ----
+
+def test_api_read_hides_secret_error_detail(client, monkeypatch, caplog):
+    monkeypatch.setattr(main, "secrets", StubSecrets(error=SecretUnavailable("vault token abc123")))
+    with caplog.at_level(logging.INFO, logger="orders"):
+        response = client.get("/api/orders/abc")
+    assert response.status_code == 503
+    assert response.json() == {"error": "SecretUnavailable"}
+    assert "abc123" not in response.text
+    assert any(r.name == "orders" and r.exc_info is not None for r in caplog.records)
+
+
+def test_api_read_hides_database_error_detail(client, monkeypatch):
+    def boom(password, order_id):
+        raise RuntimeError("Server=prod;Pwd=hunter2")
+
+    monkeypatch.setattr(main.db, "get_order", boom)
+    response = client.get("/api/orders/abc")
+    assert response.status_code == 503
+    assert response.json() == {"error": "RuntimeError"}
+    assert "hunter2" not in response.text
+
+
+def test_unknown_sku_on_cart_returns_404(client):
+    assert client.get("/cart", params={"sku": "SKU-999"}).status_code == 404
+
+
+def test_unknown_sku_on_checkout_page_returns_404(client):
+    assert client.get("/checkout", params={"sku": "SKU-999"}).status_code == 404
+
+
+def test_api_order_with_invalid_json_returns_400(client, stubs):
+    response = client.post("/api/orders", content=b"{not json",
+                           headers={"content-type": "application/json"})
+    assert response.status_code == 400
+    assert stubs.db.placed == []
+
+
+@pytest.mark.parametrize("body", [[1, 2], "SKU-001", 5, None, {}, {"sku": 7}, {"sku": ["SKU-001"]}])
+def test_api_order_with_malformed_body_returns_400(client, stubs, body):
+    response = client.post("/api/orders", json=body)
+    assert response.status_code == 400
+    assert stubs.db.placed == []
+
+
+def test_api_order_with_unknown_sku_returns_404(client, stubs):
+    response = client.post("/api/orders", json={"sku": "SKU-999"})
+    assert response.status_code == 404
+    assert stubs.db.placed == []
+
+
+@pytest.mark.parametrize("value", ["bad id", "x" * 65, "a;b", b"id\xc3\xa9", "<script>", ""])
+def test_invalid_drill_id_is_treated_as_absent(client, stubs, value):
+    client.post("/checkout", data={"sku": "SKU-001"}, headers={"x-drill-id": value})
+    assert stubs.db.placed == [("pw-test", "SKU-001", 49.0, None)]
+    assert "drill_id" not in stubs.tracer.spans[0][1].attributes
+
+
+def test_drill_id_at_the_length_limit_with_allowed_characters_is_kept(client, stubs):
+    drill_id = "aZ09._:-" * 8
+    client.post("/checkout", data={"sku": "SKU-001"}, headers={"x-drill-id": drill_id})
+    assert stubs.db.placed[0][3] == drill_id
+
+
 # ---- telemetry setup ----
 
 def test_telemetry_targets_the_orders_logger_when_connection_string_is_set(monkeypatch):
