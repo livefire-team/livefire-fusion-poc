@@ -147,20 +147,33 @@ Status values: Proposed | Accepted | Superseded | Rejected
   that touch `src/order-service/**` (not workflow-only changes), and grants `packages: write` to the whole workflow. Our PRs are
   stacked (each PR's base is the previous PR's branch), tests now need `requirements-dev.txt` (ADR-009) and a
   coverage gate, and we want the image proven to start before it is published.
-- **Options considered:** (1) the guide's single job as written; (2) two jobs, `test` then `image`, with least
-  privilege and a container smoke test.
-- **Decision:** Option 2. Triggers: `push` to `main` and `pull_request` with no base-branch filter (so stacked PRs
+- **Options considered:** (1) the guide's single job as written; (2) two jobs, `test` then `image`, with
+  `packages: write` on `image`; (3) three jobs, `test` -> `image` -> `publish`, where only `publish` can write
+  packages and it never runs for pull requests.
+- **Decision:** Option 3 (revised in PR #7 review; option 2 still gave the pull-request build a job token that
+  could write packages). Triggers: `push` to `main` and `pull_request` with no base-branch filter (so stacked PRs
   are checked), both limited to `src/order-service/**` and the workflow file, plus manual `workflow_dispatch`.
-  `test`: Python 3.12, `unixodbc` (pyodbc needs `libodbc`), `requirements-dev.txt`, pytest with
-  `--cov-fail-under=80`. `image` (needs `test`): `docker build`, run the container, `/health` must return 200
-  `{"status":"up"}` and `/health/dependencies` must answer (200 or 503), then on `main` only log in to GHCR with
-  `GITHUB_TOKEN` and push. Workflow permission is `contents: read`; only the `image` job gets `packages: write`.
+  - `test` (`contents: read`): Python 3.12, `unixodbc` (pyodbc needs `libodbc`), `requirements-dev.txt`, pytest
+    with `--cov-fail-under=80`.
+  - `image` (needs `test`, `contents: read`): `docker build`, run the container bound to `127.0.0.1:8000`,
+    `/health` must return 200 `{"status":"up"}` and `/health/dependencies` must answer (200 or 503); container
+    logs are printed on any failure. The tested image is saved with `docker save` and uploaded as a one-day
+    artifact; its image ID is a job output.
+  - `publish` (needs `image`, only `if: github.event_name == 'push' && github.ref == 'refs/heads/main'`,
+    `contents: read` + `packages: write`): downloads the artifact, `docker load`s it, fails unless the image ID
+    equals the one `image` tested, logs in to GHCR with `GITHUB_TOKEN` and pushes `sha-<short sha>` and `g1`.
   The smoke container sets `SECRET_SOURCE=file:/nonexistent` because the default Key Vault source needs
-  `KEYVAULT_URL` at start-up and CI has no Azure. Plain `docker build`/`docker push` replace
-  `docker/build-push-action` so the pushed image is exactly the one smoke-tested. Actions are pinned to major
-  versions as in the guide (`actions/checkout@v4`, `actions/setup-python@v5`, `docker/login-action@v3`).
-- **Consequences:** A broken image or a coverage drop blocks publishing. Two jobs cost a little more CI time.
-  Major-version pins pick up action fixes automatically; pinning to commit SHAs is a possible G2 hardening step.
+  `KEYVAULT_URL` at start-up and CI has no Azure. Plain `docker build`/`save`/`load`/`push` replace
+  `docker/build-push-action` so the pushed image is exactly the one smoke-tested. Every checkout uses
+  `persist-credentials: false`. Every action is pinned to a full commit SHA with the release tag in a comment
+  (`actions/checkout` v7.0.1, `actions/setup-python` v7.1.0, `actions/upload-artifact` v7.0.2,
+  `actions/download-artifact` v8.0.2, `docker/login-action` v4.7.0; all run on Node 24).
+  The Dockerfile checks the Microsoft package signing key's fingerprint before trusting it and labels the image
+  with `org.opencontainers.image.source` so GHCR links the package to this repo.
+- **Consequences:** A broken image or a coverage drop blocks publishing, and pull-request runs never hold a
+  token that can write packages. Three jobs and the image artifact cost a little more CI time and storage
+  (artifact kept one day). SHA pins do not pick up action fixes automatically: bump them deliberately (look up
+  the tag's commit with `gh api repos/<owner>/<repo>/git/ref/tags/<tag>`, dereferencing annotated tags).
 - **Implemented in:** PR #7 (`.github/workflows/order-service.yml`, `src/order-service/Dockerfile`)
 
 <!-- Copy the block below for each new decision -->

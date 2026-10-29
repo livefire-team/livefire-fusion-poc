@@ -80,6 +80,10 @@ Status values: not started | in progress | PR open | merged | blocked
 - PR #7 opened: `src/order-service/Dockerfile` (guide, ODBC 18, non-root) + `.dockerignore`, workflow
   `.github/workflows/order-service.yml` (test -> image build + smoke test -> push `sha-`/`g1` from `main` only);
   local image built and smoke-tested; ADR-010 and ADR-011 added.
+- PR #7 review fixes: workflow split into `test` -> `image` (read-only, smoke test, image saved as artifact) ->
+  `publish` (`main` push only, `packages: write`, pushes the same tested image); actions pinned to commit SHAs;
+  `persist-credentials: false`; smoke port bound to localhost. Dockerfile: OCI source label, Microsoft key
+  fingerprint check, curl purged. `.dockerignore`: `.env*`, `.git`. ADR-011 revised. Verified by CI (no local Docker).
 
 ## Blockers / questions for the user or other workstreams
 - Teammates (WS2–WS5) are not yet invited to the `livefire-team` org/repo — need their GitHub usernames.
