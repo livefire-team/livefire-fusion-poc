@@ -4,7 +4,7 @@
 # .local/secret.txt; local-sql.ps1 generates both (ADR-005, ADR-012).
 services:
   sql:
-    image: mcr.microsoft.com/mssql/server:2022-latest
+    image: mcr.microsoft.com/mssql/server:2022-CU27-GDR1-ubuntu-22.04
     environment:
       ACCEPT_EULA: "Y"
       MSSQL_SA_PASSWORD: ${LOCAL_SA_PASSWORD:?run scripts/local-sql.ps1 first to create .env}
