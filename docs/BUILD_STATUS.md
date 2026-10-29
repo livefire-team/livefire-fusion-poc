@@ -34,12 +34,13 @@ if `git`/`gh`/`az`/`docker` are "not recognized". ODBC Driver 18 is not installe
 | 2 | docs: twin contract + plan | `contracts/twin-interface.md` (Phase 1) and this plan | in progress | |
 | 3 | feat(sql): schema + seed | Phase 2 + compose file with local SQL Server; run twice | not started | |
 | 4 | feat(infra): twin.bicep | Phase 5 + ADRs (1 replica, /health probes, Basic SQL, plain resources); `az bicep build` | not started | |
-| 5 | feat(order-service): secret provider + catalog | Phase 3 steps 1–3, 7, TDD; main commit uses Phase 6 step 1 message exactly | not started | |
+| 5 | feat(order-service): secret provider + catalog | Phase 3 steps 1–3, 7, TDD | not started | |
 | 6 | feat(order-service): db, pages, health, telemetry | Phase 3 steps 4–6, TDD with DB stubbed | not started | |
 | 7 | ci: Dockerfile + Actions -> GHCR | Phase 4; `sha-<commit>` + `:g1`; user makes package public | not started | |
-| 8 | order-service follow-up + runbook v1 | Phase 6 steps 2–3 (details in `CLAUDE.local.md`), merge commit | not started | |
-| 9 | test: local False-Green rehearsal | Phase 7 steps 1–4; app in compose, file as Key Vault stand-in | not started | |
-| 10 | docs: hand-offs | Phase 8 (commit hashes go to WS3 privately, not in repo) | not started | |
+| 8 | docs: runbook v1 | Phase 6 | not started | |
+| 9 | test: local Docker Compose rehearsal | Phase 7 steps 1–4; app in compose, file as Key Vault stand-in | not started | |
+| 10 | docs: hand-offs | Phase 8 | not started | |
+| G1 | G1 checklist | Phase 8 step 5 items all ticked | not started | |
 | 11 | ci: security scans (G2) | gitleaks, pip-audit, Trivy, CodeQL | not started | |
 | 12 | ci: candidate builds (G2) | `candidate/*` -> `candidate-<drill-id>` tags | not started | |
 | 13 | feat: load generator (G2) | Container Apps Job, steady POST /api/orders + backlog retries | not started | |
@@ -73,7 +74,7 @@ Status values: not started | in progress | PR open | merged | blocked
 
 ## Hand-offs owed
 - [ ] WS2: image name/tag, twin.bicep merged, contract additions (appInsightsConnectionString output, principalType + secretRefreshSeconds), local stack
-- [ ] WS3: hand-off items (details in `CLAUDE.local.md`), runbook path, telemetry names
+- [ ] WS3: Phase 8 items, runbook path, telemetry names
 - [ ] WS4: allowed/protected paths for the Engineer
 - [ ] WS5: metric names (orders_completed, orders_failed{reason})
 

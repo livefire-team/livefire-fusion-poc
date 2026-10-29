@@ -37,7 +37,8 @@ Version: 1 (2026-10-28) — copied from the WS2 guide's Phase 2 contract via the
 
 | Item | Contract | Delivered in |
 |---|---|---|
-| Image | `ghcr.io/livefire-team/order-service:g1` (org name lowercase); immutable `sha-<commit>` tags for rehearsals; package public (ADR-002) | `.github/workflows/order-service.yml` |
+| Image | `ghcr.io/livefire-team/order-service:g1` (org name lowercase) | `.github/workflows/order-service.yml` |
+| Image (WS1 addition) | Immutable `sha-<commit>` tags for rehearsals; package public (ADR-002) | `.github/workflows/order-service.yml` |
 
 ## Additions WS2 needs to know about
 1. New output `appInsightsConnectionString`. WS2 adds to `main.bicep`:
