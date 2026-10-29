@@ -46,7 +46,7 @@ jobs:
       - name: Scan the full git history for secrets
         run: |
           "$RUNNER_TEMP/gitleaks" version
-          "$RUNNER_TEMP/gitleaks" git --redact --verbose --exit-code 1 .
+          "$RUNNER_TEMP/gitleaks" git --config .gitleaks.toml --redact --verbose --exit-code 1 .
 
   pip-audit:
     runs-on: ubuntu-latest
