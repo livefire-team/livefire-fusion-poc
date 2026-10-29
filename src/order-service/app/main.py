@@ -1,19 +1,20 @@
 import logging
 import os
+import re
 
 # Telemetry first: the distro must patch FastAPI before FastAPI is imported.
 if os.environ.get("APPLICATIONINSIGHTS_CONNECTION_STRING"):
     from azure.monitor.opentelemetry import configure_azure_monitor
     configure_azure_monitor(logger_name="orders")
 
-from fastapi import FastAPI, Form, Request  # noqa: E402
+from fastapi import FastAPI, Form, HTTPException, Request  # noqa: E402
 from fastapi.responses import JSONResponse  # noqa: E402
 from fastapi.templating import Jinja2Templates  # noqa: E402
 from opentelemetry import metrics, trace  # noqa: E402
 
 import db  # noqa: E402
 from catalog import PRODUCTS  # noqa: E402
-from secret_provider import SecretProvider, SecretUnavailable, build_fetch, fresh_check  # noqa: E402
+from secret_provider import SecretProvider, build_fetch, fresh_check  # noqa: E402
 
 log = logging.getLogger("orders")
 log.setLevel(logging.INFO)
@@ -25,12 +26,14 @@ orders_failed = meter.create_counter("orders_failed")
 app = FastAPI(title="LiveFire order service")
 templates = Jinja2Templates(directory=os.path.join(os.path.dirname(__file__), "templates"))
 secrets = SecretProvider(build_fetch(), float(os.environ.get("SECRET_REFRESH_SECONDS", "30")))
+DRILL_ID_PATTERN = re.compile(r"[A-Za-z0-9._:-]{1,64}")
 _last_good = {}   # last password the health check read, so it can still ping SQL during a fault
 
 
 @app.middleware("http")
 async def drill_context(request: Request, call_next):
-    request.state.drill_id = request.headers.get("x-drill-id")
+    raw = request.headers.get("x-drill-id")
+    request.state.drill_id = raw if raw is not None and DRILL_ID_PATTERN.fullmatch(raw) else None
     if request.state.drill_id:
         trace.get_current_span().set_attribute("drill_id", request.state.drill_id)
     return await call_next(request)
@@ -60,6 +63,13 @@ def _confirmation(order_id: str) -> str:
     return "LF-" + order_id.replace("-", "")[:8].upper()
 
 
+def _product_page(request: Request, template: str, sku: str):
+    product = PRODUCTS.get(sku)
+    if product is None:
+        raise HTTPException(status_code=404, detail="unknown sku")
+    return templates.TemplateResponse(request, template, {"product": product})
+
+
 # ---- pages the referee walks through ----
 
 @app.get("/")
@@ -69,12 +79,12 @@ def shop(request: Request):
 
 @app.get("/cart")
 def cart(request: Request, sku: str):
-    return templates.TemplateResponse(request, "cart.html", {"product": PRODUCTS[sku]})
+    return _product_page(request, "cart.html", sku)
 
 
 @app.get("/checkout")
 def checkout(request: Request, sku: str):
-    return templates.TemplateResponse(request, "checkout.html", {"product": PRODUCTS[sku]})
+    return _product_page(request, "checkout.html", sku)
 
 
 @app.post("/checkout")
@@ -94,9 +104,17 @@ def place_order_page(request: Request, sku: str = Form(...)):
 
 @app.post("/api/orders")
 async def create_order(request: Request):
-    body = await request.json()
     try:
-        order_id = _place(body["sku"], request.state.drill_id)
+        body = await request.json()
+    except ValueError:
+        return JSONResponse({"error": "invalid JSON"}, status_code=400)
+    sku = body.get("sku") if isinstance(body, dict) else None
+    if not isinstance(sku, str):
+        return JSONResponse({"error": "sku is required"}, status_code=400)
+    if sku not in PRODUCTS:
+        return JSONResponse({"error": "unknown sku"}, status_code=404)
+    try:
+        order_id = _place(sku, request.state.drill_id)
     except Exception as exc:
         return JSONResponse({"error": type(exc).__name__}, status_code=503)
     return JSONResponse({"order_id": order_id, "confirmation": _confirmation(order_id)}, status_code=201)
@@ -106,8 +124,9 @@ async def create_order(request: Request):
 def read_order(order_id: str):
     try:
         order = db.get_order(secrets.get(), order_id)
-    except SecretUnavailable as exc:
-        return JSONResponse({"error": str(exc)}, status_code=503)
+    except Exception as exc:
+        log.exception("order lookup failed")
+        return JSONResponse({"error": type(exc).__name__}, status_code=503)
     return order or JSONResponse({"error": "not found"}, status_code=404)
 
 
