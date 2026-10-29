@@ -1,0 +1,32 @@
+# Local-only files (Key Vault stand-in secrets, scratch) — never committed
+.local/
+.env
+.env.*
+!.env.example
+
+# Spec documents and private working notes stay outside git (ADR-004)
+docs/reference/
+CLAUDE.local.md
+*.pem
+*.pfx
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+.coverage
+.coverage.*
+coverage.xml
+htmlcov/
+*.egg-info/
+
+# Azure / azd
+.azure/
+
+# Editors and OS
+.vscode/
+.idea/
+Thumbs.db
+.DS_Store
