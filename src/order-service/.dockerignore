@@ -8,3 +8,5 @@ tests/
 htmlcov/
 requirements-dev.txt
 pytest.ini
+.env*
+.git
