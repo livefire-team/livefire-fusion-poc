@@ -5,8 +5,8 @@
 $ErrorActionPreference = 'Continue'
 $RepoRoot = Split-Path -Parent $PSScriptRoot
 $EnvFile = Join-Path $RepoRoot '.env'
-$SqlCmd = '/opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -C -b'
-$ReadyTimeoutSeconds = 90
+$SqlCmd = '/opt/mssql-tools18/bin/sqlcmd'
+$ReadyTimeoutSeconds = 300  # first start on a low-memory PC takes 3-4 minutes
 $VerifyQuery = @'
 SET NOCOUNT ON;
 SELECT sku, name, price FROM dbo.products ORDER BY sku;
@@ -16,7 +16,9 @@ SELECT name AS index_name FROM sys.indexes WHERE name = 'ix_orders_drill_id';
 
 function New-LocalPassword {
     # SQL Server needs upper, lower, digit and symbol; avoid ; } ! (connection-string breakers)
-    $hex = -join ((1..16) | ForEach-Object { '{0:x}' -f (Get-Random -Maximum 16) })
+    $bytes = New-Object byte[] 12
+    [System.Security.Cryptography.RandomNumberGenerator]::Create().GetBytes($bytes)
+    $hex = -join ($bytes | ForEach-Object { '{0:x2}' -f $_ })
     return "Ld#$($hex)Z9"
 }
 
@@ -26,18 +28,23 @@ function Initialize-EnvFile {
     Write-Output "Created $EnvFile with a generated local SA password (git-ignored)."
 }
 
+function Set-SqlCmdPassword {
+    # sqlcmd reads SQLCMDPASSWORD; "-e SQLCMDPASSWORD" (name only) copies it from this process, so the password
+    # never appears on a command line. No bash -c and no stdin pipe: PowerShell 5.1 mangles nested quotes and
+    # prefixes piped text with a byte-order mark that SQL Server rejects.
+    $line = Get-Content $EnvFile | Where-Object { $_ -like 'LOCAL_SA_PASSWORD=*' } | Select-Object -First 1
+    if (-not $line) { throw "LOCAL_SA_PASSWORD missing from $EnvFile" }
+    $env:SQLCMDPASSWORD = $line.Substring('LOCAL_SA_PASSWORD='.Length)
+}
+
 function Invoke-SqlCmd([string]$Database, [string]$Query, [string]$File) {
-    # Queries go through stdin (-i /dev/stdin) so no quoting crosses PowerShell, docker and bash.
-    # The password never leaves the container: sqlcmd reads SQLCMDPASSWORD set from the container's own env.
-    # Some PowerShell hosts prefix piped text with a UTF-8 byte-order mark, which SQL Server rejects; sed strips it.
-    $sqlcmd = "SQLCMDPASSWORD=`$MSSQL_SA_PASSWORD $SqlCmd -W -d $Database"
-    if ($File) { docker compose exec -T sql bash -c "$sqlcmd -i $File" }
-    else { $Query | docker compose exec -T sql bash -c "sed '1s/^\xEF\xBB\xBF//' | $sqlcmd -i /dev/stdin" }
+    $source = if ($File) { @('-i', $File) } else { @('-Q', $Query) }
+    docker compose exec -T -e SQLCMDPASSWORD sql $SqlCmd -S localhost -U sa -C -b -W -d $Database @source
 }
 
 function Invoke-Sql([string]$Database, [string]$Query, [string]$File) {
     Invoke-SqlCmd -Database $Database -Query $Query -File $File
-    if ($LASTEXITCODE -ne 0) { throw "sqlcmd failed (exit $LASTEXITCODE) on database ${Database}: $Query$File" }
+    if ($LASTEXITCODE -ne 0) { throw "sqlcmd failed (exit $LASTEXITCODE) on database ${Database}$(if ($File) { " running $File" })" }
 }
 
 function Wait-SqlReady {
@@ -53,6 +60,7 @@ function Wait-SqlReady {
 Push-Location $RepoRoot
 try {
     Initialize-EnvFile
+    Set-SqlCmdPassword
     docker compose up -d sql
     if ($LASTEXITCODE -ne 0) { throw 'docker compose up failed. Is Docker Desktop running?' }
     Wait-SqlReady
@@ -63,5 +71,6 @@ try {
     Write-Output 'Local SQL ready: schema and seed applied.'
 }
 finally {
+    Remove-Item Env:SQLCMDPASSWORD -ErrorAction SilentlyContinue
     Pop-Location
 }

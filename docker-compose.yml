@@ -6,5 +6,7 @@ services:
     environment:
       ACCEPT_EULA: "Y"
       MSSQL_SA_PASSWORD: ${LOCAL_SA_PASSWORD:?run scripts/local-sql.ps1 first to create .env}
+      # SQL Server's minimum; keeps it from taking most of a small dev PC's memory
+      MSSQL_MEMORY_LIMIT_MB: "2048"
     ports: ["127.0.0.1:1433:1433"]
     volumes: ["./sql:/sql:ro"]
