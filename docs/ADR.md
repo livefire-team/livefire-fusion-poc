@@ -112,6 +112,20 @@ Status values: Proposed | Accepted | Superseded | Rejected
   in return the file is short, readable and stable for WS2's `main.bicep`.
 - **Implemented in:** PR #4 (`infra/modules/twin.bicep`)
 
+## ADR-009: Test-only Python packages in `requirements-dev.txt`
+- **Date:** 2026-10-29
+- **Status:** Accepted
+- **Context:** The container image only needs the runtime packages in `src/order-service/requirements.txt`
+  (pinned versions from the build guide). Tests also need pytest and pytest-cov, and an unpinned
+  `pip install pytest` can change behaviour between runs.
+- **Options considered:** (1) add pytest to `requirements.txt`; (2) install pytest unpinned in CI;
+  (3) a separate `requirements-dev.txt` that starts with `-r requirements.txt` and pins the test tools.
+- **Decision:** Option 3 (pytest 8.4.2, pytest-cov 7.0.0). `src/order-service/pytest.ini` puts `app/` on the
+  import path so `pytest` works from `src/order-service` or the repo root.
+- **Consequences:** The image stays free of test tools; local runs and CI use the same test versions.
+  CI should install `requirements-dev.txt` instead of `requirements.txt pytest`.
+- **Implemented in:** PR #5 (`src/order-service/requirements-dev.txt`, `src/order-service/pytest.ini`)
+
 <!-- Copy the block below for each new decision -->
 
 ## ADR-00N: <short title>
