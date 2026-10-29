@@ -1,0 +1,83 @@
+name: order-service
+
+# Pull requests (any base branch, so stacked PRs are checked too) are tested and built, never pushed.
+# Pushes to main are tested, built, smoke-tested and then pushed to GHCR as :sha-<short sha> and :g1.
+on:
+  push:
+    branches: [main]
+    paths: ['src/order-service/**', '.github/workflows/order-service.yml']
+  pull_request:
+    paths: ['src/order-service/**', '.github/workflows/order-service.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: order-service-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: System library for pyodbc
+        run: sudo apt-get update && sudo apt-get install -y unixodbc
+      - name: Install dependencies
+        run: pip install -r src/order-service/requirements-dev.txt
+      - name: Unit tests with coverage
+        run: pytest -q src/order-service --cov=src/order-service/app --cov-fail-under=80
+
+  image:
+    needs: test
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Image name and tags (GHCR needs lowercase)
+        run: |
+          echo "IMAGE=ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/order-service" >> "$GITHUB_ENV"
+          echo "SHORT_SHA=${GITHUB_SHA::7}" >> "$GITHUB_ENV"
+      - name: Build image
+        run: docker build -t order-service:ci src/order-service
+      # No Azure in CI: point the secret source at a missing file so the app starts without Key Vault.
+      # /health must answer 200; /health/dependencies must answer (503 is expected without SQL/Key Vault).
+      - name: Smoke test (/health and /health/dependencies)
+        run: |
+          docker run -d --name smoke -p 8000:8000 -e SECRET_SOURCE=file:/nonexistent order-service:ci
+          ok=""
+          for i in $(seq 1 30); do
+            if body=$(curl -fsS http://127.0.0.1:8000/health); then ok=1; break; fi
+            sleep 1
+          done
+          if [ -z "$ok" ]; then docker logs smoke; exit 1; fi
+          echo "/health -> $body"
+          [ "$body" = '{"status":"up"}' ] || { echo "unexpected /health body"; exit 1; }
+          code=$(curl -sS -o deps.json -w '%{http_code}' http://127.0.0.1:8000/health/dependencies)
+          echo "/health/dependencies -> $code $(cat deps.json)"
+          case "$code" in 200|503) ;; *) docker logs smoke; exit 1 ;; esac
+      - name: Remove smoke container
+        if: always()
+        run: docker rm -f smoke || true
+      - name: Log in to GHCR
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Push :sha-<short sha> and :g1
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        run: |
+          docker tag order-service:ci "$IMAGE:sha-$SHORT_SHA"
+          docker tag order-service:ci "$IMAGE:g1"
+          docker push "$IMAGE:sha-$SHORT_SHA"
+          docker push "$IMAGE:g1"
