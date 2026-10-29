@@ -7,8 +7,11 @@
 **Current gate target:** G2 (Nov 2)
 
 ## FIRST THING THE NEXT SESSION SHOULD DO
-Plan item #3 on branch `feat/sql-schema-seed`: make sure Docker Desktop is running (`docker info`), then run
-`.\scripts\local-sql.ps1` twice and confirm both runs succeed; then open/finish PR #3 and ask "Merge PR #3?".
+Plan item #3 on branch `feat/sql-schema-seed` (committed and pushed, no PR yet). Blocker: Docker needs CPU
+virtualization, which was OFF in the HP firmware. Ask the user whether they turned on "Virtualization Technology"
+in the BIOS (HP: Esc then F10 at power-on). Check with
+`(Get-CimInstance Win32_Processor).VirtualizationFirmwareEnabled` (must be True) and `docker info`. Then run
+`.\scripts\local-sql.ps1` twice, open PR #3, review, ask "Merge PR #3?".
 
 ## Environment facts
 | Item | Value |
@@ -21,7 +24,7 @@ Plan item #3 on branch `feat/sql-schema-seed`: make sure Docker Desktop is runni
 | Azure resource group | not yet deployed (will be `rg-lf-twin-<env>`, created by WS2) |
 | Image | ghcr.io/livefire-team/order-service:<tag> (not built yet) |
 | GitHub account | venkataare (gh logged in, HTTPS); git identity "Venkata Are" / noreply email |
-| Tools verified | git 2.56 ✅ / gh 2.103 ✅ / python 3.12.10 ✅ / docker 29.9 (CLI ✅; Desktop first launch pending) / az 2.91 + bicep 0.48 ✅ |
+| Tools verified | git 2.56 ✅ / gh 2.103 ✅ / python 3.12.10 ✅ / docker 29.9 (CLI ✅; engine ❌ until BIOS virtualization is on) / az 2.91 + bicep 0.48 ✅ |
 
 Machine note: the Claude app's shell may start with a stale PATH. Prefix PowerShell commands with
 `$env:Path = [Environment]::GetEnvironmentVariable('Path','Machine') + ';' + [Environment]::GetEnvironmentVariable('Path','User')`
@@ -66,6 +69,9 @@ Status values: not started | in progress | PR open | merged | blocked
 - PR #2 contract v1 + plan merged (merge commit 9b698f1). Team message drafted for the user to send.
 
 ## Blockers / questions for the user or other workstreams
+- Docker engine cannot start: "Virtualization is disabled in firmware" (HP All-in-One 24-df0xxx, AMD Ryzen 3 3250U,
+  BIOS AMI F.33). User enables SVM / "Virtualization Technology" in BIOS setup. Fallback if impossible: run the
+  SQL and image tests in GitHub Actions instead of locally.
 - Teammates (WS2–WS5) are not yet invited to the `livefire-team` org/repo — need their GitHub usernames.
 - Tell WS2–WS5 the repo URL and image path (`ghcr.io/livefire-team/order-service`).
 - Tell WS3: keep `docs/` and `CLAUDE.md` off the agents' `read_repository_context` allowlist (ADR-004).
