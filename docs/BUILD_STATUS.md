@@ -7,9 +7,8 @@
 **Current gate target:** G2 (Nov 2)
 
 ## FIRST THING THE NEXT SESSION SHOULD DO
-If PR #1 (`chore/project-scaffold`) is still open: check its CI/review state and ask the user "Merge PR #1?".
-If it is merged: `git checkout main; git pull --ff-only`, then do step 5 of the starter prompt — turn Build Guide
-Phases 1–8 into an ordered PR plan, get the user's approval, and record it in the Plan table below.
+If PR #2 (`docs/twin-contract`) is still open: review state, then ask the user "Merge PR #2?".
+If it is merged: `git checkout main; git pull --ff-only`, then start plan item #3 (`feat/sql-schema-seed`).
 
 ## Environment facts
 | Item | Value |
@@ -18,7 +17,7 @@ Phases 1–8 into an ordered PR plan, get the user's approval, and record it in 
 | Local path | C:\Users\venka\projects\livefire-fusion-poc |
 | Kit folder | C:\Users\venka\projects\livefire-ws1-kit |
 | Default branch | main |
-| Working branch | chore/project-scaffold |
+| Working branch | docs/twin-contract |
 | Azure resource group | not yet deployed (will be `rg-lf-twin-<env>`, created by WS2) |
 | Image | ghcr.io/livefire-team/order-service:<tag> (not built yet) |
 | GitHub account | venkataare (gh logged in, HTTPS); git identity "Venkata Are" / noreply email |
@@ -28,42 +27,54 @@ Machine note: the Claude app's shell may start with a stale PATH. Prefix PowerSh
 `$env:Path = [Environment]::GetEnvironmentVariable('Path','Machine') + ';' + [Environment]::GetEnvironmentVariable('Path','User')`
 if `git`/`gh`/`az`/`docker` are "not recognized". ODBC Driver 18 is not installed (only needed outside Docker).
 
-## Plan (ordered PRs) — provisional until approved in step 5
-| # | PR / task | Status | Link |
-|---|---|---|---|
-| 1 | chore: project scaffold | PR open | PR #1 |
-| 2 | docs: contracts/twin-interface.md | not started | |
-| 3 | feat: SQL schema + seed | not started | |
-| 4 | feat: secret provider + catalog (TDD) | not started | |
-| 5 | feat: db + main + templates (TDD) | not started | |
-| 6 | ci: Dockerfile + GitHub Actions -> GHCR | not started | |
-| 7 | test: local Docker Compose False-Green rehearsal | not started | |
-| 8 | feat: infra/modules/twin.bicep | not started | |
-| 9 | docs: runbook v1 + history commits | not started | |
-| 10 | docs: hand-offs (WS2/WS3/WS4/WS5) | not started | |
-| G2 | load generator, CI scans, candidate builds, architecture note | not started | |
+## Plan (ordered PRs) — approved by the user 2026-10-28
+| # | PR / task | Purpose | Status | Link |
+|---|---|---|---|---|
+| 1 | chore: project scaffold | Rules, ADRs, status, glossary, folders | merged | PR #1 |
+| 2 | docs: twin contract + plan | `contracts/twin-interface.md` (Phase 1) and this plan | in progress | |
+| 3 | feat(sql): schema + seed | Phase 2 + compose file with local SQL Server; run twice | not started | |
+| 4 | feat(infra): twin.bicep | Phase 5 + ADRs (1 replica, /health probes, Basic SQL, plain resources); `az bicep build` | not started | |
+| 5 | feat(order-service): secret provider + catalog | Phase 3 steps 1–3, 7, TDD | not started | |
+| 6 | feat(order-service): db, pages, health, telemetry | Phase 3 steps 4–6, TDD with DB stubbed | not started | |
+| 7 | ci: Dockerfile + Actions -> GHCR | Phase 4; `sha-<commit>` + `:g1`; user makes package public | not started | |
+| 8 | docs: runbook v1 | Phase 6 | not started | |
+| 9 | test: local Docker Compose rehearsal | Phase 7 steps 1–4; app in compose, file as Key Vault stand-in | not started | |
+| 10 | docs: hand-offs | Phase 8 | not started | |
+| G1 | G1 checklist | Phase 8 step 5 items all ticked | not started | |
+| 11 | ci: security scans (G2) | gitleaks, pip-audit, Trivy, CodeQL | not started | |
+| 12 | ci: candidate builds (G2) | `candidate/*` -> `candidate-<drill-id>` tags | not started | |
+| 13 | feat: load generator (G2) | Container Apps Job, steady POST /api/orders + backlog retries | not started | |
+| 14 | docs: architecture note (G2) | `docs/architecture.md` — the only file WS3 indexes | not started | |
+
+Outside PRs (with WS2, needs Azure): agree `SECRET_REFRESH_SECONDS` with WS2/WS5; check twin after first
+`azd provision` (Phase 7 steps 5–6); joint drill PASS, FAIL, FAIL, PASS ×3 (Phase 7 step 7).
+If time runs short before Nov 2, cut #13 then #12 first.
 
 Status values: not started | in progress | PR open | merged | blocked
 
 ## In progress right now
-- Branch: chore/project-scaffold
-- Last command run: `gh pr create` for the scaffold
+- Branch: docs/twin-contract
+- Last command run: `gh pr create` for PR #2
 - Uncommitted / unpushed files: none expected
 - Test status: n/a (docs and empty folders only)
 
 ## Done (with evidence)
 - Machine set up: gh, az + bicep, Docker Desktop installed via winget (git and Python were already present).
 - GitHub org `livefire-team` created by the user; repo `livefire-fusion-poc` created (public, README on `main`).
+- PR #1 scaffold merged (merge commit c3427c7); repo set to merge-commit only.
+- PR plan approved (table above).
 
 ## Blockers / questions for the user or other workstreams
 - Teammates (WS2–WS5) are not yet invited to the `livefire-team` org/repo — need their GitHub usernames.
 - Tell WS2–WS5 the repo URL and image path (`ghcr.io/livefire-team/order-service`).
 - Tell WS3: keep `docs/` and `CLAUDE.md` off the agents' `read_repository_context` allowlist (ADR-004).
+- Tell WS3: the G2 architecture note will be `docs/architecture.md` only — index that file, not all of `docs/`.
+- Contract v1 (`contracts/twin-interface.md`) must be sent to WS2–WS5 the day PR #2 merges.
 - If `CLAUDE.local.md` is missing on this PC, recreate it before writing order-service code (see CLAUDE.md).
 
 ## Hand-offs owed
 - [ ] WS2: image name/tag, twin.bicep merged, contract additions (appInsightsConnectionString output, principalType + secretRefreshSeconds), local stack
-- [ ] WS3: hand-off items (details in `CLAUDE.local.md`), runbook path, telemetry names
+- [ ] WS3: Phase 8 items, runbook path, telemetry names
 - [ ] WS4: allowed/protected paths for the Engineer
 - [ ] WS5: metric names (orders_completed, orders_failed{reason})
 
@@ -71,4 +82,4 @@ Status values: not started | in progress | PR open | merged | blocked
 See `docs/ADR.md` (latest: ADR-004).
 
 ## Session log (newest first)
-- 2026-10-28 session #1: tools installed, gh login, org + repo created, scaffold PR opened.
+- 2026-10-28 session #1: tools installed, gh login, org + repo created, PR #1 merged, plan approved, PR #2 opened.
