@@ -73,6 +73,45 @@ Status values: Proposed | Accepted | Superseded | Rejected
   (or a hand-made `.env`). The app's local `order_app` password is handled the same way in plan item #9.
 - **Implemented in:** PR #3
 
+## ADR-006: One replica of the order service; liveness and readiness probes on `/health` only
+- **Date:** 2026-10-29
+- **Status:** Accepted
+- **Context:** The twin runs a single small order service. Container Apps can scale out to several replicas and
+  restarts or stops routing to a replica whose probes fail. The service has two health endpoints: `/health`
+  (the process is up) and `/health/dependencies` (Key Vault and SQL are reachable).
+- **Options considered:** (1) autoscale with probes on `/health/dependencies`; (2) exactly one replica
+  (min = max = 1) with both probes on `/health`.
+- **Decision:** Option 2, as the contract (`contracts/twin-interface.md`) requires. Probes on `/health` keep the
+  platform from restarting the app or taking it out of rotation because of a dependency outage; dependency health
+  is reported by `/health/dependencies` and telemetry instead.
+- **Consequences:** Predictable behaviour and cost: every request hits the same instance. No horizontal scaling or
+  redundancy, which is acceptable for a disposable twin. A dependency outage shows up in telemetry and
+  `/health/dependencies`, not as restarts.
+- **Implemented in:** PR #4 (`infra/modules/twin.bicep`)
+
+## ADR-007: Azure SQL Basic tier for the twin database
+- **Date:** 2026-10-29
+- **Status:** Accepted
+- **Context:** The twin needs a small, cheap database that answers the first request quickly.
+  Serverless databases can auto-pause and take time to resume.
+- **Options considered:** (1) Basic (DTU) tier; (2) serverless `GP_S_Gen5` with auto-pause; (3) serverless
+  `GP_S_Gen5` with `autoPauseDelay: -1` (never pause).
+- **Decision:** Basic tier: always on and the cheapest fixed option. Fallback only if an Azure Policy blocks Basic:
+  switch to option 3 (serverless that never pauses), recorded as a new ADR.
+- **Consequences:** No cold start; 2 GB size and 5 DTU limits are ample for the twin's few tables.
+- **Implemented in:** PR #4 (`infra/modules/twin.bicep`)
+
+## ADR-008: Plain Bicep resources rather than Azure Verified Modules (AVM)
+- **Date:** 2026-10-29
+- **Status:** Accepted
+- **Context:** Azure Verified Modules are Microsoft-maintained Bicep modules for each resource type. The twin needs
+  exact control over replicas, probes and a deterministic role-assignment name that WS2 relies on.
+- **Options considered:** (1) AVM modules for each resource; (2) plain `resource` declarations in one module.
+- **Decision:** Option 2. The twin is small, and AVM parameter names change between versions.
+- **Consequences:** We own the resource definitions (API versions, defaults) and must update them ourselves;
+  in return the file is short, readable and stable for WS2's `main.bicep`.
+- **Implemented in:** PR #4 (`infra/modules/twin.bicep`)
+
 <!-- Copy the block below for each new decision -->
 
 ## ADR-00N: <short title>
