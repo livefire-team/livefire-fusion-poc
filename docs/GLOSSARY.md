@@ -20,7 +20,7 @@ One-sentence definitions of terms used in this project, added the first time eac
 | PATH | The list of folders Windows searches when you type a command like `git`; programs started before an install keep the old list. |
 | PR (pull request) | A request on GitHub to merge a branch into `main`, where changes are reviewed and checks run before merging. |
 | Public / private repo | Who can read the code: anyone (public) or only invited people (private). Ours is public (ADR-002). |
-| Squash merge | Merging a PR as one combined commit; forbidden here because it would erase the seeded commit history. |
+| Squash merge | Merging a PR as one combined commit; forbidden here because it rewrites commit history (ADR-003). |
 | Token | A long secret string proving to a service that it is you; never pasted into chat or files. |
 | UAC prompt | The Windows "Allow this app to make changes?" dialog; only you click it. |
 | WSL2 | A small Linux layer built into Windows that Docker Desktop runs on. |

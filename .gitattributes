@@ -1,4 +1,6 @@
 # Linux line endings everywhere: the app, scripts and CI all run on Linux
 * text=auto eol=lf
+*.cmd text eol=crlf
+*.bat text eol=crlf
 *.pdf binary
 *.png binary

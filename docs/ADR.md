@@ -30,16 +30,15 @@ Status values: Proposed | Accepted | Superseded | Rejected
   The image will be `ghcr.io/livefire-team/order-service` (lowercase, as GHCR requires) and its package public.
 - **Consequences:** Free CodeQL; Container Apps pulls the image with no registry credential, so `twin.bicep` stays
   simple. Ownership is not tied to one person (more org admins can be added). Anyone can read the code and the
-  commit history, including the seeded demo bug — acceptable because the repo holds no secrets and is a demo.
+  commit history — acceptable because the repo holds no secrets and is a demo.
   Teammates must be invited to the org/repo before they can push.
 - **Implemented in:** PR #1 (repo created 2026-10-28)
 
 ## ADR-003: Merge commits only — never squash or rebase-merge
 - **Date:** 2026-10-28
 - **Status:** Accepted
-- **Context:** The demo relies on two separate seed commits in `main` (the secret provider without the bug, then the
-  `perf(order-service): cache secret failures...` commit). The Investigator agent finds the clue in that history.
-  A squash merge would collapse them into one commit and destroy the clue.
+- **Context:** The demo depends on specific commits in `main` staying exactly as written, one by one.
+  A squash merge collapses a PR's commits into one; a rebase merge rewrites them.
 - **Options considered:** (1) squash merges (tidy history); (2) rebase merges; (3) merge commits only.
 - **Decision:** Merge every PR with a merge commit (`gh pr merge <N> --merge`). Never force-push `main`.
   Disable squash and rebase merging in the repo settings so nobody can do it by accident.
@@ -50,16 +49,15 @@ Status values: Proposed | Accepted | Superseded | Rejected
 - **Date:** 2026-10-28
 - **Status:** Accepted
 - **Context:** The starter prompt asked for the Build Guide and PoC plan under `docs/reference/`. The Build Guide
-  explains the demo's fault in detail. The repo is public (ADR-002), and the Planner agent's
-  `read_repository_context` tool reads allowlisted repo paths. Either way the answer would sit next to the code,
-  while the guardrail says the clue must live only in git history.
+  contains the full demo script. The repo is public (ADR-002), and the Planner agent's
+  `read_repository_context` tool reads allowlisted repo paths, so the script would sit next to the code.
 - **Options considered:** (1) commit them and rely on WS3's allowlist excluding `docs/`; (2) keep them only in the
   local kit folder and git-ignore `docs/reference/`.
 - **Decision:** Option 2. The specs stay in `C:\Users\venka\projects\livefire-ws1-kit\reference\`; `CLAUDE.md`
-  points there. WS3 must also keep `docs/` and `CLAUDE.md` off the agent allowlist, because they name the
-  guardrails.
+  points there. Demo-specific working rules live in a git-ignored `CLAUDE.local.md`. WS3 keeps `docs/` and
+  `CLAUDE.md` off the agent allowlist.
 - **Consequences:** A new laptop or teammate needs the kit folder (or the PDFs) separately. The demo cannot be
-  spoiled by reading the repo's spec copies.
+  spoiled by reading the repo's current files. (PR #1's first commit predates this and keeps older wording.)
 - **Implemented in:** PR #1
 
 <!-- Copy the block below for each new decision -->

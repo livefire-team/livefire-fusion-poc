@@ -2,9 +2,11 @@
 .local/
 .env
 .env.*
+!.env.example
 
-# Spec documents stay outside git: they describe the demo's answer (ADR-004)
+# Spec documents and private working notes stay outside git (ADR-004)
 docs/reference/
+CLAUDE.local.md
 *.pem
 *.pfx
 

@@ -39,7 +39,7 @@ if `git`/`gh`/`az`/`docker` are "not recognized". ODBC Driver 18 is not installe
 | 6 | ci: Dockerfile + GitHub Actions -> GHCR | not started | |
 | 7 | test: local Docker Compose False-Green rehearsal | not started | |
 | 8 | feat: infra/modules/twin.bicep | not started | |
-| 9 | docs: runbook v1 + seeded history | not started | |
+| 9 | docs: runbook v1 + history commits | not started | |
 | 10 | docs: hand-offs (WS2/WS3/WS4/WS5) | not started | |
 | G2 | load generator, CI scans, candidate builds, architecture note | not started | |
 
@@ -59,10 +59,11 @@ Status values: not started | in progress | PR open | merged | blocked
 - Teammates (WS2–WS5) are not yet invited to the `livefire-team` org/repo — need their GitHub usernames.
 - Tell WS2–WS5 the repo URL and image path (`ghcr.io/livefire-team/order-service`).
 - Tell WS3: keep `docs/` and `CLAUDE.md` off the agents' `read_repository_context` allowlist (ADR-004).
+- If `CLAUDE.local.md` is missing on this PC, recreate it before writing order-service code (see CLAUDE.md).
 
 ## Hand-offs owed
 - [ ] WS2: image name/tag, twin.bicep merged, contract additions (appInsightsConnectionString output, principalType + secretRefreshSeconds), local stack
-- [ ] WS3: two seed commit hashes, runbook path, telemetry names
+- [ ] WS3: hand-off items (details in `CLAUDE.local.md`), runbook path, telemetry names
 - [ ] WS4: allowed/protected paths for the Engineer
 - [ ] WS5: metric names (orders_completed, orders_failed{reason})
 

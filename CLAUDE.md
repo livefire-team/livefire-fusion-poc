@@ -22,7 +22,7 @@ and `...\livefire-ws1-kit\reference\livefire-poc-plan.txt`. Never copy them into
    Non-Python: SQL runs twice locally; `az bicep build`; `docker build` + `/health` smoke test.
 2. Never commit to `main`. Branch per concern, conventional commits, small PRs, PR template filled with real test output.
 3. Merge gate: local tests pass + CI green + code-reviewer run + plain-English summary + the user explicitly approves
-   ("Merge") -> `gh pr merge <N> --merge`. NEVER squash (seed commits must stay separate). Never force-push.
+   ("Merge") -> `gh pr merge <N> --merge`. NEVER squash or rebase-merge (ADR-003). Never force-push.
    Ask before deleting branches or closing PRs.
 4. Every architectural decision -> entry in `docs/ADR.md` before/with the code.
 5. Update `docs/BUILD_STATUS.md` after every step/PR and before any session ends; commit and push it.
@@ -31,14 +31,14 @@ and `...\livefire-ws1-kit\reference\livefire-poc-plan.txt`. Never copy them into
    security-reviewer, fastapi-reviewer) proactively. If a session does not have them loaded, follow the same
    discipline by hand and run a separate review pass (subagent) before asking to merge.
 
-## Demo-protecting guardrails (do not violate)
-- No comments/TODOs/test names pointing at the seeded bug; no test asserting the latch.
-- Bug arms only after a first successful read (`self._value is not None`).
+## Guardrails (do not violate)
+- Also read `CLAUDE.local.md` (git-ignored, on the owner's PC): it holds the demo-specific guardrails.
+  If it is missing, restore it from the kit's `templates/CLAUDE.md` before writing any order-service code.
+- Never add demo-specific notes to tracked files (code comments, tests, docs, commit messages) — ADR-004.
 - One replica (min=max=1); probes on `/health` only.
 - `configure_azure_monitor(logger_name="orders")` at the very top of `main.py`, before FastAPI import.
 - `catalog.py` and `sql/seed.sql` change together.
 - Dockerfile base `python:3.12-slim-bookworm`; rehearse with `sha-` tags, not `:g1`.
-- Seed commits (provider without bug, then the perf commit) stay separate in `main` history.
 - Contract changes -> update `contracts/twin-interface.md` and tell WS2/WS3/WS4/WS5 the same day.
 
 ## Security
