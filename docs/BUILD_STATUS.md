@@ -8,9 +8,11 @@
 
 ## FIRST THING THE NEXT SESSION SHOULD DO
 The owner reviews and merges the stack bottom-up: PR #3 (base `main`) first, then PR #4 (base
-`feat/sql-schema-seed`), then PR #5 (base `feat/twin-bicep`), then PR #6 (base `feat/secret-provider`). Merge each with `gh pr merge <N> --merge` only on the
+`feat/sql-schema-seed`), then PR #5 (base `feat/twin-bicep`), then PR #6 (base `feat/secret-provider`), then PR #7 (base
+`feat/order-service-app`). Merge each with `gh pr merge <N> --merge` only on the
 owner's explicit "Merge", and after each merge retarget the next PR's base to `main` (`gh pr edit <N> --base main`).
-Then start plan item #7.
+Then start plan item #8. After PR #7 merges and the first `main` run pushes the image, the owner makes the GHCR
+package public (Phase 4 step 4) and tells WS2 the image name.
 
 ## Environment facts
 | Item | Value |
@@ -19,9 +21,9 @@ Then start plan item #7.
 | Local path | C:\Users\venka\projects\livefire-fusion-poc |
 | Kit folder | C:\Users\venka\projects\livefire-ws1-kit |
 | Default branch | main |
-| Working branch | feat/order-service-app (stacked on feat/secret-provider) |
+| Working branch | ci/order-service-image (stacked on feat/order-service-app) |
 | Azure resource group | not yet deployed (will be `rg-lf-twin-<env>`, created by WS2) |
-| Image | ghcr.io/livefire-team/order-service:<tag> (not built yet) |
+| Image | ghcr.io/livefire-team/order-service:<tag> (`sha-<7-char commit>` and `g1`, pushed by CI from `main` only; not pushed yet) |
 | GitHub account | venkataare (gh logged in, HTTPS); git identity "Venkata Are" / noreply email |
 | Tools verified | git 2.56 ✅ / gh 2.103 ✅ / python 3.12.10 ✅ / docker 29.9 (CLI ✅; engine ✅ after BIOS virtualization enabled 2026-10-29) / az 2.91 + bicep 0.48 ✅ |
 
@@ -38,7 +40,7 @@ if `git`/`gh`/`az`/`docker` are "not recognized". ODBC Driver 18 is not installe
 | 4 | feat(infra): twin.bicep | Phase 5 + ADRs (1 replica, /health probes, Basic SQL, plain resources); `az bicep build` | PR open | PR #4 |
 | 5 | feat(order-service): secret provider + catalog | Phase 3 steps 1–3, 7, TDD | PR open | [PR #5](https://github.com/livefire-team/livefire-fusion-poc/pull/5) |
 | 6 | feat(order-service): db, pages, health, telemetry | Phase 3 steps 4–6, TDD with DB stubbed | PR open | [PR #6](https://github.com/livefire-team/livefire-fusion-poc/pull/6) |
-| 7 | ci: Dockerfile + Actions -> GHCR | Phase 4; `sha-<commit>` + `:g1`; user makes package public | not started | |
+| 7 | ci: Dockerfile + Actions -> GHCR | Phase 4; `sha-<commit>` + `:g1`; user makes package public | PR open | [PR #7](PR7_URL) |
 | 8 | docs: runbook v1 | Phase 6 | not started | |
 | 9 | test: local Docker Compose rehearsal | Phase 7 steps 1–4; app in compose, file as Key Vault stand-in | not started | |
 | 10 | docs: hand-offs | Phase 8 | not started | |
@@ -55,9 +57,9 @@ If time runs short before Nov 2, cut #13 then #12 first.
 Status values: not started | in progress | PR open | merged | blocked
 
 ## In progress right now
-- Branch: feat/order-service-app (stacked on feat/secret-provider), PR #6
-- Last command run: `pytest -q src/order-service --cov=src/order-service/app` from the repo root (venv at `.venv`,
-  `pip install -r src/order-service/requirements-dev.txt`): 39 passed, coverage 100%
+- Branch: ci/order-service-image (stacked on feat/order-service-app), PR #7
+- Last commands run: `docker build -t order-service:local src/order-service` + container smoke test (`/health` 200),
+  and `pytest -q src/order-service --cov=src/order-service/app` (venv `.venv`): 39 passed, coverage 100%
 - Uncommitted / unpushed files: none expected
 - Test status: order-service unit tests green 2026-10-29. Nothing deployed to Azure (WS2 deploys via `main.bicep`).
 
@@ -75,10 +77,16 @@ Status values: not started | in progress | PR open | merged | blocked
   `catalog.py` (matches `sql/seed.sql`), tests written first (RED shown), 13 passed, 100% coverage; ADR-009 added.
 - PR #6 opened: `db.py`, `main.py` (pages, JSON API, `/health`, `/health/dependencies`, drill ID, telemetry) and the
   four templates; TestClient tests written first with SQL/Key Vault stubbed (RED shown), 39 passed, 100% coverage.
+- PR #7 opened: `src/order-service/Dockerfile` (guide, ODBC 18, non-root) + `.dockerignore`, workflow
+  `.github/workflows/order-service.yml` (test -> image build + smoke test -> push `sha-`/`g1` from `main` only);
+  local image built and smoke-tested; ADR-010 and ADR-011 added.
 
 ## Blockers / questions for the user or other workstreams
 - Teammates (WS2–WS5) are not yet invited to the `livefire-team` org/repo — need their GitHub usernames.
 - Tell WS2–WS5 the repo URL and image path (`ghcr.io/livefire-team/order-service`).
+- Owner, after PR #7 merges and the first `main` run is green: make the GHCR package `order-service` public
+  (org Packages -> order-service -> Package settings -> Visibility: Public), then tell WS2 the image
+  `ghcr.io/livefire-team/order-service:g1` (`sha-` tags for rehearsals).
 - Tell WS3: keep `docs/` and `CLAUDE.md` off the agents' `read_repository_context` allowlist (ADR-004).
 - Tell WS3: the G2 architecture note will be `docs/architecture.md` only — index that file, not all of `docs/`.
 - Contract v1 (`contracts/twin-interface.md`) must be sent to WS2–WS5 the day PR #2 merges.
@@ -91,9 +99,10 @@ Status values: not started | in progress | PR open | merged | blocked
 - [ ] WS5: metric names (orders_completed, orders_failed{reason})
 
 ## Decisions log pointer
-See `docs/ADR.md` (latest: ADR-009).
+See `docs/ADR.md` (latest: ADR-011).
 
 ## Session log (newest first)
+- 2026-10-29 session #2: PR #7 Dockerfile + GitHub Actions workflow (image built and smoke-tested locally), stacked on PR #6.
 - 2026-10-29 session #2: PR #6 order pages, API, health checks and telemetry (TDD, 100% coverage), stacked on PR #5.
 - 2026-10-29 session #2: PR #5 secret provider + catalog (TDD, 100% coverage), stacked on PR #4.
 - 2026-10-29 session #2: PR #4 twin.bicep built (compile + lint clean), stacked on PR #3.
