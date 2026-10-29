@@ -7,8 +7,8 @@
 **Current gate target:** G2 (Nov 2)
 
 ## FIRST THING THE NEXT SESSION SHOULD DO
-If PR #2 (`docs/twin-contract`) is still open: review state, then ask the user "Merge PR #2?".
-If it is merged: `git checkout main; git pull --ff-only`, then start plan item #3 (`feat/sql-schema-seed`).
+Plan item #3 on branch `feat/sql-schema-seed`: make sure Docker Desktop is running (`docker info`), then run
+`.\scripts\local-sql.ps1` twice and confirm both runs succeed; then open/finish PR #3 and ask "Merge PR #3?".
 
 ## Environment facts
 | Item | Value |
@@ -17,11 +17,11 @@ If it is merged: `git checkout main; git pull --ff-only`, then start plan item #
 | Local path | C:\Users\venka\projects\livefire-fusion-poc |
 | Kit folder | C:\Users\venka\projects\livefire-ws1-kit |
 | Default branch | main |
-| Working branch | docs/twin-contract |
+| Working branch | feat/sql-schema-seed |
 | Azure resource group | not yet deployed (will be `rg-lf-twin-<env>`, created by WS2) |
 | Image | ghcr.io/livefire-team/order-service:<tag> (not built yet) |
 | GitHub account | venkataare (gh logged in, HTTPS); git identity "Venkata Are" / noreply email |
-| Tools verified | git 2.56 ✅ / gh 2.103 ✅ / python 3.12.10 ✅ / docker 29.9 ✅ / az 2.91 + bicep 0.48 ✅ |
+| Tools verified | git 2.56 ✅ / gh 2.103 ✅ / python 3.12.10 ✅ / docker 29.9 (CLI ✅; Desktop first launch pending) / az 2.91 + bicep 0.48 ✅ |
 
 Machine note: the Claude app's shell may start with a stale PATH. Prefix PowerShell commands with
 `$env:Path = [Environment]::GetEnvironmentVariable('Path','Machine') + ';' + [Environment]::GetEnvironmentVariable('Path','User')`
@@ -31,8 +31,8 @@ if `git`/`gh`/`az`/`docker` are "not recognized". ODBC Driver 18 is not installe
 | # | PR / task | Purpose | Status | Link |
 |---|---|---|---|---|
 | 1 | chore: project scaffold | Rules, ADRs, status, glossary, folders | merged | PR #1 |
-| 2 | docs: twin contract + plan | `contracts/twin-interface.md` (Phase 1) and this plan | in progress | |
-| 3 | feat(sql): schema + seed | Phase 2 + compose file with local SQL Server; run twice | not started | |
+| 2 | docs: twin contract + plan | `contracts/twin-interface.md` (Phase 1) and this plan | merged | PR #2 |
+| 3 | feat(sql): schema + seed | Phase 2 + compose file with local SQL Server; run twice | in progress | |
 | 4 | feat(infra): twin.bicep | Phase 5 + ADRs (1 replica, /health probes, Basic SQL, plain resources); `az bicep build` | not started | |
 | 5 | feat(order-service): secret provider + catalog | Phase 3 steps 1–3, 7, TDD | not started | |
 | 6 | feat(order-service): db, pages, health, telemetry | Phase 3 steps 4–6, TDD with DB stubbed | not started | |
@@ -53,8 +53,8 @@ If time runs short before Nov 2, cut #13 then #12 first.
 Status values: not started | in progress | PR open | merged | blocked
 
 ## In progress right now
-- Branch: docs/twin-contract
-- Last command run: `gh pr create` for PR #2
+- Branch: feat/sql-schema-seed
+- Last command run: wrote sql/ scripts, docker-compose.yml, scripts/local-sql.ps1
 - Uncommitted / unpushed files: none expected
 - Test status: n/a (docs and empty folders only)
 
@@ -63,6 +63,7 @@ Status values: not started | in progress | PR open | merged | blocked
 - GitHub org `livefire-team` created by the user; repo `livefire-fusion-poc` created (public, README on `main`).
 - PR #1 scaffold merged (merge commit c3427c7); repo set to merge-commit only.
 - PR plan approved (table above).
+- PR #2 contract v1 + plan merged (merge commit 9b698f1). Team message drafted for the user to send.
 
 ## Blockers / questions for the user or other workstreams
 - Teammates (WS2–WS5) are not yet invited to the `livefire-team` org/repo — need their GitHub usernames.
@@ -79,7 +80,7 @@ Status values: not started | in progress | PR open | merged | blocked
 - [ ] WS5: metric names (orders_completed, orders_failed{reason})
 
 ## Decisions log pointer
-See `docs/ADR.md` (latest: ADR-004).
+See `docs/ADR.md` (latest: ADR-005).
 
 ## Session log (newest first)
-- 2026-10-28 session #1: tools installed, gh login, org + repo created, PR #1 merged, plan approved, PR #2 opened.
+- 2026-10-28 session #1: tools installed, gh login, org + repo created, PR #1 and PR #2 merged, plan approved, PR #3 started.

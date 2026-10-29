@@ -1,0 +1,10 @@
+# Local dev stack (Build Guide Phase 7). Run .\scripts\local-sql.ps1 to start SQL and load the scripts.
+# LOCAL_SA_PASSWORD comes from the git-ignored .env file, which local-sql.ps1 generates (ADR-005).
+services:
+  sql:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    environment:
+      ACCEPT_EULA: "Y"
+      MSSQL_SA_PASSWORD: ${LOCAL_SA_PASSWORD:?run scripts/local-sql.ps1 first to create .env}
+    ports: ["127.0.0.1:1433:1433"]
+    volumes: ["./sql:/sql:ro"]
