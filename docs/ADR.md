@@ -176,6 +176,26 @@ Status values: Proposed | Accepted | Superseded | Rejected
   the tag's commit with `gh api repos/<owner>/<repo>/git/ref/tags/<tag>`, dereferencing annotated tags).
 - **Implemented in:** PR #7 (`.github/workflows/order-service.yml`, `src/order-service/Dockerfile`)
 
+## ADR-012: Local stack uses a file as the Key Vault stand-in and a generated app password
+- **Date:** 2026-10-29
+- **Status:** Accepted
+- **Context:** The local Docker Compose stack (Build Guide Phase 7) has no Key Vault and no managed identity. The
+  guide's example uses fixed passwords for the SA and `order_app` logins, publishes ports on all interfaces, and
+  writes the app password with `echo`.
+- **Options considered:** (1) the guide's fixed passwords and ports as written; (2) run a Key Vault emulator
+  locally; (3) the app's existing `SECRET_SOURCE=file:<path>` mode with a generated password in a git-ignored file.
+- **Decision:** Option 3. `scripts/local-sql.ps1` also creates the `order_app` login and user (same grants as the
+  guide) with a password generated from the crypto random-number generator (no `;` `}` `!`), stored in the
+  git-ignored `.local/secret.txt` and kept on later runs; the login's password is re-applied each run so the two
+  stay in step. The password reaches `sqlcmd` as an environment variable used as a scripting variable, so it is
+  never on a command line. The `orders` service mounts `.local` at `/run/livefire`, reads
+  the password from `secret.txt` with a 2-second refresh window, and is published on `127.0.0.1:8000` only.
+  `scripts/local-access-drill.ps1` changes that file to walk through access stages and prints what the app reports.
+- **Consequences:** No local credential is in git and the stack runs with no Azure access or extra containers
+  (fits a 6 GB PC). The file source is a stand-in: it does not exercise managed identity or Key Vault RBAC, which are
+  only checked in the lab. Deleting `.local/secret.txt` makes the next `local-sql.ps1` run generate a new password.
+- **Implemented in:** PR #9 (`docker-compose.yml`, `scripts/local-sql.ps1`, `scripts/local-access-drill.ps1`)
+
 <!-- Copy the block below for each new decision -->
 
 ## ADR-00N: <short title>

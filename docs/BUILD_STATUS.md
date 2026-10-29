@@ -9,9 +9,10 @@
 ## FIRST THING THE NEXT SESSION SHOULD DO
 The owner reviews and merges the stack bottom-up: PR #3 (base `main`) first, then PR #4 (base
 `feat/sql-schema-seed`), then PR #5 (base `feat/twin-bicep`), then PR #6 (base `feat/secret-provider`), then PR #7 (base
-`feat/order-service-app`). Merge each with `gh pr merge <N> --merge` only on the
+`feat/order-service-app`), then PR #8 (base `ci/order-service-image`), then PR #9 (base `docs/runbook-v1`).
+Merge each with `gh pr merge <N> --merge` only on the
 owner's explicit "Merge", and after each merge retarget the next PR's base to `main` (`gh pr edit <N> --base main`).
-Then start plan item #8. After PR #7 merges and the first `main` run pushes the image, the owner makes the GHCR
+Then start plan item #10. After PR #7 merges and the first `main` run pushes the image, the owner makes the GHCR
 package public (Phase 4 step 4) and tells WS2 the image name.
 
 ## Environment facts
@@ -21,7 +22,7 @@ package public (Phase 4 step 4) and tells WS2 the image name.
 | Local path | C:\Users\venka\projects\livefire-fusion-poc |
 | Kit folder | C:\Users\venka\projects\livefire-ws1-kit |
 | Default branch | main |
-| Working branch | ci/order-service-image (stacked on feat/order-service-app) |
+| Working branch | test/local-rehearsal (stacked on docs/runbook-v1) |
 | Azure resource group | not yet deployed (will be `rg-lf-twin-<env>`, created by WS2) |
 | Image | ghcr.io/livefire-team/order-service:<tag> (`sha-<7-char commit>` and `g1`, pushed by CI from `main` only; not pushed yet) |
 | GitHub account | venkataare (gh logged in, HTTPS); git identity "Venkata Are" / noreply email |
@@ -42,7 +43,7 @@ if `git`/`gh`/`az`/`docker` are "not recognized". ODBC Driver 18 is not installe
 | 6 | feat(order-service): db, pages, health, telemetry | Phase 3 steps 4–6, TDD with DB stubbed | PR open | [PR #6](https://github.com/livefire-team/livefire-fusion-poc/pull/6) |
 | 7 | ci: Dockerfile + Actions -> GHCR | Phase 4; `sha-<commit>` + `:g1`; user makes package public | PR open | [PR #7](https://github.com/livefire-team/livefire-fusion-poc/pull/7) |
 | 8 | docs: runbook v1 | Phase 6 | PR open | PR #8 |
-| 9 | test: local Docker Compose rehearsal | Phase 7 steps 1–4; app in compose, file as Key Vault stand-in | not started | |
+| 9 | test: local Docker Compose rehearsal | Phase 7 steps 1–4; app in compose, file as Key Vault stand-in | PR open | [PR #9](https://github.com/livefire-team/livefire-fusion-poc/pull/9) |
 | 10 | docs: hand-offs | Phase 8 | not started | |
 | G1 | G1 checklist | Phase 8 step 5 items all ticked | not started | |
 | 11 | ci: security scans (G2) | gitleaks, pip-audit, Trivy, CodeQL | not started | |
@@ -57,10 +58,10 @@ If time runs short before Nov 2, cut #13 then #12 first.
 Status values: not started | in progress | PR open | merged | blocked
 
 ## In progress right now
-- Branch: docs/runbook-v1 (stacked on ci/order-service-image), PR #8; next: plan item #9
-- Previous: ci/order-service-image (stacked on feat/order-service-app), PR #7
-- Last commands run: `docker build -t order-service:local src/order-service` + container smoke test (`/health` 200),
-  and `pytest -q src/order-service --cov=src/order-service/app` (venv `.venv`): 39 passed, coverage 100%
+- Branch: test/local-rehearsal (stacked on docs/runbook-v1), PR #9; next: plan item #10
+- Previous: docs/runbook-v1 (stacked on ci/order-service-image), PR #8
+- Last commands run: `.\scripts\local-sql.ps1` twice, `.\scripts\local-access-drill.ps1` (ran all 4 stages, exit 0),
+  `docker compose down`, and `pytest -q src/order-service --cov=src/order-service/app`: 59 passed, coverage 99%
 - Uncommitted / unpushed files: none expected
 - Test status: order-service unit tests green 2026-10-29. Nothing deployed to Azure (WS2 deploys via `main.bicep`).
 
@@ -86,6 +87,10 @@ Status values: not started | in progress | PR open | merged | blocked
   `persist-credentials: false`; smoke port bound to localhost. Dockerfile: OCI source label, Microsoft key
   fingerprint check, curl purged. `.dockerignore`: `.env*`, `.git`. ADR-011 revised. Verified by CI (no local Docker).
 
+- PR #9 opened: `orders` service added to `docker-compose.yml` (file secret source, `127.0.0.1:8000`);
+  `local-sql.ps1` now also creates the `order_app` login with a generated password in `.local/secret.txt` (run
+  twice, same result); `scripts/local-access-drill.ps1` run against the local stack (all 4 stages ran); ADR-012.
+
 ## Blockers / questions for the user or other workstreams
 - Teammates (WS2–WS5) are not yet invited to the `livefire-team` org/repo — need their GitHub usernames.
 - Tell WS2–WS5 the repo URL and image path (`ghcr.io/livefire-team/order-service`).
@@ -104,9 +109,10 @@ Status values: not started | in progress | PR open | merged | blocked
 - [ ] WS5: metric names (orders_completed, orders_failed{reason})
 
 ## Decisions log pointer
-See `docs/ADR.md` (latest: ADR-011).
+See `docs/ADR.md` (latest: ADR-012).
 
 ## Session log (newest first)
+- 2026-10-29 session #2: PR #9 local Docker Compose stack with the app and the local access drill script, stacked on PR #8.
 - 2026-10-29 session #2: PR #7 Dockerfile + GitHub Actions workflow (image built and smoke-tested locally), stacked on PR #6.
 - 2026-10-29 session #2: PR #6 order pages, API, health checks and telemetry (TDD, 100% coverage), stacked on PR #5.
 - 2026-10-29 session #2: PR #5 secret provider + catalog (TDD, 100% coverage), stacked on PR #4.
