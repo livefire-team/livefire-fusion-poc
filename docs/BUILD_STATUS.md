@@ -41,7 +41,7 @@ if `git`/`gh`/`az`/`docker` are "not recognized". ODBC Driver 18 is not installe
 | 5 | feat(order-service): secret provider + catalog | Phase 3 steps 1–3, 7, TDD | PR open | [PR #5](https://github.com/livefire-team/livefire-fusion-poc/pull/5) |
 | 6 | feat(order-service): db, pages, health, telemetry | Phase 3 steps 4–6, TDD with DB stubbed | PR open | [PR #6](https://github.com/livefire-team/livefire-fusion-poc/pull/6) |
 | 7 | ci: Dockerfile + Actions -> GHCR | Phase 4; `sha-<commit>` + `:g1`; user makes package public | PR open | [PR #7](https://github.com/livefire-team/livefire-fusion-poc/pull/7) |
-| 8 | docs: runbook v1 | Phase 6 | not started | |
+| 8 | docs: runbook v1 | Phase 6 | PR open | PR #8 |
 | 9 | test: local Docker Compose rehearsal | Phase 7 steps 1–4; app in compose, file as Key Vault stand-in | not started | |
 | 10 | docs: hand-offs | Phase 8 | not started | |
 | G1 | G1 checklist | Phase 8 step 5 items all ticked | not started | |
@@ -57,7 +57,8 @@ If time runs short before Nov 2, cut #13 then #12 first.
 Status values: not started | in progress | PR open | merged | blocked
 
 ## In progress right now
-- Branch: ci/order-service-image (stacked on feat/order-service-app), PR #7
+- Branch: docs/runbook-v1 (stacked on ci/order-service-image), PR #8; next: plan item #9
+- Previous: ci/order-service-image (stacked on feat/order-service-app), PR #7
 - Last commands run: `docker build -t order-service:local src/order-service` + container smoke test (`/health` 200),
   and `pytest -q src/order-service --cov=src/order-service/app` (venv `.venv`): 39 passed, coverage 100%
 - Uncommitted / unpushed files: none expected
