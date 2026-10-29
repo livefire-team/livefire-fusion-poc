@@ -40,7 +40,7 @@ if `git`/`gh`/`az`/`docker` are "not recognized". ODBC Driver 18 is not installe
 | 4 | feat(infra): twin.bicep | Phase 5 + ADRs (1 replica, /health probes, Basic SQL, plain resources); `az bicep build` | PR open | PR #4 |
 | 5 | feat(order-service): secret provider + catalog | Phase 3 steps 1–3, 7, TDD | PR open | [PR #5](https://github.com/livefire-team/livefire-fusion-poc/pull/5) |
 | 6 | feat(order-service): db, pages, health, telemetry | Phase 3 steps 4–6, TDD with DB stubbed | PR open | [PR #6](https://github.com/livefire-team/livefire-fusion-poc/pull/6) |
-| 7 | ci: Dockerfile + Actions -> GHCR | Phase 4; `sha-<commit>` + `:g1`; user makes package public | PR open | [PR #7](PR7_URL) |
+| 7 | ci: Dockerfile + Actions -> GHCR | Phase 4; `sha-<commit>` + `:g1`; user makes package public | PR open | [PR #7](https://github.com/livefire-team/livefire-fusion-poc/pull/7) |
 | 8 | docs: runbook v1 | Phase 6 | not started | |
 | 9 | test: local Docker Compose rehearsal | Phase 7 steps 1–4; app in compose, file as Key Vault stand-in | not started | |
 | 10 | docs: hand-offs | Phase 8 | not started | |
