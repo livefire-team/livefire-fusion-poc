@@ -219,8 +219,12 @@ Status values: Proposed | Accepted | Superseded | Rejected
   base-image CVEs are not blocking, so they need a periodic look (rebuild on a newer base when fixes land). Trivy does
   not read Bicep directly, so `infra/` is only covered once it is compiled to ARM JSON. Scanner versions and
   checksums are bumped by hand (`gh api repos/<owner>/<repo>/releases/latest`, then the release's checksums file).
-  Any gitleaks allowlist entry goes in `.gitleaks.toml` with a comment saying why it is not a secret.
-- **Implemented in:** PR #11 (`.github/workflows/security.yml`, `docker-compose.yml`)
+  Any gitleaks allowlist entry goes in `.gitleaks.toml` with a comment saying why it is not a secret. The first run
+  found three false positives (two Azure built-in role IDs in `twin.bicep`, the Microsoft signing-key fingerprint
+  in the Dockerfile), now allowlisted by exact value; a dev-only pytest advisory (PYSEC-2026-1845), fixed by moving
+  `requirements-dev.txt` to pytest 9.0.3; and Trivy check DS-0031 reading the Dockerfile build argument
+  `MS_KEY_FPR` as a secret name, fixed by renaming it `MS_SIGNING_FINGERPRINT`.
+- **Implemented in:** PR #11 (`.github/workflows/security.yml`, `.gitleaks.toml`, `docker-compose.yml`)
 
 <!-- Copy the block below for each new decision -->
 
