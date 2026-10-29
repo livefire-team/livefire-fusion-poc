@@ -1,0 +1,11 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>Order</title></head>
+<body>
+  {% if confirmation %}
+  <h1>Thank you</h1>
+  <p>Your confirmation number is <strong data-testid="confirmation-number">{{ confirmation }}</strong></p>
+  {% else %}
+  <h1>Something went wrong</h1>
+  <p data-testid="order-error">{{ error }}</p>
+  {% endif %}
+</body></html>

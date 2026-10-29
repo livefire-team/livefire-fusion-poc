@@ -1,0 +1,12 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>LiveFire Shop</title></head>
+<body>
+  <h1>LiveFire Shop</h1>
+  {% for p in products %}
+  <div data-testid="product-{{ p.sku }}">
+    <h2>{{ p.name }}</h2>
+    <p>${{ "%.2f"|format(p.price) }}</p>
+    <a data-testid="add-to-cart" href="/cart?sku={{ p.sku }}">Add to cart</a>
+  </div>
+  {% endfor %}
+</body></html>
