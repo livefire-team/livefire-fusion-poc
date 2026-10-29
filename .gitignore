@@ -1,0 +1,30 @@
+# Local-only files (Key Vault stand-in secrets, scratch) — never committed
+.local/
+.env
+.env.*
+
+# Spec documents stay outside git: they describe the demo's answer (ADR-004)
+docs/reference/
+*.pem
+*.pfx
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+.coverage
+.coverage.*
+coverage.xml
+htmlcov/
+*.egg-info/
+
+# Azure / azd
+.azure/
+
+# Editors and OS
+.vscode/
+.idea/
+Thumbs.db
+.DS_Store
