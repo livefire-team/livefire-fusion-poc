@@ -11,6 +11,8 @@ contract wins and WS1 fixes this page.
 - Immutable tags: `ghcr.io/livefire-team/order-service:sha-<short commit>` (7 characters), pushed by
   `.github/workflows/order-service.yml` on every push to `main`. Use a `sha-` tag for rehearsals so a later
   build can't change what runs.
+- Candidate tags: a push to a `candidate/<drill-id>-<attempt>` branch publishes
+  `ghcr.io/livefire-team/order-service:candidate-<drill-id>-<attempt>` plus its `sha-` tag (ADR-014); it never moves `g1`.
 - The package is made public after the first successful `main` run (ADR-002); from then on pulls need no
   credentials.
 - Select the image for a deployment with:

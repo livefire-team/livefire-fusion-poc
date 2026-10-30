@@ -226,6 +226,29 @@ Status values: Proposed | Accepted | Superseded | Rejected
   `MS_KEY_FPR` as a secret name, fixed by renaming it `MS_SIGNING_FINGERPRINT`.
 - **Implemented in:** PR #11 (`.github/workflows/security.yml`, `.gitleaks.toml`, `docker-compose.yml`)
 
+## ADR-014: Candidate builds from `candidate/<drill-id>-<attempt>` branches
+- **Date:** 2026-10-29
+- **Status:** Accepted
+- **Context:** G2 asks for candidate builds: a push to a `candidate/*` branch must build, test and publish an image
+  that WS2's deploy step can run as a new revision, named after the drill. Branch names are chosen by whoever pushes,
+  so they are untrusted input to the workflow, and a candidate must never replace the `g1` image.
+- **Options considered:** (1) a separate candidate workflow; (2) extend `order-service.yml` so candidate pushes run
+  the same `test` -> `image` -> `publish` path as `main`; and for the tag (a) the raw branch name, (b) a tag parsed
+  from a strictly validated branch name.
+- **Decision:** Option 2 with (b). `on.push.branches` adds `candidate/**`. A new first job `candidate-tag` (no token
+  permissions) reads `github.ref` through an environment variable, requires
+  `^candidate/([a-z0-9][a-z0-9-]{0,47})-([1-9][0-9]?)$` (lowercase drill ID, attempt 1-99) and outputs
+  `candidate-<drill-id>-<attempt>`; any other `candidate/` name fails the run before tests. `publish` (still the
+  only job with `packages: write`) runs for pushes to `main` or to a valid candidate branch and always pushes
+  `sha-<short sha>`; it pushes `g1` only from `main` and the candidate tag only from candidate branches (re-checked
+  against the pattern before use). Pull requests still run `test` and `image` only.
+- **Consequences:** WS2 deploys `ghcr.io/livefire-team/order-service:candidate-<drill-id>-<attempt>` (or the
+  `sha-` tag for an exact build). Anyone who can push a `candidate/` branch can publish a candidate tag, so branch
+  protection or a ruleset should limit who can create those branches. The workflow's `paths` filter still applies:
+  a candidate push that changes nothing under `src/order-service/` or the workflow does not build. Pushing to the
+  same candidate branch again moves its candidate tag; the `sha-` tag stays immutable.
+- **Implemented in:** PR #12 (`.github/workflows/order-service.yml`)
+
 <!-- Copy the block below for each new decision -->
 
 ## ADR-00N: <short title>
