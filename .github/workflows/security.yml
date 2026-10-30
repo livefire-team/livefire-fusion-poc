@@ -67,6 +67,11 @@ jobs:
           pip-audit --desc on \
             -r src/order-service/requirements.txt \
             -r src/order-service/requirements-dev.txt
+      - name: Audit the load generator's pinned dependencies
+        run: |
+          pip-audit --desc on \
+            -r src/load-generator/requirements.txt \
+            -r src/load-generator/requirements-dev.txt
 
   codeql:
     runs-on: ubuntu-latest
@@ -113,3 +118,9 @@ jobs:
         run: |
           "$RUNNER_TEMP/trivy" image --scanners vuln \
             --severity HIGH,CRITICAL --ignore-unfixed --exit-code 1 order-service:scan
+      - name: Build the load-generator image
+        run: docker build -t load-generator:scan src/load-generator
+      - name: Scan the load-generator image
+        run: |
+          "$RUNNER_TEMP/trivy" image --scanners vuln \
+            --severity HIGH,CRITICAL --ignore-unfixed --exit-code 1 load-generator:scan

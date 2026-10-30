@@ -3,17 +3,26 @@
 > Purpose: if a session ends (usage limit, closed laptop), the next Claude session reads THIS file and continues
 > exactly where we stopped. Keep it accurate. Update after every step and PR, and before ending any session.
 
-**Last updated:** 2026-10-29 by session #2
+**Last updated:** 2026-10-29 by session #2 (final)
 **Current gate target:** G2 (Nov 2)
 
 ## FIRST THING THE NEXT SESSION SHOULD DO
-The owner reviews and merges the stack bottom-up: PR #3 (base `main`) first, then PR #4 (base
-`feat/sql-schema-seed`), then PR #5 (base `feat/twin-bicep`), then PR #6 (base `feat/secret-provider`), then PR #7 (base
-`feat/order-service-app`), then PR #8 (base `ci/order-service-image`), then PR #9 (base `docs/runbook-v1`), then PR #10 (base `test/local-rehearsal`), then PR #11 (base `docs/handoffs`), then PR #12 (base `ci/security-scans`), then PR #13 (base `ci/candidate-builds`).
-Merge each with `gh pr merge <N> --merge` only on the
-owner's explicit "Merge", and after each merge retarget the next PR's base to `main` (`gh pr edit <N> --base main`).
-Then send the hand-offs in `docs/handoffs.md` (plus the items shared directly). After PR #7 merges and the first `main` run pushes the image, the owner makes the GHCR
-package public (Phase 4 step 4) and tells WS2 the image name.
+The owner reviews and merges the stack bottom-up: PR #3 (base `main`) first, then PR #4 through PR #14 in order (each is
+based on the previous PR's branch). Merge each with `gh pr merge <N> --merge` only on the owner's explicit "Merge".
+After each merge, retarget the next PR's base to main (`gh pr edit <N> --base main`) and wait for CI green before merging it.
+
+Note: plan row numbers and PR numbers differ. Plan #14 (architecture note) is PR #13, and plan #13 (load generator) is PR #14.
+
+### Owner actions
+1. BEFORE merging PR #12: add a repository ruleset so only the Engineer agent's identity (and admins) can
+   create or push `candidate/**` branches, and protect `main` (require a PR and status checks, block force-push and deletion).
+2. After the first green `main` run: make the GHCR packages `order-service` and `load-generator` public.
+3. Tell WS2: `azd env set ORDER_IMAGE ghcr.io/livefire-team/order-service:g1`, the `APPINSIGHTS_CONNECTION_STRING`
+   output line, and `infra/modules/loadgen.bicep`.
+4. Send WS3 and WS4 their private hand-offs (see `CLAUDE.local.md`).
+5. Agree `SECRET_REFRESH_SECONDS` with WS2 and WS5.
+6. Lab checks and the joint drill with WS2 (Phase 7 steps 5-7).
+7. Invite teammates to the `livefire-team` org.
 
 ## Environment facts
 | Item | Value |
@@ -37,18 +46,18 @@ if `git`/`gh`/`az`/`docker` are "not recognized". ODBC Driver 18 is not installe
 |---|---|---|---|---|
 | 1 | chore: project scaffold | Rules, ADRs, status, glossary, folders | merged | PR #1 |
 | 2 | docs: twin contract + plan | `contracts/twin-interface.md` (Phase 1) and this plan | merged | PR #2 |
-| 3 | feat(sql): schema + seed | Phase 2 + compose file with local SQL Server; run twice | PR open | PR #3 |
-| 4 | feat(infra): twin.bicep | Phase 5 + ADRs (1 replica, /health probes, Basic SQL, plain resources); `az bicep build` | PR open | PR #4 |
+| 3 | feat(sql): schema + seed | Phase 2 + compose file with local SQL Server; run twice | PR open | [PR #3](https://github.com/livefire-team/livefire-fusion-poc/pull/3) |
+| 4 | feat(infra): twin.bicep | Phase 5 + ADRs (1 replica, /health probes, Basic SQL, plain resources); `az bicep build` | PR open | [PR #4](https://github.com/livefire-team/livefire-fusion-poc/pull/4) |
 | 5 | feat(order-service): secret provider + catalog | Phase 3 steps 1–3, 7, TDD | PR open | [PR #5](https://github.com/livefire-team/livefire-fusion-poc/pull/5) |
 | 6 | feat(order-service): db, pages, health, telemetry | Phase 3 steps 4–6, TDD with DB stubbed | PR open | [PR #6](https://github.com/livefire-team/livefire-fusion-poc/pull/6) |
 | 7 | ci: Dockerfile + Actions -> GHCR | Phase 4; `sha-<commit>` + `:g1`; user makes package public | PR open | [PR #7](https://github.com/livefire-team/livefire-fusion-poc/pull/7) |
-| 8 | docs: runbook v1 | Phase 6 | PR open | PR #8 |
+| 8 | docs: runbook v1 | Phase 6 | PR open | [PR #8](https://github.com/livefire-team/livefire-fusion-poc/pull/8) |
 | 9 | test: local Docker Compose rehearsal | Phase 7 steps 1–4; app in compose, file as Key Vault stand-in | PR open | [PR #9](https://github.com/livefire-team/livefire-fusion-poc/pull/9) |
 | 10 | docs: hand-offs | Phase 8; `docs/handoffs.md` | PR open | [PR #10](https://github.com/livefire-team/livefire-fusion-poc/pull/10) |
 | G1 | G1 checklist | Phase 8 step 5 items all ticked | not started | |
 | 11 | ci: security scans (G2) | gitleaks, pip-audit, Trivy, CodeQL; ADR-013 | PR open | [PR #11](https://github.com/livefire-team/livefire-fusion-poc/pull/11) |
 | 12 | ci: candidate builds (G2) | `candidate/*` -> `candidate-<drill-id>` tags | PR open | [PR #12](https://github.com/livefire-team/livefire-fusion-poc/pull/12) |
-| 13 | feat: load generator (G2) | Container Apps Job, steady POST /api/orders + backlog retries | not started | |
+| 13 | feat: load generator (G2) | Container Apps Job, steady POST /api/orders + backlog retries | PR open | [PR #14](https://github.com/livefire-team/livefire-fusion-poc/pull/14) |
 | 14 | docs: architecture note (G2) | `docs/architecture.md` — the only file WS3 indexes | PR open | [PR #13](https://github.com/livefire-team/livefire-fusion-poc/pull/13) |
 
 Outside PRs (with WS2, needs Azure): agree `SECRET_REFRESH_SECONDS` with WS2/WS5; check twin after first
@@ -58,8 +67,8 @@ If time runs short before Nov 2, cut #13 then #12 first.
 Status values: not started | in progress | PR open | merged | blocked
 
 ## In progress right now
-- Branch: docs/architecture-note (stacked on ci/candidate-builds), PR #13; next: plan item #13
-- Previous: ci/candidate-builds (stacked on ci/security-scans), PR #12
+- Branch: feat/load-generator (stacked on docs/architecture-note), PR #14; next: G1 checklist, refresh window with WS2/WS5
+- Previous: docs/architecture-note (stacked on ci/candidate-builds), PR #13
 - Last commands run: `.\scripts\local-sql.ps1` twice, `.\scripts\local-access-drill.ps1` (ran all 4 stages, exit 0),
   `docker compose down`, and `pytest -q src/order-service --cov=src/order-service/app`: 59 passed, coverage 99%
 - Uncommitted / unpushed files: none expected
@@ -99,10 +108,16 @@ Status values: not started | in progress | PR open | merged | blocked
   (never `g1`); contract row added; ADR-014. Verified by CI on the PR (no candidate branch pushed).
 - PR #13 opened: `docs/architecture.md` (components, request flow, secrets and configuration, health
   endpoints, telemetry names, CI/CD and image tags, runbook location) for WS3's search index.
+- PR #14 opened: `src/load-generator/` (TDD, tests first, coverage 98%), Dockerfile (non-root), workflow
+  `load-generator.yml` (test -> image smoke test -> publish `sha-`/`g2` from `main`), `infra/modules/loadgen.bicep`
+  (Container Apps Job in `cae-lf-twin`, `az bicep build` clean, `twin.bicep` unchanged); security scans cover it;
+  contract addition (G2) and ADR-015.
 
 ## Blockers / questions for the user or other workstreams
 - Teammates (WS2–WS5) are not yet invited to the `livefire-team` org/repo — need their GitHub usernames.
 - Tell WS2–WS5 the repo URL and image path (`ghcr.io/livefire-team/order-service`).
+- Owner, after PR #14 merges and the first `main` run of `load-generator.yml` is green: make the GHCR package
+  `load-generator` public too, then tell WS2 the image `ghcr.io/livefire-team/load-generator:g2`.
 - Owner, after PR #7 merges and the first `main` run is green: make the GHCR package `order-service` public
   (org Packages -> order-service -> Package settings -> Visibility: Public), then tell WS2 the image
   `ghcr.io/livefire-team/order-service:g1` (`sha-` tags for rehearsals).
@@ -115,12 +130,13 @@ Status values: not started | in progress | PR open | merged | blocked
 - [ ] WS2: image name/tag, twin.bicep merged, contract additions (appInsightsConnectionString output, principalType + secretRefreshSeconds), local stack
 - [ ] WS3: Phase 8 items, runbook path, telemetry names
 - [ ] WS4: allowed/protected paths for the Engineer
-- [ ] WS5: metric names (orders_completed, orders_failed{reason})
+- [ ] WS5: metric names (orders_completed, orders_failed{reason}, loadgen_orders_sent, loadgen_orders_dropped, loadgen_backlog_size)
 
 ## Decisions log pointer
-See `docs/ADR.md` (latest: ADR-014).
+See `docs/ADR.md` (latest: ADR-015).
 
 ## Session log (newest first)
+- 2026-10-29 session #2: final BUILD_STATUS; load generator hardened (partial reads, bounded config, steady schedule, non-overlapping job runs). PR #14 load generator (G2), stacked on PR #13.
 - 2026-10-29 session #2: PR #13 architecture note `docs/architecture.md` (G2), stacked on PR #12.
 - 2026-10-29 session #2: PR #12 candidate builds (G2), stacked on PR #11.
 - 2026-10-29 session #2: PR #11 security scans workflow (G2), stacked on PR #10.

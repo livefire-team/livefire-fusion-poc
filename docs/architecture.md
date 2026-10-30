@@ -53,6 +53,7 @@ Azure Monitor OpenTelemetry (`configure_azure_monitor(logger_name="orders")`) se
 | Span | `place_order` |
 | Log messages | `order placed` (info), `order failed` (error, with the exception) |
 | Metrics | `orders_completed`; `orders_failed` tagged `reason` (exception type) |
+| Load generator metrics | `loadgen_orders_sent` {`kind`, `result`}, `loadgen_orders_dropped` {`reason`}, `loadgen_backlog_size` |
 
 ## CI/CD and images
 
@@ -63,6 +64,8 @@ GitHub Actions (`.github/workflows/`): `order-service.yml` runs unit tests, buil
 - `sha-<7-character commit>`: immutable, every published build.
 - `g1`: the current release from `main`.
 - `candidate-<drill-id>-<attempt>`: builds of `candidate/<drill-id>-<attempt>` branches.
+
+`load-generator.yml` builds `ghcr.io/livefire-team/load-generator` the same way (`sha-<commit>` and `g2` from `main`).
 
 A deployment selects an image tag and creates a new Container Apps revision.
 
