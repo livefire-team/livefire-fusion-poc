@@ -1,0 +1,23 @@
+# gitleaks configuration (ADR-013): the default rules plus an allowlist of public values that the
+# generic-api-key rule mistakes for secrets. Each entry must say why it is not a secret.
+title = "livefire-fusion-poc gitleaks config"
+
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = "Azure built-in role definition IDs (public, the same in every tenant) used in infra/modules/twin.bicep"
+regexTarget = "secret"
+regexes = [
+  # Key Vault Secrets User
+  '''^4633458b-17de-408a-b874-0445c86b69e6$''',
+  # Key Vault Secrets Officer
+  '''^b86a8fe4-44ce-4948-aee5-eccb2c155cd7$''',
+]
+
+[[allowlists]]
+description = "Fingerprint of Microsoft's published package signing key, checked in src/order-service/Dockerfile"
+regexTarget = "secret"
+regexes = [
+  '''^BC528686B50D79E339D3721CEB3E94ADBE1229CF$''',
+]

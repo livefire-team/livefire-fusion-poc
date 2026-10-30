@@ -196,6 +196,36 @@ Status values: Proposed | Accepted | Superseded | Rejected
   only checked in the lab. Deleting `.local/secret.txt` makes the next `local-sql.ps1` run generate a new password.
 - **Implemented in:** PR #9 (`docker-compose.yml`, `scripts/local-sql.ps1`, `scripts/local-access-drill.ps1`)
 
+## ADR-013: Security scans in CI and their fail policy
+- **Date:** 2026-10-29
+- **Status:** Accepted
+- **Context:** G2 asks for gitleaks, pip-audit, Trivy and CodeQL in CI. The repo is public, so CodeQL is free.
+  `gitleaks-action` needs a paid licence for organisation repos, and third-party scanner actions that run whatever
+  their tag points at are a supply-chain risk. A scan that fails on every unfixable base-image CVE would block every
+  PR without anything we could do about it.
+- **Options considered:** (1) the vendors' wrapper actions (`gitleaks-action`, `trivy-action`); (2) the official
+  release binaries, downloaded at a fixed version and checked against a fixed SHA-256 checksum; and for the fail
+  policy (a) report only, (b) fail on any finding, (c) fail on HIGH/CRITICAL findings that have a fix available.
+- **Decision:** Option 2 with policy (c). New workflow `.github/workflows/security.yml` runs on every pull request
+  (any base) and on pushes to `main`, as four jobs with read-only tokens: `gitleaks` scans the full git history
+  (`--redact`, fails on any finding); `pip-audit` audits `src/order-service/requirements.txt` and
+  `requirements-dev.txt` (fails on any known vulnerability); `codeql` analyses the Python code (only this job has
+  `security-events: write`; alerts go to the repo's Security tab); `trivy` scans the repository for vulnerable
+  dependencies and misconfigurations (Dockerfile, IaC) and then the order-service image built in the job, both with
+  `--severity HIGH,CRITICAL --ignore-unfixed --exit-code 1`. Actions are pinned to commit SHAs (ADR-011);
+  `pip-audit` is pinned by version. The local SQL Server image in `docker-compose.yml` is pinned to
+  `2022-CU27-GDR1-ubuntu-22.04` (same digest as `2022-latest` on 2026-10-29) instead of the moving tag.
+- **Consequences:** A leaked secret, a fixable HIGH/CRITICAL CVE or a misconfiguration blocks the PR; unfixed
+  base-image CVEs are not blocking, so they need a periodic look (rebuild on a newer base when fixes land). Trivy does
+  not read Bicep directly, so `infra/` is only covered once it is compiled to ARM JSON. Scanner versions and
+  checksums are bumped by hand (`gh api repos/<owner>/<repo>/releases/latest`, then the release's checksums file).
+  Any gitleaks allowlist entry goes in `.gitleaks.toml` with a comment saying why it is not a secret. The first run
+  found three false positives (two Azure built-in role IDs in `twin.bicep`, the Microsoft signing-key fingerprint
+  in the Dockerfile), now allowlisted by exact value; a dev-only pytest advisory (PYSEC-2026-1845), fixed by moving
+  `requirements-dev.txt` to pytest 9.0.3; and Trivy check DS-0031 reading the Dockerfile build argument
+  `MS_KEY_FPR` as a secret name, fixed by renaming it `MS_SIGNING_FINGERPRINT`.
+- **Implemented in:** PR #11 (`.github/workflows/security.yml`, `.gitleaks.toml`, `docker-compose.yml`)
+
 <!-- Copy the block below for each new decision -->
 
 ## ADR-00N: <short title>

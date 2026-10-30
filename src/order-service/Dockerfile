@@ -4,7 +4,7 @@ LABEL org.opencontainers.image.source="https://github.com/livefire-team/livefire
 # The Microsoft package signing key is checked against its published fingerprint before it is trusted;
 # the build fails if it does not match. curl and gnupg are only needed here and are purged afterwards
 # (ca-certificates stays: the ODBC driver uses the system CA store for TLS to Azure SQL).
-ARG MS_KEY_FPR=BC528686B50D79E339D3721CEB3E94ADBE1229CF
+ARG MS_SIGNING_FINGERPRINT=BC528686B50D79E339D3721CEB3E94ADBE1229CF
 RUN set -eu \
  && apt-get update \
  && apt-get install -y --no-install-recommends curl ca-certificates gnupg \
@@ -15,8 +15,8 @@ RUN set -eu \
  && npub="$(grep -c '^pub:' /tmp/microsoft.keys)" \
  && fpr="$(awk -F: '$1 == "fpr" { print $10; exit }' /tmp/microsoft.keys)" \
  && echo "microsoft.asc: $npub key(s), primary fingerprint $fpr" \
- && if [ "$npub" != "1" ] || [ "$fpr" != "$MS_KEY_FPR" ]; then \
-      echo "ERROR: Microsoft signing key fingerprint mismatch (expected $MS_KEY_FPR)" >&2; exit 1; \
+ && if [ "$npub" != "1" ] || [ "$fpr" != "$MS_SIGNING_FINGERPRINT" ]; then \
+      echo "ERROR: Microsoft signing key fingerprint mismatch (expected $MS_SIGNING_FINGERPRINT)" >&2; exit 1; \
     fi \
  && gpg --batch --dearmor -o /usr/share/keyrings/microsoft-prod.gpg /tmp/microsoft.asc \
  && curl -fsSL https://packages.microsoft.com/config/debian/12/prod.list -o /etc/apt/sources.list.d/mssql-release.list \

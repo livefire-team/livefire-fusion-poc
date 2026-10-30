@@ -11,11 +11,12 @@ One-sentence definitions of terms used in this project, added the first time eac
 | Cache | A copy of a value kept in memory so the app doesn't fetch it again every time; our secret provider caches the DB password. |
 | CI (continuous integration) | Automatically testing and building every change on a server (for us, GitHub Actions) so problems show up before merging. |
 | Clone | Download a linked local copy of a GitHub repo, so you can work on it and push changes back. |
-| CodeQL | GitHub's code-security scanner; free on public repos. |
+| CodeQL | GitHub's code-security scanner that reads our Python code for security bugs; free on public repos, runs in `security.yml`. |
 | Commit | A saved snapshot of changes in git, with a message describing it. |
 | Container registry | An online store for container images that platforms pull from; ours is GHCR. |
 | Conventional commit | A commit message that starts with its type, e.g. `feat:`, `fix:`, `docs:`, `chore:`, `test:`, `ci:`. |
 | Coverage (test coverage) | The share of code lines that the tests actually run, measured with `pytest --cov`; we require at least 80% on `src/order-service/app`. |
+| CVE | Common Vulnerabilities and Exposures: the public ID (like `CVE-2026-12345`) given to a known security flaw in a piece of software. |
 | Dependency override | A FastAPI feature (`app.dependency_overrides`) that swaps a dependency for a test stand-in; our tests use pytest's monkeypatch instead because `main.py` uses module-level objects. |
 | Docker / container | A way to package an app with everything it needs so it runs the same everywhere; Docker Desktop runs them on Windows. |
 | Docker Compose | A file (`docker-compose.yml`) describing several containers to start together with `docker compose up`. |
@@ -26,6 +27,7 @@ One-sentence definitions of terms used in this project, added the first time eac
 | `gh` | The GitHub command-line tool: log in, create repos, open and merge PRs from the terminal. |
 | GHCR | GitHub Container Registry (`ghcr.io`): where our order-service container image is stored; names must be lowercase. |
 | GitHub Actions | GitHub's built-in CI service: it runs the workflows in `.github/workflows/` on GitHub's machines. |
+| gitleaks | A scanner that searches the whole git history for committed secrets such as passwords and keys; runs in `security.yml`. |
 | Health check | An endpoint that reports whether the app (`/health`) or what it depends on (`/health/dependencies`) is working. |
 | Idempotent | Safe to run more than once: the second run changes nothing and doesn't fail. Our SQL scripts must be. |
 | Image tag | The label after the colon in an image name (like `:g1` or `:sha-1a2b3c4`) that picks one version of the image (ADR-010). |
@@ -38,6 +40,7 @@ One-sentence definitions of terms used in this project, added the first time eac
 | OpenTelemetry | An open standard and library for traces, metrics and logs; `azure-monitor-opentelemetry` sends ours to Application Insights. |
 | Organisation (GitHub org) | A shared GitHub account that several people can own; ours is `livefire-team`. |
 | PATH | The list of folders Windows searches when you type a command like `git`; programs started before an install keep the old list. |
+| pip-audit | A tool that checks our pinned Python packages against databases of known vulnerabilities. |
 | PR (pull request) | A request on GitHub to merge a branch into `main`, where changes are reviewed and checks run before merging. |
 | Probe | A regular HTTP check the platform makes on a container (liveness: restart it if it fails; readiness: stop sending it traffic if it fails); ours both call `/health` (ADR-006). |
 | Public / private repo | Who can read the code: anyone (public) or only invited people (private). Ours is public (ADR-002). |
@@ -45,6 +48,7 @@ One-sentence definitions of terms used in this project, added the first time eac
 | RBAC | Role-Based Access Control: Azure grants access by assigning a role (like "Key Vault Secrets User") to an identity on a resource. |
 | Replica | One running copy of a container app; the twin runs exactly one (ADR-006). |
 | Revision | An immutable version of a Container App's settings and image; a new one is created when the app's template changes. |
+| SARIF | A standard JSON format for scanner results; CodeQL uploads SARIF so findings show in GitHub's Security tab. |
 | Seed data | Starting rows loaded into a fresh database; ours is the two products in `sql/seed.sql`. |
 | Smoke test | A quick check that something basically works, like starting the container and calling `/health`, before deeper testing or publishing. |
 | Span | One timed step inside a trace (like `place_order`), which can carry attributes such as `drill_id`. |
@@ -53,6 +57,7 @@ One-sentence definitions of terms used in this project, added the first time eac
 | Stand-in | A simple local replacement for a real service, used so the app can run without it; our local stand-in for Key Vault is the file `.local/secret.txt` (ADR-012). |
 | TestClient | FastAPI's in-process test browser: it calls the app's endpoints without starting a server. |
 | Token | A long secret string proving to a service that it is you; never pasted into chat or files. |
+| Trivy | A scanner for known vulnerabilities and misconfigurations in files, Dockerfiles and container images. |
 | TTL / refresh window | How long a cached value is trusted before it is fetched again; for the DB password it is `SECRET_REFRESH_SECONDS`. |
 | UAC prompt | The Windows "Allow this app to make changes?" dialog; only you click it. |
 | Virtual environment (venv) | A private folder of Python packages for one project (ours is the git-ignored `.venv`), so its pinned versions don't clash with other projects. |
