@@ -45,10 +45,10 @@ param skus string = 'SKU-001,SKU-002'
 @description('Optional x-drill-id header value (DRILL_ID): 1-64 letters, digits or . _ : -. Empty sends no header.')
 param drillId string = ''
 
-@description('How long one job execution places orders, in seconds (DURATION_SECONDS).')
+@description('How long one job execution places orders, in seconds (DURATION_SECONDS). Keep durationSeconds plus the 300 s shutdown grace below the cron period (hourly by default) so scheduled runs cannot overlap.')
 @minValue(60)
 @maxValue(86000)
-param durationSeconds int = 3600
+param durationSeconds int = 3000
 
 @description('Manual: start each run with `az containerapp job start`. Schedule: run on cronExpression.')
 @allowed(['Manual', 'Schedule'])

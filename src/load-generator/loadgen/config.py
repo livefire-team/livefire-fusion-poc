@@ -8,6 +8,9 @@ from urllib.parse import urlsplit
 DRILL_ID_PATTERN = re.compile(r"[A-Za-z0-9._:-]{1,64}")   # same rule the order service applies to x-drill-id
 SKU_PATTERN = re.compile(r"[A-Za-z0-9-]{1,32}")
 MAX_RATE_PER_MINUTE = 600.0
+MAX_BACKLOG_LIMIT = 100_000
+MAX_RETRIES_PER_TICK = 100
+DIGITS = re.compile(r"[0-9]+")
 DEFAULT_SKUS = "SKU-001,SKU-002"
 
 
@@ -45,10 +48,10 @@ def _number(env: Mapping[str, str], name: str, default: str, minimum: float, *, 
     return value
 
 
-def _integer(env: Mapping[str, str], name: str, default: str, minimum: int) -> int:
-    raw = env.get(name, default)
-    if not raw.strip().isdigit() or int(raw) < minimum:
-        raise ConfigError(f"{name} must be a whole number >= {minimum}, got {raw!r}")
+def _integer(env: Mapping[str, str], name: str, default: str, minimum: int, maximum: int) -> int:
+    raw = env.get(name, default).strip()
+    if not DIGITS.fullmatch(raw) or not minimum <= int(raw) <= maximum:
+        raise ConfigError(f"{name} must be a whole number from {minimum} to {maximum}, got {raw!r}")
     return int(raw)
 
 
@@ -91,8 +94,8 @@ def load_config(env: Mapping[str, str]) -> Config:
         rate_per_minute=rate,
         skus=_skus(env),
         drill_id=_drill_id(env),
-        max_backlog=_integer(env, "MAX_BACKLOG", "500", 1),
-        retries_per_tick=_integer(env, "RETRIES_PER_TICK", "5", 0),
+        max_backlog=_integer(env, "MAX_BACKLOG", "500", 1, MAX_BACKLOG_LIMIT),
+        retries_per_tick=_integer(env, "RETRIES_PER_TICK", "5", 0, MAX_RETRIES_PER_TICK),
         retry_base_seconds=base,
         retry_max_seconds=cap,
         request_timeout_seconds=_number(env, "REQUEST_TIMEOUT_SECONDS", "10", 0.0, strict=True),

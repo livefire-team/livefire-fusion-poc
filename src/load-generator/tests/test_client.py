@@ -1,3 +1,4 @@
+import http.client
 import io
 import json
 import urllib.error
@@ -12,8 +13,8 @@ class FakeResponse:
         self.status = status
         self._body = json.dumps(body).encode()
 
-    def read(self):
-        return self._body
+    def read(self, amt=None):
+        return self._body if amt is None else self._body[:amt]
 
     def __enter__(self):
         return self
@@ -81,3 +82,24 @@ def test_network_errors_are_retryable(exc):
 def test_unexpected_success_status_is_treated_as_retryable():
     client = OrderClient("https://a", None, 1.0, opener=Recorder(FakeResponse(200, {})))
     assert client.place("SKU-001") == OrderResult(ok=False, retryable=True, status=200, reason="http_200")
+
+
+def test_incomplete_read_is_a_retryable_failure():
+    opener = Recorder(http.client.IncompleteRead(b"par"))
+    client = OrderClient("https://app.example.net", drill_id=None, timeout=1.0, opener=opener)
+    result = client.place("SKU-001")
+    assert result == OrderResult(ok=False, retryable=True, status=None, reason="IncompleteRead")
+
+
+def test_response_body_read_is_capped():
+    amounts = []
+
+    class Recording(FakeResponse):
+        def read(self, amt=None):
+            amounts.append(amt)
+            return b""
+
+    opener = Recorder(Recording(201, {}))
+    client = OrderClient("https://app.example.net", drill_id=None, timeout=1.0, opener=opener)
+    client.place("SKU-001")
+    assert amounts == [65536]

@@ -1,10 +1,12 @@
 """HTTP client for the order service's `POST /api/orders`."""
+import http.client
 import json
 import urllib.error
 import urllib.request
 from collections.abc import Callable
 from dataclasses import dataclass
 
+MAX_BODY_BYTES = 65536
 RETRYABLE_STATUSES = frozenset({408, 429})
 
 
@@ -39,12 +41,12 @@ class OrderClient:
     def place(self, sku: str) -> OrderResult:
         try:
             with self._open(self._request(sku), timeout=self._timeout) as response:
-                response.read()
+                response.read(MAX_BODY_BYTES)
                 status = response.status
         except urllib.error.HTTPError as exc:
             exc.close()
             return _failure(exc.code)
-        except (urllib.error.URLError, OSError) as exc:   # refused, DNS, TLS, timeout
+        except (urllib.error.URLError, http.client.HTTPException, OSError) as exc:   # refused, DNS, TLS, timeout, short read
             return OrderResult(ok=False, retryable=True, status=None, reason=type(exc).__name__)
         if status == 201:
             return OrderResult(ok=True, retryable=False, status=status, reason=None)

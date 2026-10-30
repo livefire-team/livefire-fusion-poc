@@ -47,7 +47,7 @@ Version: 1 (2026-10-28) — copied from the WS2 guide's Phase 2 contract via the
 2. The `principalType` and `secretRefreshSeconds` pass-through parameters (both optional, defaults above).
 3. WS1 addition (G2): load generator module `infra/modules/loadgen.bicep` (Container Apps Job `caj-loadgen` in the
    existing environment `cae-lf-twin`; required params `location`, `loadgenImage`, `orderAppUrl`; optional
-   `appInsightsConnectionString`, `ratePerMinute` (30), `skus`, `drillId`, `durationSeconds` (3600), `triggerType`
+   `appInsightsConnectionString`, `ratePerMinute` (30), `skus`, `drillId`, `durationSeconds` (3000), `triggerType`
    (`Manual` or `Schedule`), `cronExpression`, `jobName`, `containerAppsEnvironmentName`; outputs `loadgenJobName`,
    `loadgenJobId`). Image `ghcr.io/livefire-team/load-generator:g2` (and `sha-<commit>`). Metrics in Application
    Insights: `loadgen_orders_sent` {`kind`, `result`}, `loadgen_orders_dropped` {`reason`}, `loadgen_backlog_size`.

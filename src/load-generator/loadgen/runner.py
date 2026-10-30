@@ -1,5 +1,6 @@
 """The steady loop: one new order per tick, plus a bounded number of due retries from the backlog."""
 import itertools
+import math
 import time
 from collections.abc import Callable
 
@@ -48,6 +49,14 @@ class LoadRunner:
                 break
             self._retry(order, now)
 
+    def _seconds_until_next_slot(self, start: float, ticks: int, now: float) -> float:
+        """Slots sit at start + n*interval; slots already missed are skipped rather than bursted."""
+        interval = self._config.interval_seconds
+        slot = ticks
+        if start + slot * interval <= now:
+            slot = math.floor((now - start) / interval) + 1
+        return start + slot * interval - now
+
     def run(self, stop, clock: Callable[[], float] = time.monotonic) -> int:
         """Tick at the configured rate until `stop` is set or DURATION_SECONDS (0 = no limit) has passed."""
         start = clock()
@@ -60,7 +69,7 @@ class LoadRunner:
             ticks += 1
             if ticks % STATUS_EVERY_TICKS == 0:
                 log_status(self.sent, len(self._backlog), self._backlog.dropped)
-            if stop.wait(self._config.interval_seconds):
+            if stop.wait(self._seconds_until_next_slot(start, ticks, clock())):
                 break
         log_status(self.sent, len(self._backlog), self._backlog.dropped)
         return self.sent

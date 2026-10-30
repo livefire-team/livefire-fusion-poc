@@ -1,5 +1,7 @@
 import threading
 
+import pytest
+
 from loadgen.backlog import Backlog
 from loadgen.client import OrderResult
 from loadgen.config import load_config
@@ -108,3 +110,57 @@ def test_run_stops_when_asked(meter):
     runner, client, _ = build([], meter)
     assert runner.run(stop=stop) == 0
     assert client.skus == []
+
+
+def test_slow_requests_do_not_lower_the_rate(meter):
+    clock = {"t": 0.0}
+    waits = []
+
+    class Stop:
+        def is_set(self):
+            return False
+
+        def wait(self, seconds):
+            waits.append(seconds)
+            clock["t"] += seconds
+            return False
+
+    runner, client, _ = build([], meter, DURATION_SECONDS="3")
+    original = client.place
+
+    def slow_place(sku):
+        clock["t"] += 0.4
+        return original(sku)
+
+    client.place = slow_place
+    runner.run(stop=Stop(), clock=lambda: clock["t"])
+    assert waits == pytest.approx([0.6, 0.6, 0.6])
+
+
+def test_missed_ticks_are_skipped_not_burst(meter):
+    clock = {"t": 0.0}
+    waits = []
+
+    class Stop:
+        def is_set(self):
+            return False
+
+        def wait(self, seconds):
+            waits.append(seconds)
+            clock["t"] += seconds
+            return False
+
+    runner, client, _ = build([], meter, DURATION_SECONDS="6")
+    original = client.place
+    calls = {"n": 0}
+
+    def place(sku):
+        calls["n"] += 1
+        if calls["n"] == 1:
+            clock["t"] += 2.5   # one request overruns two intervals
+        return original(sku)
+
+    client.place = place
+    runner.run(stop=Stop(), clock=lambda: clock["t"])
+    assert waits[0] == pytest.approx(0.5)   # next slot is t=3, not an immediate burst
+    assert all(w > 0 for w in waits)

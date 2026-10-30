@@ -6,7 +6,7 @@ from loadgen import __main__ as entry
 class FakeResponse:
     status = 201
 
-    def read(self):
+    def read(self, amt=None):
         return json.dumps({"order_id": "x"}).encode()
 
     def __enter__(self):
