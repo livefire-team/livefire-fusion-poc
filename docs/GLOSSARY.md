@@ -19,6 +19,8 @@ One-sentence definitions of terms used in this project, added the first time eac
 | Dependency override | A FastAPI feature (`app.dependency_overrides`) that swaps a dependency for a test stand-in; our tests use pytest's monkeypatch instead because `main.py` uses module-level objects. |
 | Docker / container | A way to package an app with everything it needs so it runs the same everywhere; Docker Desktop runs them on Windows. |
 | Docker Compose | A file (`docker-compose.yml`) describing several containers to start together with `docker compose up`. |
+| Docker Compose service | One named container entry in `docker-compose.yml` (ours are `sql` and `orders`) that you can start, restart or stop by name. |
+| Drill | A planned practice run of an incident, where you change one thing on purpose and record what the system reports; `scripts/local-access-drill.ps1` is our local one. |
 | Endpoint | One URL path plus method that the app answers, like `GET /health` or `POST /api/orders`. |
 | `.env` file | A git-ignored file of local settings (like a generated password) that Docker Compose reads automatically. |
 | `gh` | The GitHub command-line tool: log in, create repos, open and merge PRs from the terminal. |
@@ -48,6 +50,7 @@ One-sentence definitions of terms used in this project, added the first time eac
 | Span | One timed step inside a trace (like `place_order`), which can carry attributes such as `drill_id`. |
 | sqlcmd | Microsoft's command-line tool for running SQL against SQL Server; we run it inside the SQL container. |
 | Squash merge | Merging a PR as one combined commit; forbidden here because it rewrites commit history (ADR-003). |
+| Stand-in | A simple local replacement for a real service, used so the app can run without it; our local stand-in for Key Vault is the file `.local/secret.txt` (ADR-012). |
 | TestClient | FastAPI's in-process test browser: it calls the app's endpoints without starting a server. |
 | Token | A long secret string proving to a service that it is you; never pasted into chat or files. |
 | TTL / refresh window | How long a cached value is trusted before it is fetched again; for the DB password it is `SECRET_REFRESH_SECONDS`. |
