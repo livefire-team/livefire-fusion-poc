@@ -7,16 +7,17 @@
 **Current gate target:** G2 (Nov 2)
 
 ## FIRST THING THE NEXT SESSION SHOULD DO
-The owner reviews and merges the stack bottom-up: PR #3 (base `main`) first, then PR #4 through PR #14 in order (each is
-based on the previous PR's branch). Merge each with `gh pr merge <N> --merge` only on the owner's explicit "Merge".
-After each merge, retarget the next PR's base to main (`gh pr edit <N> --base main`) and wait for CI green before merging it.
+All WS1 PRs (#1-#14) are merged into `main` (2026-10-30, merge commits; last merge 8e37fd0); every `main` run is green.
+Ask the owner which owner action below is done, then help with the next open one (G2 is Nov 2).
+`main` is protected by ruleset `protect-main` (changes only via PR), so even status updates need a small PR.
 
 Note: plan row numbers and PR numbers differ. Plan #14 (architecture note) is PR #13, and plan #13 (load generator) is PR #14.
 
 ### Owner actions
-1. BEFORE merging PR #12: add a repository ruleset so only the Engineer agent's identity (and admins) can
-   create or push `candidate/**` branches, and protect `main` (require a PR and status checks, block force-push and deletion).
-2. After the first green `main` run: make the GHCR packages `order-service` and `load-generator` public.
+1. DONE 2026-10-30: rulesets `candidate-branches` (only admins create/push `candidate/**`) and `protect-main`.
+   Still to do: add WS4's Engineer agent identity as a bypass actor on `candidate-branches` once WS4 names it.
+2. Make the GHCR packages `order-service` and `load-generator` public (org > Packages > package settings >
+   Change visibility). Both have been published from `main`.
 3. Tell WS2: `azd env set ORDER_IMAGE ghcr.io/livefire-team/order-service:g1`, the `APPINSIGHTS_CONNECTION_STRING`
    output line, and `infra/modules/loadgen.bicep`.
 4. Send WS3 and WS4 their private hand-offs (see `CLAUDE.local.md`).
@@ -46,19 +47,19 @@ if `git`/`gh`/`az`/`docker` are "not recognized". ODBC Driver 18 is not installe
 |---|---|---|---|---|
 | 1 | chore: project scaffold | Rules, ADRs, status, glossary, folders | merged | PR #1 |
 | 2 | docs: twin contract + plan | `contracts/twin-interface.md` (Phase 1) and this plan | merged | PR #2 |
-| 3 | feat(sql): schema + seed | Phase 2 + compose file with local SQL Server; run twice | PR open | [PR #3](https://github.com/livefire-team/livefire-fusion-poc/pull/3) |
-| 4 | feat(infra): twin.bicep | Phase 5 + ADRs (1 replica, /health probes, Basic SQL, plain resources); `az bicep build` | PR open | [PR #4](https://github.com/livefire-team/livefire-fusion-poc/pull/4) |
-| 5 | feat(order-service): secret provider + catalog | Phase 3 steps 1–3, 7, TDD | PR open | [PR #5](https://github.com/livefire-team/livefire-fusion-poc/pull/5) |
-| 6 | feat(order-service): db, pages, health, telemetry | Phase 3 steps 4–6, TDD with DB stubbed | PR open | [PR #6](https://github.com/livefire-team/livefire-fusion-poc/pull/6) |
-| 7 | ci: Dockerfile + Actions -> GHCR | Phase 4; `sha-<commit>` + `:g1`; user makes package public | PR open | [PR #7](https://github.com/livefire-team/livefire-fusion-poc/pull/7) |
-| 8 | docs: runbook v1 | Phase 6 | PR open | [PR #8](https://github.com/livefire-team/livefire-fusion-poc/pull/8) |
-| 9 | test: local Docker Compose rehearsal | Phase 7 steps 1–4; app in compose, file as Key Vault stand-in | PR open | [PR #9](https://github.com/livefire-team/livefire-fusion-poc/pull/9) |
-| 10 | docs: hand-offs | Phase 8; `docs/handoffs.md` | PR open | [PR #10](https://github.com/livefire-team/livefire-fusion-poc/pull/10) |
+| 3 | feat(sql): schema + seed | Phase 2 + compose file with local SQL Server; run twice | merged | [PR #3](https://github.com/livefire-team/livefire-fusion-poc/pull/3) |
+| 4 | feat(infra): twin.bicep | Phase 5 + ADRs (1 replica, /health probes, Basic SQL, plain resources); `az bicep build` | merged | [PR #4](https://github.com/livefire-team/livefire-fusion-poc/pull/4) |
+| 5 | feat(order-service): secret provider + catalog | Phase 3 steps 1–3, 7, TDD | merged | [PR #5](https://github.com/livefire-team/livefire-fusion-poc/pull/5) |
+| 6 | feat(order-service): db, pages, health, telemetry | Phase 3 steps 4–6, TDD with DB stubbed | merged | [PR #6](https://github.com/livefire-team/livefire-fusion-poc/pull/6) |
+| 7 | ci: Dockerfile + Actions -> GHCR | Phase 4; `sha-<commit>` + `:g1`; user makes package public | merged | [PR #7](https://github.com/livefire-team/livefire-fusion-poc/pull/7) |
+| 8 | docs: runbook v1 | Phase 6 | merged | [PR #8](https://github.com/livefire-team/livefire-fusion-poc/pull/8) |
+| 9 | test: local Docker Compose rehearsal | Phase 7 steps 1–4; app in compose, file as Key Vault stand-in | merged | [PR #9](https://github.com/livefire-team/livefire-fusion-poc/pull/9) |
+| 10 | docs: hand-offs | Phase 8; `docs/handoffs.md` | merged | [PR #10](https://github.com/livefire-team/livefire-fusion-poc/pull/10) |
 | G1 | G1 checklist | Phase 8 step 5 items all ticked | not started | |
-| 11 | ci: security scans (G2) | gitleaks, pip-audit, Trivy, CodeQL; ADR-013 | PR open | [PR #11](https://github.com/livefire-team/livefire-fusion-poc/pull/11) |
-| 12 | ci: candidate builds (G2) | `candidate/*` -> `candidate-<drill-id>` tags | PR open | [PR #12](https://github.com/livefire-team/livefire-fusion-poc/pull/12) |
-| 13 | feat: load generator (G2) | Container Apps Job, steady POST /api/orders + backlog retries | PR open | [PR #14](https://github.com/livefire-team/livefire-fusion-poc/pull/14) |
-| 14 | docs: architecture note (G2) | `docs/architecture.md` — the only file WS3 indexes | PR open | [PR #13](https://github.com/livefire-team/livefire-fusion-poc/pull/13) |
+| 11 | ci: security scans (G2) | gitleaks, pip-audit, Trivy, CodeQL; ADR-013 | merged | [PR #11](https://github.com/livefire-team/livefire-fusion-poc/pull/11) |
+| 12 | ci: candidate builds (G2) | `candidate/*` -> `candidate-<drill-id>` tags | merged | [PR #12](https://github.com/livefire-team/livefire-fusion-poc/pull/12) |
+| 13 | feat: load generator (G2) | Container Apps Job, steady POST /api/orders + backlog retries | merged | [PR #14](https://github.com/livefire-team/livefire-fusion-poc/pull/14) |
+| 14 | docs: architecture note (G2) | `docs/architecture.md` — the only file WS3 indexes | merged | [PR #13](https://github.com/livefire-team/livefire-fusion-poc/pull/13) |
 
 Outside PRs (with WS2, needs Azure): agree `SECRET_REFRESH_SECONDS` with WS2/WS5; check twin after first
 `azd provision` (Phase 7 steps 5–6); joint drill PASS, FAIL, FAIL, PASS ×3 (Phase 7 step 7).
@@ -67,8 +68,8 @@ If time runs short before Nov 2, cut #13 then #12 first.
 Status values: not started | in progress | PR open | merged | blocked
 
 ## In progress right now
-- Branch: feat/load-generator (stacked on docs/architecture-note), PR #14; next: G1 checklist, refresh window with WS2/WS5
-- Previous: docs/architecture-note (stacked on ci/candidate-builds), PR #13
+- Branch: docs/status-after-merge (this status update); all feature PRs merged. Next: owner actions above, then
+  the lab checks and joint drill with WS2.
 - Last commands run: `.\scripts\local-sql.ps1` twice, `.\scripts\local-access-drill.ps1` (ran all 4 stages, exit 0),
   `docker compose down`, and `pytest -q src/order-service --cov=src/order-service/app`: 59 passed, coverage 99%
 - Uncommitted / unpushed files: none expected
@@ -136,6 +137,7 @@ Status values: not started | in progress | PR open | merged | blocked
 See `docs/ADR.md` (latest: ADR-015).
 
 ## Session log (newest first)
+- 2026-10-30 session #2: owner merged PRs #3-#14 bottom-up (merge commits, CI green after each); rulesets added.
 - 2026-10-29 session #2: final BUILD_STATUS; load generator hardened (partial reads, bounded config, steady schedule, non-overlapping job runs). PR #14 load generator (G2), stacked on PR #13.
 - 2026-10-29 session #2: PR #13 architecture note `docs/architecture.md` (G2), stacked on PR #12.
 - 2026-10-29 session #2: PR #12 candidate builds (G2), stacked on PR #11.
