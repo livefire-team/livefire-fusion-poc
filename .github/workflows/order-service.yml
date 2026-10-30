@@ -2,10 +2,11 @@ name: order-service
 
 # Pull requests (any base branch, so stacked PRs are checked too) run `test` and `image` only, with read-only tokens.
 # Pushes to main also run `publish`, which pushes the exact image that `image` smoke-tested to GHCR as
-# :sha-<short sha> and :g1. Actions are pinned to full commit SHAs (ADR-011).
+# :sha-<short sha> and :g1. Pushes to candidate/<drill-id>-<attempt> branches publish :sha-<short sha> and
+# :candidate-<drill-id>-<attempt>, never :g1 (ADR-014). Actions are pinned to full commit SHAs (ADR-011).
 on:
   push:
-    branches: [main]
+    branches: [main, 'candidate/**']
     paths: ['src/order-service/**', '.github/workflows/order-service.yml']
   pull_request:
     paths: ['src/order-service/**', '.github/workflows/order-service.yml']
@@ -19,7 +20,37 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
+  # Works out the candidate image tag from the branch name. Empty for anything that is not a candidate push.
+  # The branch name is untrusted input: it reaches the shell only through an environment variable and must match a
+  # strict pattern before it is used.
+  candidate-tag:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions: {}
+    outputs:
+      tag: ${{ steps.tag.outputs.tag }}
+    steps:
+      - name: Validate the candidate branch name
+        id: tag
+        env:
+          REF: ${{ github.ref }}
+        run: |
+          case "$REF" in
+            refs/heads/candidate/*) ;;
+            *) echo "not a candidate branch, no candidate tag"; echo "tag=" >> "$GITHUB_OUTPUT"; exit 0 ;;
+          esac
+          name="${REF#refs/heads/}"
+          re='^candidate/([a-z0-9][a-z0-9-]{0,47})-([1-9][0-9]?)$'
+          if [[ ! "$name" =~ $re ]]; then
+            echo "::error::candidate branches must be named candidate/<drill-id>-<attempt> (lowercase letters, digits and hyphens; attempt 1-99)"
+            exit 1
+          fi
+          tag="candidate-${BASH_REMATCH[1]}-${BASH_REMATCH[2]}"
+          echo "candidate tag: $tag"
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+
   test:
+    needs: candidate-tag
     runs-on: ubuntu-latest
     timeout-minutes: 15
     permissions:
@@ -89,8 +120,10 @@ jobs:
           if-no-files-found: error
 
   publish:
-    needs: image
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: [candidate-tag, image]
+    if: >-
+      github.event_name == 'push' &&
+      (github.ref == 'refs/heads/main' || needs.candidate-tag.outputs.tag != '')
     runs-on: ubuntu-latest
     timeout-minutes: 15
     permissions:
@@ -118,9 +151,20 @@ jobs:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
-      - name: Push :sha-<short sha> and :g1
+      - name: Push :sha-<short sha>
         run: |
           docker tag order-service:ci "$IMAGE:sha-$SHORT_SHA"
-          docker tag order-service:ci "$IMAGE:g1"
           docker push "$IMAGE:sha-$SHORT_SHA"
+      - name: Push :g1 (main only)
+        if: github.ref == 'refs/heads/main'
+        run: |
+          docker tag order-service:ci "$IMAGE:g1"
           docker push "$IMAGE:g1"
+      - name: Push :candidate-<drill-id>-<attempt> (candidate branches only)
+        if: github.ref != 'refs/heads/main'
+        env:
+          CANDIDATE_TAG: ${{ needs.candidate-tag.outputs.tag }}
+        run: |
+          [[ "$CANDIDATE_TAG" =~ ^candidate-[a-z0-9][a-z0-9-]{0,47}-[1-9][0-9]?$ ]] || { echo "invalid candidate tag"; exit 1; }
+          docker tag order-service:ci "$IMAGE:$CANDIDATE_TAG"
+          docker push "$IMAGE:$CANDIDATE_TAG"

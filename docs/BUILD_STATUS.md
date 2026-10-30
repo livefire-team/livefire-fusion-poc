@@ -9,7 +9,7 @@
 ## FIRST THING THE NEXT SESSION SHOULD DO
 The owner reviews and merges the stack bottom-up: PR #3 (base `main`) first, then PR #4 (base
 `feat/sql-schema-seed`), then PR #5 (base `feat/twin-bicep`), then PR #6 (base `feat/secret-provider`), then PR #7 (base
-`feat/order-service-app`), then PR #8 (base `ci/order-service-image`), then PR #9 (base `docs/runbook-v1`), then PR #10 (base `test/local-rehearsal`), then PR #11 (base `docs/handoffs`).
+`feat/order-service-app`), then PR #8 (base `ci/order-service-image`), then PR #9 (base `docs/runbook-v1`), then PR #10 (base `test/local-rehearsal`), then PR #11 (base `docs/handoffs`), then PR #12 (base `ci/security-scans`).
 Merge each with `gh pr merge <N> --merge` only on the
 owner's explicit "Merge", and after each merge retarget the next PR's base to `main` (`gh pr edit <N> --base main`).
 Then send the hand-offs in `docs/handoffs.md` (plus the items shared directly). After PR #7 merges and the first `main` run pushes the image, the owner makes the GHCR
@@ -47,7 +47,7 @@ if `git`/`gh`/`az`/`docker` are "not recognized". ODBC Driver 18 is not installe
 | 10 | docs: hand-offs | Phase 8; `docs/handoffs.md` | PR open | [PR #10](https://github.com/livefire-team/livefire-fusion-poc/pull/10) |
 | G1 | G1 checklist | Phase 8 step 5 items all ticked | not started | |
 | 11 | ci: security scans (G2) | gitleaks, pip-audit, Trivy, CodeQL; ADR-013 | PR open | [PR #11](https://github.com/livefire-team/livefire-fusion-poc/pull/11) |
-| 12 | ci: candidate builds (G2) | `candidate/*` -> `candidate-<drill-id>` tags | not started | |
+| 12 | ci: candidate builds (G2) | `candidate/*` -> `candidate-<drill-id>` tags | PR open | [PR #12](PR12_URL) |
 | 13 | feat: load generator (G2) | Container Apps Job, steady POST /api/orders + backlog retries | not started | |
 | 14 | docs: architecture note (G2) | `docs/architecture.md` — the only file WS3 indexes | not started | |
 
@@ -58,8 +58,8 @@ If time runs short before Nov 2, cut #13 then #12 first.
 Status values: not started | in progress | PR open | merged | blocked
 
 ## In progress right now
-- Branch: ci/security-scans (stacked on docs/handoffs), PR #11; next: G1 checklist, then plan item #12
-- Previous: docs/handoffs (stacked on test/local-rehearsal), PR #10
+- Branch: ci/candidate-builds (stacked on ci/security-scans), PR #12; next: plan item #14, then #13
+- Previous: ci/security-scans (stacked on docs/handoffs), PR #11
 - Last commands run: `.\scripts\local-sql.ps1` twice, `.\scripts\local-access-drill.ps1` (ran all 4 stages, exit 0),
   `docker compose down`, and `pytest -q src/order-service --cov=src/order-service/app`: 59 passed, coverage 99%
 - Uncommitted / unpushed files: none expected
@@ -94,6 +94,9 @@ Status values: not started | in progress | PR open | merged | blocked
   pass-throughs, local stack, SQL reset order, runbook path, telemetry and metric names).
 - PR #11 opened: `.github/workflows/security.yml` (gitleaks full history, pip-audit, CodeQL Python, Trivy repo +
   image scan; fail on fixable HIGH/CRITICAL); local SQL image pinned to `2022-CU27-GDR1-ubuntu-22.04`; ADR-013.
+- PR #12 opened: `order-service.yml` also runs on pushes to `candidate/<drill-id>-<attempt>` branches; the
+  branch name is validated by a strict pattern and published as `candidate-<drill-id>-<attempt>` plus `sha-`
+  (never `g1`); contract row added; ADR-014. Verified by CI on the PR (no candidate branch pushed).
 
 ## Blockers / questions for the user or other workstreams
 - Teammates (WS2–WS5) are not yet invited to the `livefire-team` org/repo — need their GitHub usernames.
@@ -113,9 +116,10 @@ Status values: not started | in progress | PR open | merged | blocked
 - [ ] WS5: metric names (orders_completed, orders_failed{reason})
 
 ## Decisions log pointer
-See `docs/ADR.md` (latest: ADR-013).
+See `docs/ADR.md` (latest: ADR-014).
 
 ## Session log (newest first)
+- 2026-10-29 session #2: PR #12 candidate builds (G2), stacked on PR #11.
 - 2026-10-29 session #2: PR #11 security scans workflow (G2), stacked on PR #10.
 - 2026-10-29 session #2: PR #10 hand-offs page `docs/handoffs.md`, stacked on PR #9.
 - 2026-10-29 session #2: PR #9 local Docker Compose stack with the app and the local access drill script, stacked on PR #8.

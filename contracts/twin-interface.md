@@ -39,6 +39,7 @@ Version: 1 (2026-10-28) — copied from the WS2 guide's Phase 2 contract via the
 |---|---|---|
 | Image | `ghcr.io/livefire-team/order-service:g1` (org name lowercase) | `.github/workflows/order-service.yml` |
 | Image (WS1 addition) | Immutable `sha-<commit>` tags for rehearsals; package public (ADR-002) | `.github/workflows/order-service.yml` |
+| Image (WS1 addition, G2) | `candidate-<drill-id>-<attempt>` tags, pushed from `candidate/<drill-id>-<attempt>` branches (lowercase drill ID, attempt 1-99; ADR-014) | `.github/workflows/order-service.yml` |
 
 ## Additions WS2 needs to know about
 1. New output `appInsightsConnectionString`. WS2 adds to `main.bicep`:
@@ -49,3 +50,4 @@ Version: 1 (2026-10-28) — copied from the WS2 guide's Phase 2 contract via the
 | Date | Change | Told WS2/3/4/5? |
 |---|---|---|
 | 2026-10-28 | Version 1; repo is `livefire-team/livefire-fusion-poc`, image owner `livefire-team` | pending |
+| 2026-10-29 | WS1 addition (G2): `candidate-<drill-id>-<attempt>` image tags (ADR-014) | pending |

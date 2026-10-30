@@ -9,6 +9,7 @@ One-sentence definitions of terms used in this project, added the first time eac
 | Bicep module | A reusable Bicep file that another Bicep file calls with parameters and reads outputs from; ours is `infra/modules/twin.bicep`, called by WS2's `main.bicep`. |
 | Branch | A separate line of work in git, so `main` stays untouched until a change is reviewed and merged. |
 | Cache | A copy of a value kept in memory so the app doesn't fetch it again every time; our secret provider caches the DB password. |
+| Candidate branch | A branch named `candidate/<drill-id>-<attempt>` holding a proposed change; CI builds it and publishes a `candidate-<drill-id>-<attempt>` image for a trial deploy. |
 | CI (continuous integration) | Automatically testing and building every change on a server (for us, GitHub Actions) so problems show up before merging. |
 | Clone | Download a linked local copy of a GitHub repo, so you can work on it and push changes back. |
 | CodeQL | GitHub's code-security scanner that reads our Python code for security bugs; free on public repos, runs in `security.yml`. |
