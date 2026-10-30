@@ -1,9 +1,9 @@
 # Local access drill (Build Guide Phase 7 step 4) against the Docker Compose stack.
 # Starts SQL and the order service, then walks four stages and records what the app reports at each one:
-#   baseline         - normal running
-#   access lost      - .local/secret.txt holds "forbidden", which the app's file source reads as a 403
-#   access restored  - the real password is written back
-#   after restart    - `docker compose restart orders`
+#   baseline           - stack as started
+#   secret forbidden   - .local/secret.txt is set to the text "forbidden"
+#   secret rewritten   - the generated password is written back to .local/secret.txt
+#   after restart      - `docker compose restart orders`
 # At each stage it calls GET /health, GET /health/dependencies and POST /api/orders (with an x-drill-id header)
 # and prints one table row. The real password is always written back at the end.
 # Exit code: 0 when every stage ran; 1 when the stack could not be started.
@@ -88,13 +88,14 @@ try {
 
     Write-SecretFile 'forbidden'
     Start-Sleep -Seconds $SettleSeconds
-    $rows += Measure-Stage 'access lost'
+    $rows += Measure-Stage 'secret forbidden'
 
     Write-SecretFile $password
     Start-Sleep -Seconds $SettleSeconds
-    $rows += Measure-Stage 'access restored'
+    $rows += Measure-Stage 'secret rewritten'
 
-    docker compose restart orders
+    docker compose restart orders 2>$null | Out-Null
+    if ($LASTEXITCODE -ne 0) { throw 'docker compose restart orders failed' }
     Wait-Health
     $rows += Measure-Stage 'after restart'
     exit 0
