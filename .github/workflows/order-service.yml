@@ -1,0 +1,126 @@
+name: order-service
+
+# Pull requests (any base branch, so stacked PRs are checked too) run `test` and `image` only, with read-only tokens.
+# Pushes to main also run `publish`, which pushes the exact image that `image` smoke-tested to GHCR as
+# :sha-<short sha> and :g1. Actions are pinned to full commit SHAs (ADR-011).
+on:
+  push:
+    branches: [main]
+    paths: ['src/order-service/**', '.github/workflows/order-service.yml']
+  pull_request:
+    paths: ['src/order-service/**', '.github/workflows/order-service.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: order-service-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: '3.12'
+      - name: System library for pyodbc
+        run: sudo apt-get update && sudo apt-get install -y unixodbc
+      - name: Install dependencies
+        run: pip install -r src/order-service/requirements-dev.txt
+      - name: Unit tests with coverage
+        run: pytest -q src/order-service --cov=src/order-service/app --cov-fail-under=80
+
+  image:
+    needs: test
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    outputs:
+      image-id: ${{ steps.save.outputs.image-id }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Build image
+        run: docker build -t order-service:ci src/order-service
+      # No Azure in CI: point the secret source at a missing file so the app starts without Key Vault.
+      # /health must answer 200; /health/dependencies must answer (503 is expected without SQL/Key Vault).
+      - name: Smoke test (/health and /health/dependencies)
+        run: |
+          docker run -d --name smoke -p 127.0.0.1:8000:8000 -e SECRET_SOURCE=file:/nonexistent order-service:ci
+          ok=""
+          body=""
+          for i in $(seq 1 30); do
+            if body=$(curl -fsS http://127.0.0.1:8000/health); then ok=1; break; fi
+            sleep 1
+          done
+          if [ -z "$ok" ]; then echo "/health never answered 200"; exit 1; fi
+          echo "/health -> $body"
+          [ "$body" = '{"status":"up"}' ] || { echo "unexpected /health body"; exit 1; }
+          code=$(curl -sS -o deps.json -w '%{http_code}' http://127.0.0.1:8000/health/dependencies || true)
+          echo "/health/dependencies -> $code $(cat deps.json 2>/dev/null || true)"
+          case "$code" in 200|503) ;; *) echo "unexpected /health/dependencies status"; exit 1 ;; esac
+      - name: Container logs (on failure)
+        if: failure()
+        run: docker logs smoke || true
+      - name: Remove smoke container
+        if: always()
+        run: docker rm -f smoke || true
+      - name: Save the tested image
+        id: save
+        run: |
+          echo "image-id=$(docker image inspect --format '{{.Id}}' order-service:ci)" >> "$GITHUB_OUTPUT"
+          docker save order-service:ci | gzip > order-service-image.tar.gz
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: order-service-image
+          path: order-service-image.tar.gz
+          retention-days: 1
+          compression-level: 0
+          if-no-files-found: error
+
+  publish:
+    needs: image
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: order-service-image
+      - name: Load the tested image and check it is the same one
+        env:
+          EXPECTED_ID: ${{ needs.image.outputs.image-id }}
+        run: |
+          gunzip -c order-service-image.tar.gz | docker load
+          actual=$(docker image inspect --format '{{.Id}}' order-service:ci)
+          echo "expected $EXPECTED_ID, loaded $actual"
+          [ -n "$EXPECTED_ID" ] && [ "$actual" = "$EXPECTED_ID" ] || { echo "image ID mismatch"; exit 1; }
+      - name: Image name and tags (GHCR needs lowercase)
+        run: |
+          echo "IMAGE=ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/order-service" >> "$GITHUB_ENV"
+          echo "SHORT_SHA=${GITHUB_SHA::7}" >> "$GITHUB_ENV"
+      - name: Log in to GHCR
+        uses: docker/login-action@81c6f93d4bc991e510b342a00b419b3bb4efc5c6 # v4.7.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Push :sha-<short sha> and :g1
+        run: |
+          docker tag order-service:ci "$IMAGE:sha-$SHORT_SHA"
+          docker tag order-service:ci "$IMAGE:g1"
+          docker push "$IMAGE:sha-$SHORT_SHA"
+          docker push "$IMAGE:g1"

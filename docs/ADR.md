@@ -126,6 +126,56 @@ Status values: Proposed | Accepted | Superseded | Rejected
   CI should install `requirements-dev.txt` instead of `requirements.txt pytest`.
 - **Implemented in:** PR #5 (`src/order-service/requirements-dev.txt`, `src/order-service/pytest.ini`)
 
+## ADR-010: Image tags — immutable `sha-<commit>` plus moving `g1`, pushed only from `main`
+- **Date:** 2026-10-29
+- **Status:** Accepted
+- **Context:** WS2 deploys the order service from GHCR. Rehearsals need a version that never changes under them;
+  the G1 milestone needs one well-known name that always points at the latest good build of `main`.
+- **Options considered:** (1) only `latest`; (2) only per-commit tags; (3) a per-commit tag plus one moving tag.
+- **Decision:** Option 3. Every push to `main` that touches the service pushes `ghcr.io/<org>/order-service:sha-<7-char
+  commit>` (never overwritten, used for rehearsals) and `:g1` (moves to the newest `main` build, the G1 hand-off name).
+  Pull requests build and smoke-test the image but never push it.
+- **Consequences:** A rehearsal pinned to a `sha-` tag is reproducible; `g1` changes whenever `main` changes, so it
+  is not used for rehearsals. Unmerged branches never reach the registry. The GHCR package must be made public by
+  hand once, after the first push (or WS2 needs a `read:packages` token).
+- **Implemented in:** PR #7 (`.github/workflows/order-service.yml`)
+
+## ADR-011: CI design for the order service
+- **Date:** 2026-10-29
+- **Status:** Accepted
+- **Context:** The build guide's workflow is one job that installs `requirements.txt pytest`, runs on pull requests
+  that touch `src/order-service/**` (not workflow-only changes), and grants `packages: write` to the whole workflow. Our PRs are
+  stacked (each PR's base is the previous PR's branch), tests now need `requirements-dev.txt` (ADR-009) and a
+  coverage gate, and we want the image proven to start before it is published.
+- **Options considered:** (1) the guide's single job as written; (2) two jobs, `test` then `image`, with
+  `packages: write` on `image`; (3) three jobs, `test` -> `image` -> `publish`, where only `publish` can write
+  packages and it never runs for pull requests.
+- **Decision:** Option 3 (revised in PR #7 review; option 2 still gave the pull-request build a job token that
+  could write packages). Triggers: `push` to `main` and `pull_request` with no base-branch filter (so stacked PRs
+  are checked), both limited to `src/order-service/**` and the workflow file, plus manual `workflow_dispatch`.
+  - `test` (`contents: read`): Python 3.12, `unixodbc` (pyodbc needs `libodbc`), `requirements-dev.txt`, pytest
+    with `--cov-fail-under=80`.
+  - `image` (needs `test`, `contents: read`): `docker build`, run the container bound to `127.0.0.1:8000`,
+    `/health` must return 200 `{"status":"up"}` and `/health/dependencies` must answer (200 or 503); container
+    logs are printed on any failure. The tested image is saved with `docker save` and uploaded as a one-day
+    artifact; its image ID is a job output.
+  - `publish` (needs `image`, only `if: github.event_name == 'push' && github.ref == 'refs/heads/main'`,
+    `contents: read` + `packages: write`): downloads the artifact, `docker load`s it, fails unless the image ID
+    equals the one `image` tested, logs in to GHCR with `GITHUB_TOKEN` and pushes `sha-<short sha>` and `g1`.
+  The smoke container sets `SECRET_SOURCE=file:/nonexistent` because the default Key Vault source needs
+  `KEYVAULT_URL` at start-up and CI has no Azure. Plain `docker build`/`save`/`load`/`push` replace
+  `docker/build-push-action` so the pushed image is exactly the one smoke-tested. Every checkout uses
+  `persist-credentials: false`. Every action is pinned to a full commit SHA with the release tag in a comment
+  (`actions/checkout` v7.0.1, `actions/setup-python` v7.1.0, `actions/upload-artifact` v7.0.2,
+  `actions/download-artifact` v8.0.2, `docker/login-action` v4.7.0; all run on Node 24).
+  The Dockerfile checks the Microsoft package signing key's fingerprint before trusting it and labels the image
+  with `org.opencontainers.image.source` so GHCR links the package to this repo.
+- **Consequences:** A broken image or a coverage drop blocks publishing, and pull-request runs never hold a
+  token that can write packages. Three jobs and the image artifact cost a little more CI time and storage
+  (artifact kept one day). SHA pins do not pick up action fixes automatically: bump them deliberately (look up
+  the tag's commit with `gh api repos/<owner>/<repo>/git/ref/tags/<tag>`, dereferencing annotated tags).
+- **Implemented in:** PR #7 (`.github/workflows/order-service.yml`, `src/order-service/Dockerfile`)
+
 <!-- Copy the block below for each new decision -->
 
 ## ADR-00N: <short title>
