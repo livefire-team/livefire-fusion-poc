@@ -13,7 +13,8 @@ contract wins and WS1 fixes this page.
   build can't change what runs.
 - Candidate tags: a push to a `candidate/<drill-id>-<attempt>` branch publishes
   `ghcr.io/livefire-team/order-service:candidate-<drill-id>-<attempt>` plus its `sha-` tag (ADR-014); it never moves `g1`.
-- The package is public (ADR-002), so pulls need no credentials.
+- The package is made public after the first successful `main` run (ADR-002); from then on pulls need no
+  credentials.
 - Select the image for a deployment with:
 
   ```
@@ -51,7 +52,7 @@ The `products` seed rows stay.
 | Kind | Name | Notes |
 |---|---|---|
 | Table | `requests` | Carries `customDimensions.drill_id` |
-| Table | `exceptions` | Carries `customDimensions.drill_id` for failed orders |
+| Table | `exceptions` | Failed orders; carries `customDimensions.drill_id` when an `x-drill-id` header was sent |
 | Log message | `order placed` | Info, with `drill_id` and `order_id` |
 | Log message | `order failed` | Error with the exception, with `drill_id` and `sku` |
 | Metric | `orders_completed` | Counter, +1 per placed order |
