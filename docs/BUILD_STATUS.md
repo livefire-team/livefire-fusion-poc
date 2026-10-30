@@ -8,8 +8,9 @@
 
 ## FIRST THING THE NEXT SESSION SHOULD DO
 The owner reviews and merges the stack bottom-up: PR #3 (base `main`) first, then PR #4 (base
-`feat/sql-schema-seed`). Merge each with `gh pr merge <N> --merge` only on the owner's explicit "Merge", and after
-each merge retarget the next PR's base to `main` (`gh pr edit <N> --base main`). Then start plan item #5.
+`feat/sql-schema-seed`), then PR #5 (base `feat/twin-bicep`). Merge each with `gh pr merge <N> --merge` only on the
+owner's explicit "Merge", and after each merge retarget the next PR's base to `main` (`gh pr edit <N> --base main`).
+Then start plan item #6.
 
 ## Environment facts
 | Item | Value |
@@ -18,7 +19,7 @@ each merge retarget the next PR's base to `main` (`gh pr edit <N> --base main`).
 | Local path | C:\Users\venka\projects\livefire-fusion-poc |
 | Kit folder | C:\Users\venka\projects\livefire-ws1-kit |
 | Default branch | main |
-| Working branch | feat/twin-bicep (stacked on feat/sql-schema-seed) |
+| Working branch | feat/secret-provider (stacked on feat/twin-bicep) |
 | Azure resource group | not yet deployed (will be `rg-lf-twin-<env>`, created by WS2) |
 | Image | ghcr.io/livefire-team/order-service:<tag> (not built yet) |
 | GitHub account | venkataare (gh logged in, HTTPS); git identity "Venkata Are" / noreply email |
@@ -35,7 +36,7 @@ if `git`/`gh`/`az`/`docker` are "not recognized". ODBC Driver 18 is not installe
 | 2 | docs: twin contract + plan | `contracts/twin-interface.md` (Phase 1) and this plan | merged | PR #2 |
 | 3 | feat(sql): schema + seed | Phase 2 + compose file with local SQL Server; run twice | PR open | PR #3 |
 | 4 | feat(infra): twin.bicep | Phase 5 + ADRs (1 replica, /health probes, Basic SQL, plain resources); `az bicep build` | PR open | PR #4 |
-| 5 | feat(order-service): secret provider + catalog | Phase 3 steps 1–3, 7, TDD | not started | |
+| 5 | feat(order-service): secret provider + catalog | Phase 3 steps 1–3, 7, TDD | PR open | [PR #5](https://github.com/livefire-team/livefire-fusion-poc/pull/5) |
 | 6 | feat(order-service): db, pages, health, telemetry | Phase 3 steps 4–6, TDD with DB stubbed | not started | |
 | 7 | ci: Dockerfile + Actions -> GHCR | Phase 4; `sha-<commit>` + `:g1`; user makes package public | not started | |
 | 8 | docs: runbook v1 | Phase 6 | not started | |
@@ -54,11 +55,11 @@ If time runs short before Nov 2, cut #13 then #12 first.
 Status values: not started | in progress | PR open | merged | blocked
 
 ## In progress right now
-- Branch: feat/twin-bicep (stacked on feat/sql-schema-seed), PR #4
-- Last command run: `az bicep build` and `az bicep lint` on `infra/modules/twin.bicep` and
-  `infra/tests/twin.test.bicep` (Bicep 0.48.1): all exit 0, no warnings
+- Branch: feat/secret-provider (stacked on feat/twin-bicep), PR #5
+- Last command run: `pytest --cov=app --cov-report=term-missing` in `src/order-service` (venv at `.venv`,
+  `pip install -r src/order-service/requirements-dev.txt`): 13 passed, coverage 100%
 - Uncommitted / unpushed files: none expected
-- Test status: Bicep compile + lint clean 2026-10-29. Nothing deployed to Azure (WS2 deploys via `main.bicep`).
+- Test status: order-service unit tests green 2026-10-29. Nothing deployed to Azure (WS2 deploys via `main.bicep`).
 
 ## Done (with evidence)
 - Machine set up: gh, az + bicep, Docker Desktop installed via winget (git and Python were already present).
@@ -70,6 +71,8 @@ Status values: not started | in progress | PR open | merged | blocked
 - PR #3 opened; `local-sql.ps1` run twice locally with identical results.
 - PR #4 opened: `infra/modules/twin.bicep` (contract v1 parameters/outputs) + compile harness
   `infra/tests/twin.test.bicep`; build and lint clean; ADR-006 to ADR-008 added.
+- PR #5 opened: order-service `requirements.txt` (guide pins) + `requirements-dev.txt`, `secret_provider.py`,
+  `catalog.py` (matches `sql/seed.sql`), tests written first (RED shown), 13 passed, 100% coverage; ADR-009 added.
 
 ## Blockers / questions for the user or other workstreams
 - Teammates (WS2–WS5) are not yet invited to the `livefire-team` org/repo — need their GitHub usernames.
@@ -86,9 +89,10 @@ Status values: not started | in progress | PR open | merged | blocked
 - [ ] WS5: metric names (orders_completed, orders_failed{reason})
 
 ## Decisions log pointer
-See `docs/ADR.md` (latest: ADR-008).
+See `docs/ADR.md` (latest: ADR-009).
 
 ## Session log (newest first)
+- 2026-10-29 session #2: PR #5 secret provider + catalog (TDD, 100% coverage), stacked on PR #4.
 - 2026-10-29 session #2: PR #4 twin.bicep built (compile + lint clean), stacked on PR #3.
 - 2026-10-29 session #2: Docker unblocked, local-sql.ps1 fixed for PowerShell 5.1 and run twice, PR #3 updated.
 - 2026-10-28 session #1: tools installed, gh login, org + repo created, PR #1 and PR #2 merged, plan approved, PR #3 started.
