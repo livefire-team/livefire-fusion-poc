@@ -73,8 +73,9 @@ def test_full_backlog_counts_a_drop(meter):
 
 def test_retries_per_tick_is_bounded(meter):
     runner, client, backlog = build([DOWN, DOWN, DOWN], meter, RETRIES_PER_TICK="2")
-    for t in range(3):
-        runner.tick(now=float(t))
+    for t in (0.0, 0.1, 0.2):   # three failures, none due for retry yet
+        runner.tick(now=t)
+    assert len(backlog) == 3
     client.skus.clear()
     runner.tick(now=100.0)
     assert len(client.skus) == 3
