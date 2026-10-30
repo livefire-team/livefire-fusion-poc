@@ -48,7 +48,7 @@ if `git`/`gh`/`az`/`docker` are "not recognized". ODBC Driver 18 is not installe
 | G1 | G1 checklist | Phase 8 step 5 items all ticked | not started | |
 | 11 | ci: security scans (G2) | gitleaks, pip-audit, Trivy, CodeQL; ADR-013 | PR open | [PR #11](https://github.com/livefire-team/livefire-fusion-poc/pull/11) |
 | 12 | ci: candidate builds (G2) | `candidate/*` -> `candidate-<drill-id>` tags | PR open | [PR #12](https://github.com/livefire-team/livefire-fusion-poc/pull/12) |
-| 13 | feat: load generator (G2) | Container Apps Job, steady POST /api/orders + backlog retries | PR open | [PR #14](PR14_URL) |
+| 13 | feat: load generator (G2) | Container Apps Job, steady POST /api/orders + backlog retries | PR open | [PR #14](https://github.com/livefire-team/livefire-fusion-poc/pull/14) |
 | 14 | docs: architecture note (G2) | `docs/architecture.md` — the only file WS3 indexes | PR open | [PR #13](https://github.com/livefire-team/livefire-fusion-poc/pull/13) |
 
 Outside PRs (with WS2, needs Azure): agree `SECRET_REFRESH_SECONDS` with WS2/WS5; check twin after first
