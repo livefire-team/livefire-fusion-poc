@@ -9,7 +9,7 @@
 ## FIRST THING THE NEXT SESSION SHOULD DO
 The owner reviews and merges the stack bottom-up: PR #3 (base `main`) first, then PR #4 (base
 `feat/sql-schema-seed`), then PR #5 (base `feat/twin-bicep`), then PR #6 (base `feat/secret-provider`), then PR #7 (base
-`feat/order-service-app`), then PR #8 (base `ci/order-service-image`), then PR #9 (base `docs/runbook-v1`), then PR #10 (base `test/local-rehearsal`), then PR #11 (base `docs/handoffs`), then PR #12 (base `ci/security-scans`), then PR #14-note (base `ci/candidate-builds`).
+`feat/order-service-app`), then PR #8 (base `ci/order-service-image`), then PR #9 (base `docs/runbook-v1`), then PR #10 (base `test/local-rehearsal`), then PR #11 (base `docs/handoffs`), then PR #12 (base `ci/security-scans`), then PR #13 (base `ci/candidate-builds`).
 Merge each with `gh pr merge <N> --merge` only on the
 owner's explicit "Merge", and after each merge retarget the next PR's base to `main` (`gh pr edit <N> --base main`).
 Then send the hand-offs in `docs/handoffs.md` (plus the items shared directly). After PR #7 merges and the first `main` run pushes the image, the owner makes the GHCR
@@ -49,7 +49,7 @@ if `git`/`gh`/`az`/`docker` are "not recognized". ODBC Driver 18 is not installe
 | 11 | ci: security scans (G2) | gitleaks, pip-audit, Trivy, CodeQL; ADR-013 | PR open | [PR #11](https://github.com/livefire-team/livefire-fusion-poc/pull/11) |
 | 12 | ci: candidate builds (G2) | `candidate/*` -> `candidate-<drill-id>` tags | PR open | [PR #12](https://github.com/livefire-team/livefire-fusion-poc/pull/12) |
 | 13 | feat: load generator (G2) | Container Apps Job, steady POST /api/orders + backlog retries | not started | |
-| 14 | docs: architecture note (G2) | `docs/architecture.md` — the only file WS3 indexes | PR open | [PR](PR14_URL) |
+| 14 | docs: architecture note (G2) | `docs/architecture.md` — the only file WS3 indexes | PR open | [PR #13](https://github.com/livefire-team/livefire-fusion-poc/pull/13) |
 
 Outside PRs (with WS2, needs Azure): agree `SECRET_REFRESH_SECONDS` with WS2/WS5; check twin after first
 `azd provision` (Phase 7 steps 5–6); joint drill PASS, FAIL, FAIL, PASS ×3 (Phase 7 step 7).
@@ -58,7 +58,7 @@ If time runs short before Nov 2, cut #13 then #12 first.
 Status values: not started | in progress | PR open | merged | blocked
 
 ## In progress right now
-- Branch: docs/architecture-note (stacked on ci/candidate-builds); next: plan item #13
+- Branch: docs/architecture-note (stacked on ci/candidate-builds), PR #13; next: plan item #13
 - Previous: ci/candidate-builds (stacked on ci/security-scans), PR #12
 - Last commands run: `.\scripts\local-sql.ps1` twice, `.\scripts\local-access-drill.ps1` (ran all 4 stages, exit 0),
   `docker compose down`, and `pytest -q src/order-service --cov=src/order-service/app`: 59 passed, coverage 99%
@@ -97,7 +97,7 @@ Status values: not started | in progress | PR open | merged | blocked
 - PR #12 opened: `order-service.yml` also runs on pushes to `candidate/<drill-id>-<attempt>` branches; the
   branch name is validated by a strict pattern and published as `candidate-<drill-id>-<attempt>` plus `sha-`
   (never `g1`); contract row added; ADR-014. Verified by CI on the PR (no candidate branch pushed).
-- Architecture note PR opened: `docs/architecture.md` (components, request flow, secrets and configuration, health
+- PR #13 opened: `docs/architecture.md` (components, request flow, secrets and configuration, health
   endpoints, telemetry names, CI/CD and image tags, runbook location) for WS3's search index.
 
 ## Blockers / questions for the user or other workstreams
@@ -121,7 +121,7 @@ Status values: not started | in progress | PR open | merged | blocked
 See `docs/ADR.md` (latest: ADR-014).
 
 ## Session log (newest first)
-- 2026-10-29 session #2: architecture note `docs/architecture.md` (G2), stacked on PR #12.
+- 2026-10-29 session #2: PR #13 architecture note `docs/architecture.md` (G2), stacked on PR #12.
 - 2026-10-29 session #2: PR #12 candidate builds (G2), stacked on PR #11.
 - 2026-10-29 session #2: PR #11 security scans workflow (G2), stacked on PR #10.
 - 2026-10-29 session #2: PR #10 hand-offs page `docs/handoffs.md`, stacked on PR #9.
