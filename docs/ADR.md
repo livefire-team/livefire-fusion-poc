@@ -249,6 +249,36 @@ Status values: Proposed | Accepted | Superseded | Rejected
   same candidate branch again moves its candidate tag; the `sha-` tag stays immutable.
 - **Implemented in:** PR #12 (`.github/workflows/order-service.yml`)
 
+## ADR-015: Load generator as a Container Apps Job with an in-memory retry backlog
+- **Date:** 2026-10-29
+- **Status:** Accepted
+- **Context:** G2 asks for a load generator that calls `POST /api/orders` at a steady rate and retries failed orders
+  from a backlog, so throughput, backlog and the drain after recovery are real numbers in Application Insights. It
+  must run next to the twin without changing the `twin.bicep` contract.
+- **Options considered:** (1) a Container App with one always-on replica; (2) a Container Apps Job (manual or
+  schedule trigger) that runs for a set duration; (3) an external tool such as Azure Load Testing or k6. For the
+  backlog: (a) in memory, bounded; (b) a queue or table in Azure.
+- **Decision:** Option 2 with (a). `src/load-generator/` is a Python 3.12 package (`python -m loadgen`, standard
+  library HTTP client, `azure-monitor-opentelemetry` pinned like the order service). Each tick (60 /
+  `RATE_PER_MINUTE` seconds) sends one new order, cycling through `SKUS`, with `x-drill-id: DRILL_ID` when set, then
+  up to `RETRIES_PER_TICK` (default 5) due retries. 5xx, 408, 429 and network errors go to a backlog capped at
+  `MAX_BACKLOG` (default 500) with exponential backoff from `RETRY_BASE_SECONDS` (2) to `RETRY_MAX_SECONDS` (60);
+  other 4xx answers and backlog overflow are counted as dropped. The run stops after `DURATION_SECONDS` (0 = no limit)
+  or on SIGTERM; invalid settings exit with code 2. Metrics (only exported when
+  `APPLICATIONINSIGHTS_CONNECTION_STRING` is set, logger `loadgen`): `loadgen_orders_sent` (counter, attributes
+  `kind` = `new`/`retry`, `result` = `ok`/`failed`), `loadgen_orders_dropped` (counter, attribute `reason`) and
+  `loadgen_backlog_size` (gauge); a `loadgen status sent=.. backlog=.. dropped=..` log line every 30 ticks and at the
+  end. `infra/modules/loadgen.bicep` defines the job `caj-loadgen` (one replica per execution, no retries of the
+  replica, timeout `durationSeconds` + 300 s) in the existing environment `cae-lf-twin`, found by name with an
+  `existing` reference, so `twin.bicep` gets no new parameter or output. The connection string is a job secret.
+  Workflow `.github/workflows/load-generator.yml` mirrors `order-service.yml` (test, image smoke test, publish
+  `sha-<short>` and `g2` from `main` only); `security.yml` also audits and scans the load generator.
+- **Consequences:** No extra Azure resources and nothing to clean up between runs, but the backlog is lost if a job
+  execution ends: orders still in it at the end are not placed (the final status line shows how many). WS2 deploys
+  the module after `twin.bicep` and starts runs with `az containerapp job start`. The `load-generator` GHCR package
+  must be made public like `order-service`. The rate is capped at 600 per minute.
+- **Implemented in:** PR #14 (`src/load-generator/`, `infra/modules/loadgen.bicep`, `.github/workflows/load-generator.yml`)
+
 <!-- Copy the block below for each new decision -->
 
 ## ADR-00N: <short title>

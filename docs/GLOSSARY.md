@@ -6,6 +6,7 @@ One-sentence definitions of terms used in this project, added the first time eac
 |---|---|
 | ADR | Architecture Decision Record: a short note in `docs/ADR.md` saying what we decided, why, and what else we considered. |
 | Architecture note | `docs/architecture.md`: a one-page description of the order service's parts, request flow, settings and telemetry. |
+| Backlog (load generator) | The load generator's in-memory list of orders that failed and will be tried again later, with growing waits between tries. |
 | Bicep | Microsoft's language for describing Azure resources as code; `az bicep build` checks it compiles. |
 | Bicep module | A reusable Bicep file that another Bicep file calls with parameters and reads outputs from; ours is `infra/modules/twin.bicep`, called by WS2's `main.bicep`. |
 | Branch | A separate line of work in git, so `main` stays untouched until a change is reviewed and merged. |
@@ -15,6 +16,7 @@ One-sentence definitions of terms used in this project, added the first time eac
 | Clone | Download a linked local copy of a GitHub repo, so you can work on it and push changes back. |
 | CodeQL | GitHub's code-security scanner that reads our Python code for security bugs; free on public repos, runs in `security.yml`. |
 | Commit | A saved snapshot of changes in git, with a message describing it. |
+| Container Apps Job | An Azure Container Apps resource that runs a container to completion when started (by hand or on a schedule) instead of serving traffic; our load generator is one. |
 | Container registry | An online store for container images that platforms pull from; ours is GHCR. |
 | Conventional commit | A commit message that starts with its type, e.g. `feat:`, `fix:`, `docs:`, `chore:`, `test:`, `ci:`. |
 | Coverage (test coverage) | The share of code lines that the tests actually run, measured with `pytest --cov`; we require at least 80% on `src/order-service/app`. |
@@ -26,6 +28,7 @@ One-sentence definitions of terms used in this project, added the first time eac
 | Drill | A planned practice run of an incident, where you change one thing on purpose and record what the system reports; `scripts/local-access-drill.ps1` is our local one. |
 | Endpoint | One URL path plus method that the app answers, like `GET /health` or `POST /api/orders`. |
 | `.env` file | A git-ignored file of local settings (like a generated password) that Docker Compose reads automatically. |
+| Exponential backoff | Waiting longer after each failed retry (2 s, 4 s, 8 s ... up to a cap) so a struggling service is not flooded. |
 | `gh` | The GitHub command-line tool: log in, create repos, open and merge PRs from the terminal. |
 | GHCR | GitHub Container Registry (`ghcr.io`): where our order-service container image is stored; names must be lowercase. |
 | GitHub Actions | GitHub's built-in CI service: it runs the workflows in `.github/workflows/` on GitHub's machines. |
@@ -35,6 +38,7 @@ One-sentence definitions of terms used in this project, added the first time eac
 | Image tag | The label after the colon in an image name (like `:g1` or `:sha-1a2b3c4`) that picks one version of the image (ADR-010). |
 | Jinja2 template | An HTML file with `{{ ... }}` placeholders and `{% ... %}` loops that FastAPI fills in to draw a page; ours are in `app/templates/`. |
 | Job | One group of steps in a workflow that runs on its own fresh machine; ours are `test` and `image`, and `image` waits for `test`. |
+| Load generator | `src/load-generator/`: a small program that places orders at a steady rate so the order service has real traffic and throughput numbers. |
 | Managed identity | An Azure-managed login for an app (no password to store) that can be granted access to other resources, like our app reading Key Vault. |
 | Merge commit | A commit that joins a branch into `main` while keeping every original commit; we never squash (ADR-003). |
 | Monkeypatch | A pytest helper that temporarily replaces a function or object during one test (like the database calls) and puts it back afterwards. |

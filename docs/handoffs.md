@@ -32,6 +32,13 @@ contract wins and WS1 fixes this page.
 - Two optional pass-through parameters: `principalType` (default `User`) and `secretRefreshSeconds`
   (default `30`; `10` while testing).
 
+### Load generator (G2)
+- Module `infra/modules/loadgen.bicep`: a Container Apps Job `caj-loadgen` in the twin's environment. Deploy it after
+  `twin.bicep` with `loadgenImage: 'ghcr.io/livefire-team/load-generator:g2'`, `orderAppUrl: twin.outputs.orderAppUrl`
+  and `appInsightsConnectionString: twin.outputs.appInsightsConnectionString`; other parameters are listed in the
+  module and the contract (ADR-015).
+- Start a run: `az containerapp job start -g <rg> -n caj-loadgen` (or set `triggerType: 'Schedule'`).
+
 ### Local stack (no Azure needed)
 - `docker-compose.yml`: SQL Server (`sql`) and the order service (`orders`, on `http://127.0.0.1:8000`).
 - `scripts/local-sql.ps1`: starts SQL, runs `sql/schema.sql` and `sql/seed.sql`, and creates the app's database
@@ -69,3 +76,5 @@ WS4 engineer brief details are shared directly.
 |---|---|
 | Throughput | `orders_completed` |
 | Failed orders | `orders_failed`, split by its `reason` tag |
+| Load sent | `loadgen_orders_sent`, split by `kind` (`new`/`retry`) and `result` (`ok`/`failed`) |
+| Backlog | `loadgen_backlog_size` (gauge); `loadgen_orders_dropped` by `reason` |

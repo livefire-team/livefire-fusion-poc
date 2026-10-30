@@ -1,0 +1,12 @@
+# Keep the build context small: the image only needs requirements.txt and loadgen/
+tests/
+.venv/
+**/__pycache__/
+**/*.pyc
+.pytest_cache/
+.coverage
+htmlcov/
+requirements-dev.txt
+pytest.ini
+.env*
+.git

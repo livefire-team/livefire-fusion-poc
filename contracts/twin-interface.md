@@ -45,9 +45,17 @@ Version: 1 (2026-10-28) — copied from the WS2 guide's Phase 2 contract via the
 1. New output `appInsightsConnectionString`. WS2 adds to `main.bicep`:
    `output APPINSIGHTS_CONNECTION_STRING string = twin.outputs.appInsightsConnectionString`
 2. The `principalType` and `secretRefreshSeconds` pass-through parameters (both optional, defaults above).
+3. WS1 addition (G2): load generator module `infra/modules/loadgen.bicep` (Container Apps Job `caj-loadgen` in the
+   existing environment `cae-lf-twin`; required params `location`, `loadgenImage`, `orderAppUrl`; optional
+   `appInsightsConnectionString`, `ratePerMinute` (30), `skus`, `drillId`, `durationSeconds` (3600), `triggerType`
+   (`Manual` or `Schedule`), `cronExpression`, `jobName`, `containerAppsEnvironmentName`; outputs `loadgenJobName`,
+   `loadgenJobId`). Image `ghcr.io/livefire-team/load-generator:g2` (and `sha-<commit>`). Metrics in Application
+   Insights: `loadgen_orders_sent` {`kind`, `result`}, `loadgen_orders_dropped` {`reason`}, `loadgen_backlog_size`.
+   `twin.bicep` parameters and outputs are unchanged (ADR-015).
 
 ## Change log
 | Date | Change | Told WS2/3/4/5? |
 |---|---|---|
 | 2026-10-28 | Version 1; repo is `livefire-team/livefire-fusion-poc`, image owner `livefire-team` | pending |
 | 2026-10-29 | WS1 addition (G2): `candidate-<drill-id>-<attempt>` image tags (ADR-014) | pending |
+| 2026-10-29 | WS1 addition (G2): load generator module, image and `loadgen_*` metrics (ADR-015) | pending |
