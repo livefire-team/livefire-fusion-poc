@@ -5,6 +5,7 @@ One-sentence definitions of terms used in this project, added the first time eac
 | Term | Meaning |
 |---|---|
 | ADR | Architecture Decision Record: a short note in `docs/ADR.md` saying what we decided, why, and what else we considered. |
+| Architecture note | `docs/architecture.md`: a one-page description of the order service's parts, request flow, settings and telemetry. |
 | Bicep | Microsoft's language for describing Azure resources as code; `az bicep build` checks it compiles. |
 | Bicep module | A reusable Bicep file that another Bicep file calls with parameters and reads outputs from; ours is `infra/modules/twin.bicep`, called by WS2's `main.bicep`. |
 | Branch | A separate line of work in git, so `main` stays untouched until a change is reviewed and merged. |
