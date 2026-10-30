@@ -1,0 +1,10 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>Checkout</title></head>
+<body>
+  <h1>Checkout</h1>
+  <p>{{ product.name }}: ${{ "%.2f"|format(product.price) }}</p>
+  <form method="post" action="/checkout">
+    <input type="hidden" name="sku" value="{{ product.sku }}">
+    <button data-testid="place-order" type="submit">Place order</button>
+  </form>
+</body></html>

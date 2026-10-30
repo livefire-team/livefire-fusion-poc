@@ -12,17 +12,23 @@ One-sentence definitions of terms used in this project, added the first time eac
 | Clone | Download a linked local copy of a GitHub repo, so you can work on it and push changes back. |
 | CodeQL | GitHub's code-security scanner; free on public repos. |
 | Commit | A saved snapshot of changes in git, with a message describing it. |
-| Coverage (test coverage) | The share of code lines that the tests actually run, measured with `pytest --cov`; we require at least 80% on `src/order-service/app`. |
 | Conventional commit | A commit message that starts with its type, e.g. `feat:`, `fix:`, `docs:`, `chore:`, `test:`, `ci:`. |
-| Docker Compose | A file (`docker-compose.yml`) describing several containers to start together with `docker compose up`. |
-| `.env` file | A git-ignored file of local settings (like a generated password) that Docker Compose reads automatically. |
+| Coverage (test coverage) | The share of code lines that the tests actually run, measured with `pytest --cov`; we require at least 80% on `src/order-service/app`. |
+| Dependency override | A FastAPI feature (`app.dependency_overrides`) that swaps a dependency for a test stand-in; our tests use pytest's monkeypatch instead because `main.py` uses module-level objects. |
 | Docker / container | A way to package an app with everything it needs so it runs the same everywhere; Docker Desktop runs them on Windows. |
-| GHCR | GitHub Container Registry (`ghcr.io`): where our order-service container image is stored; names must be lowercase. |
+| Docker Compose | A file (`docker-compose.yml`) describing several containers to start together with `docker compose up`. |
+| Endpoint | One URL path plus method that the app answers, like `GET /health` or `POST /api/orders`. |
+| `.env` file | A git-ignored file of local settings (like a generated password) that Docker Compose reads automatically. |
 | `gh` | The GitHub command-line tool: log in, create repos, open and merge PRs from the terminal. |
+| GHCR | GitHub Container Registry (`ghcr.io`): where our order-service container image is stored; names must be lowercase. |
+| Health check | An endpoint that reports whether the app (`/health`) or what it depends on (`/health/dependencies`) is working. |
 | Idempotent | Safe to run more than once: the second run changes nothing and doesn't fail. Our SQL scripts must be. |
+| Jinja2 template | An HTML file with `{{ ... }}` placeholders and `{% ... %}` loops that FastAPI fills in to draw a page; ours are in `app/templates/`. |
 | Managed identity | An Azure-managed login for an app (no password to store) that can be granted access to other resources, like our app reading Key Vault. |
 | Merge commit | A commit that joins a branch into `main` while keeping every original commit; we never squash (ADR-003). |
+| Monkeypatch | A pytest helper that temporarily replaces a function or object during one test (like the database calls) and puts it back afterwards. |
 | Noreply email | A private address GitHub gives you for commits, so your real email is not public. |
+| OpenTelemetry | An open standard and library for traces, metrics and logs; `azure-monitor-opentelemetry` sends ours to Application Insights. |
 | Organisation (GitHub org) | A shared GitHub account that several people can own; ours is `livefire-team`. |
 | PATH | The list of folders Windows searches when you type a command like `git`; programs started before an install keep the old list. |
 | PR (pull request) | A request on GitHub to merge a branch into `main`, where changes are reviewed and checks run before merging. |
@@ -33,11 +39,13 @@ One-sentence definitions of terms used in this project, added the first time eac
 | Replica | One running copy of a container app; the twin runs exactly one (ADR-006). |
 | Revision | An immutable version of a Container App's settings and image; a new one is created when the app's template changes. |
 | Seed data | Starting rows loaded into a fresh database; ours is the two products in `sql/seed.sql`. |
+| Span | One timed step inside a trace (like `place_order`), which can carry attributes such as `drill_id`. |
 | sqlcmd | Microsoft's command-line tool for running SQL against SQL Server; we run it inside the SQL container. |
 | Squash merge | Merging a PR as one combined commit; forbidden here because it rewrites commit history (ADR-003). |
+| TestClient | FastAPI's in-process test browser: it calls the app's endpoints without starting a server. |
 | Token | A long secret string proving to a service that it is you; never pasted into chat or files. |
 | TTL / refresh window | How long a cached value is trusted before it is fetched again; for the DB password it is `SECRET_REFRESH_SECONDS`. |
 | UAC prompt | The Windows "Allow this app to make changes?" dialog; only you click it. |
 | Virtual environment (venv) | A private folder of Python packages for one project (ours is the git-ignored `.venv`), so its pinned versions don't clash with other projects. |
-| WSL2 | A small Linux layer built into Windows that Docker Desktop runs on. |
 | winget | Windows' built-in package installer (`winget install ...`). |
+| WSL2 | A small Linux layer built into Windows that Docker Desktop runs on. |
