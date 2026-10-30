@@ -60,6 +60,19 @@ Status values: Proposed | Accepted | Superseded | Rejected
   spoiled by reading the repo's current files. (PR #1's first commit predates this and keeps older wording.)
 - **Implemented in:** PR #1
 
+## ADR-005: Local SQL Server credentials are generated, not committed; port bound to localhost
+- **Date:** 2026-10-28
+- **Status:** Accepted
+- **Context:** The Build Guide's Phase 7 `docker-compose.yml` hard-codes the local SA password and publishes port
+  1433 on all interfaces. The repo is public, so anyone on the same network could log in with a published password.
+- **Options considered:** (1) copy the guide as is; (2) generate the password into a git-ignored `.env` on first
+  run and bind the port to `127.0.0.1`.
+- **Decision:** Option 2. `scripts/local-sql.ps1` creates `.env` with `LOCAL_SA_PASSWORD` if missing; compose reads
+  it and refuses to start without it. sqlcmd reads the password from inside the container, not the command line.
+- **Consequences:** No credential in git; SQL reachable only from this PC. First run must go through the script
+  (or a hand-made `.env`). The app's local `order_app` password is handled the same way in plan item #9.
+- **Implemented in:** PR #3
+
 <!-- Copy the block below for each new decision -->
 
 ## ADR-00N: <short title>

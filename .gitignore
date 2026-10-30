@@ -25,6 +25,9 @@ htmlcov/
 # Azure / azd
 .azure/
 
+# Claude Code agent worktrees
+.claude/worktrees/
+
 # Editors and OS
 .vscode/
 .idea/
