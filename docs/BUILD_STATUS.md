@@ -3,7 +3,7 @@
 > Purpose: if a session ends (usage limit, closed laptop), the next Claude session reads THIS file and continues
 > exactly where we stopped. Keep it accurate. Update after every step and PR, and before ending any session.
 
-**Last updated:** 2026-10-29 by session #2 (final)
+**Last updated:** 2026-10-31 (WS2 `ws2-starter` PR)
 **Current gate target:** G2 (Nov 2)
 
 ## FIRST THING THE NEXT SESSION SHOULD DO
@@ -68,6 +68,9 @@ If time runs short before Nov 2, cut #13 then #12 first.
 Status values: not started | in progress | PR open | merged | blocked
 
 ## In progress right now
+- 2026-10-31: WS2 branch `ws2-starter` pushed with a PR to `main`: lab probe results doc, WS2 starter files
+  (`azure.yaml`, `infra/main.bicep`, `scripts/`, `referee/`, `journeys/`) and two new `twin.bicep` outputs
+  (`logAnalyticsWorkspaceName`, `logAnalyticsCustomerId`; contract updated). Needs WS1 owner review before merge.
 - Branch: docs/status-after-merge (this status update); all feature PRs merged. Next: owner actions above, then
   the lab checks and joint drill with WS2.
 - Last commands run: `.\scripts\local-sql.ps1` twice, `.\scripts\local-access-drill.ps1` (ran all 4 stages, exit 0),
@@ -137,6 +140,7 @@ Status values: not started | in progress | PR open | merged | blocked
 See `docs/ADR.md` (latest: ADR-015).
 
 ## Session log (newest first)
+- 2026-10-31: `ws2-starter` pushed (WS2 starter files, lab probe doc, two `twin.bicep` outputs); PR opened to `main`.
 - 2026-10-30 session #2: owner merged PRs #3-#14 bottom-up (merge commits, CI green after each); rulesets added.
 - 2026-10-29 session #2: final BUILD_STATUS; load generator hardened (partial reads, bounded config, steady schedule, non-overlapping job runs). PR #14 load generator (G2), stacked on PR #13.
 - 2026-10-29 session #2: PR #13 architecture note `docs/architecture.md` (G2), stacked on PR #12.
