@@ -1,0 +1,33 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentParameters.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "environmentName": {
+      "value": "${AZURE_ENV_NAME}"
+    },
+    "location": {
+      "value": "${AZURE_LOCATION}"
+    },
+    "principalId": {
+      "value": "${AZURE_PRINCIPAL_ID}"
+    },
+    "kvPermissionModel": {
+      "value": "${KV_PERMISSION_MODEL=rbac}"
+    },
+    "orderImage": {
+      "value": "${ORDER_IMAGE}"
+    },
+    "sqlAdminPassword": {
+      "value": "${SQL_ADMIN_PASSWORD}"
+    },
+    "principalType": {
+      "value": "${AZURE_PRINCIPAL_TYPE=User}"
+    },
+    "refreshSeconds": {
+      "value": "${SECRET_REFRESH_SECONDS=10}"
+    },
+    "pathAControls": {
+      "value": "${PATH_A_CONTROLS=off}"
+    }
+  }
+}

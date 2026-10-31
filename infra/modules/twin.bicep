@@ -205,3 +205,6 @@ output orderAppUrl string = 'https://${orderApp.properties.configuration.ingress
 output sqlServerFqdn string = sql.properties.fullyQualifiedDomainName
 output sqlDbName string = dbName
 output appInsightsConnectionString string = appi.properties.ConnectionString
+
+output logAnalyticsWorkspaceName string = law.name
+output logAnalyticsCustomerId string = law.properties.customerId
