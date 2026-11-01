@@ -27,6 +27,13 @@ htmlcov/
 
 # Drill output from scripts/ (events, CSVs, referee results) stays local
 evidence/
+probe-results-*
+drill-evidence-*.zip
+
+# Local working notes and virtual environments
+private/
+docs/ADR-drafts.md
+.venv-*/
 
 # Claude Code agent worktrees
 .claude/worktrees/
