@@ -56,8 +56,9 @@ One-sentence definitions of terms used in this project, added the first time eac
 | Public / private repo | Who can read the code: anyone (public) or only invited people (private). Ours is public (ADR-002). |
 | pytest | Python's test runner: it finds functions named `test_...` and reports which pass or fail. |
 | RBAC | Role-Based Access Control: Azure grants access by assigning a role (like "Key Vault Secrets User") to an identity on a resource. |
-| Replica | One running copy of a container app; the twin runs exactly one (ADR-006). |
+| Replica | One running copy of a container app; the twin runs exactly one (ADR-006), except for a few seconds during a rolling restart. |
 | Revision | An immutable version of a Container App's settings and image; a new one is created when the app's template changes. |
+| Rolling restart | A restart that starts the new replica first and stops the old one only once the new one is ready, so the app never goes down. `az containerapp revision restart` works this way and returns before the swap is done. |
 | SARIF | A standard JSON format for scanner results; CodeQL uploads SARIF so findings show in GitHub's Security tab. |
 | Seed data | Starting rows loaded into a fresh database; ours is the two products in `sql/seed.sql`. |
 | Smoke test | A quick check that something basically works, like starting the container and calling `/health`, before deeper testing or publishing. |
