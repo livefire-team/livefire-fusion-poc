@@ -1,0 +1,10 @@
+name: livefire-fusion
+infra:
+  provider: bicep
+  path: infra
+  module: main
+hooks:
+  postprovision:
+    shell: sh
+    run: ./scripts/postprovision.sh
+    continueOnError: false
