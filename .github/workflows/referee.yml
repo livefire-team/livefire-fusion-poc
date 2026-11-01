@@ -1,0 +1,36 @@
+name: referee
+
+# Runs referee/tests: the SQL check and the WS2 scripts, driven through fake commands, so no Azure or database is
+# needed. Read-only token; actions are pinned to full commit SHAs (ADR-011).
+on:
+  pull_request:
+    paths: ['referee/**', 'scripts/**', '.github/workflows/referee.yml']
+  push:
+    branches: [main]
+    paths: ['referee/**', 'scripts/**', '.github/workflows/referee.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: referee-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: '3.12'
+      - name: Install pytest at the referee's pinned version
+        run: pip install "$(grep '^pytest==' referee/requirements.txt)"
+      - name: Run the referee tests
+        run: python -m pytest referee/tests -q

@@ -6,6 +6,9 @@ Files from the "WS2 Build Guide to G1", collected Oct 27, with three additions:
 - infra/main.bicep: WS1's three outputs, the principalType and refresh pass-throughs, and the Path A deny policy
   and limited recovery role behind PATH_A_CONTROLS=on (off by default). control.bicep now outputs both identities.
 
+referee.sh records a result and exits to match: PASS (0), FAIL (1) or INCONCLUSIVE (2, a check could not run).
+Tests with fake commands: `pytest referee/tests` (needs bash and pytest only).
+
 As tested here: every script passes bash -n and ShellCheck; three drill.sh runs against a fake Azure finished with a
 complete event log; fault.sh refuses a resource group that isn't a twin; infra/main.bicep compiles with no lint
 warnings, with PATH_A_CONTROLS on or off.
