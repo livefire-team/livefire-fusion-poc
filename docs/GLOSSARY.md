@@ -4,6 +4,7 @@ One-sentence definitions of terms used in this project, added the first time eac
 
 | Term | Meaning |
 |---|---|
+| Access policy (Key Vault) | The older way to grant Key Vault access: a list on the vault itself saying which identity may do what (e.g. get and list secrets); the alternative is RBAC. |
 | ADR | Architecture Decision Record: a short note in `docs/ADR.md` saying what we decided, why, and what else we considered. |
 | Architecture note | `docs/architecture.md`: a one-page description of the order service's parts, request flow, settings and telemetry. |
 | Backlog (load generator) | The load generator's in-memory list of orders that failed and will be tried again later, with growing waits between tries. |
@@ -51,6 +52,7 @@ One-sentence definitions of terms used in this project, added the first time eac
 | Playwright | A tool that drives a real browser from code; `journeys/test_order_journey.py` uses it to place an order like a customer. |
 | PR (pull request) | A request on GitHub to merge a branch into `main`, where changes are reviewed and checks run before merging. |
 | Probe | A regular HTTP check the platform makes on a container (liveness: restart it if it fails; readiness: stop sending it traffic if it fails); ours both call `/health` (ADR-006). |
+| Propagation | The delay between changing a setting in Azure (like removing access) and every part of Azure acting on it; `scripts/measure-propagation.sh` measures it for Key Vault access. |
 | Public / private repo | Who can read the code: anyone (public) or only invited people (private). Ours is public (ADR-002). |
 | pytest | Python's test runner: it finds functions named `test_...` and reports which pass or fail. |
 | RBAC | Role-Based Access Control: Azure grants access by assigning a role (like "Key Vault Secrets User") to an identity on a resource. |

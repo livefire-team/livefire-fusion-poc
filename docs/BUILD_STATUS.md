@@ -3,7 +3,7 @@
 > Purpose: if a session ends (usage limit, closed laptop), the next Claude session reads THIS file and continues
 > exactly where we stopped. Keep it accurate. Update after every step and PR, and before ending any session.
 
-**Last updated:** 2026-10-31 (PR #16: referee evidence-folder fix, first twin baseline PASS)
+**Last updated:** 2026-10-31 (PR #16: Key Vault access propagation measured, macOS event timestamp fix)
 **Current gate target:** G2 (Nov 2)
 
 ## FIRST THING THE NEXT SESSION SHOULD DO
@@ -74,13 +74,31 @@ Status values: not started | in progress | PR open | merged | blocked
   `main`: lab probe results doc, WS2 starter files (`azure.yaml`, `infra/main.bicep`, `scripts/`, `referee/`,
   `journeys/`) and two new `twin.bicep` outputs (`logAnalyticsWorkspaceName`, `logAnalyticsCustomerId`; contract
   updated). Also a referee fix: pytest-playwright deletes its `--output` folder at start, which removed the run's
-  evidence folder, so `referee.sh` now passes `--output "$OUTDIR/playwright"`. Needs WS1 owner review before merge.
+  evidence folder, so `referee.sh` now passes `--output "$OUTDIR/playwright"`. And a `lib.sh` fix: event
+  timestamps used `%3N` (GNU `date` only), so on macOS every `events.jsonl` line had an invalid time like
+  `...T01:06:20.3NZ`; they are now whole seconds (`...T01:11:57Z`). Needs WS1 owner review before merge.
 - Twin provisioned in `rg-lf-twin-lf-eh`; every `postprovision.sh` step is in place (firewall rule, schema + seed,
   `order_app` / `referee_ro`, Key Vault `db-password`, `REFEREE_SQL_PASSWORD`). Baseline drill
   `drill-20261101-0058-4514` PASS (journey confirmed, 1 order, 1 payment authorization). Next: `./scripts/drill.sh`.
-- Branch: docs/status-after-merge (this status update); all feature PRs merged. Next: owner actions above, then
-  the lab checks and joint drill with WS2.
-- Last commands run (WS2 Mac): `./scripts/wait-for.sh ok`, `./scripts/referee.sh baseline` (PASS);
+- Key Vault access propagation measured 2026-10-31 (`./scripts/measure-propagation.sh 3`, drill
+  `drill-20261101-0106-9260`, model `accessPolicy`):
+
+  | Run | Access removed -> `/health/dependencies` shows `forbidden` | Access restored -> shows `ok` |
+  |---|---|---|
+  | 1 | 1 s | 1 s |
+  | 2 | 0 s | 1 s |
+  | 3 | 0 s | 1 s |
+
+  The first poll saw the new state every time. The stopwatch starts only after `fault.sh` finishes its two
+  `az keyvault show` checks, so read it as "within about 5 s", not "instant". `/health/dependencies` makes a fresh
+  Key Vault read on every call, so no cached secret hides the change. Not measured: the `rbac` model. The lab probe
+  says Path A (real role removal) applies, and `lib.sh` and `main.bicep` default to `rbac`; role changes can take
+  up to about 10 minutes. Open question for WS1/WS2: which model the joint drill uses. If `rbac`, rerun this
+  measurement on a twin provisioned with `kvPermissionModel=rbac`.
+- Branch: `ws2-starter` ([PR #16](https://github.com/livefire-team/livefire-fusion-poc/pull/16)). Next: owner
+  review of PR #16, pick the Key Vault permission model for the joint drill, then the lab checks and joint drill.
+- Last commands run (WS2 Mac): `./scripts/measure-propagation.sh 3` (results above), `./scripts/wait-for.sh ok`
+  (event timestamp now valid); before that `./scripts/referee.sh baseline` (PASS);
   earlier on the WS1 PC: `pytest -q src/order-service --cov=src/order-service/app`: 59 passed, coverage 99%
 - Uncommitted / unpushed files: none expected (`evidence/` is local drill output and is not committed)
 - Test status: order-service unit tests green 2026-10-29. Twin deployed to Azure by WS2 via `main.bicep`; baseline PASS.
@@ -147,6 +165,8 @@ Status values: not started | in progress | PR open | merged | blocked
 See `docs/ADR.md` (latest: ADR-015).
 
 ## Session log (newest first)
+- 2026-10-31: Key Vault propagation measured (`accessPolicy`: within about 5 s, 3 runs); `lib.sh` event timestamps
+  fixed for macOS; `rbac` still unmeasured.
 - 2026-10-31: PR #16 referee fix (evidence folder kept); WS2 Mac OpenSSL link fixed; twin baseline PASS.
 - 2026-10-31: `ws2-starter` pushed (WS2 starter files, lab probe doc, two `twin.bicep` outputs); PR opened to `main`.
 - 2026-10-30 session #2: owner merged PRs #3-#14 bottom-up (merge commits, CI green after each); rulesets added.
