@@ -185,6 +185,8 @@ Status values: not started | in progress | PR open | merged | blocked
 See `docs/ADR.md` (latest: ADR-015).
 
 ## Session log (newest first)
+- 2026-11-01: WS2 Mac has a private drill guide at `docs/reference/drill-guide.md` (git-ignored, ADR-004): purpose,
+  how to run, twin-only checks. It exists only on that Mac.
 - 2026-11-01: `drill.sh` waits out the secret refresh window before r2 (gap now about 16 s) and its comments are
   neutral (ADR-004); drill PASS FAIL FAIL PASS ×3 again.
 - 2026-10-31: drill gave PASS FAIL PASS PASS because the rolling restart landed mid-drill; `reset.sh` now waits for
