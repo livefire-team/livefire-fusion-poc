@@ -38,7 +38,9 @@ One-sentence definitions of terms used in this project, added the first time eac
 | Idempotent | Safe to run more than once: the second run changes nothing and doesn't fail. Our SQL scripts must be. |
 | Image tag | The label after the colon in an image name (like `:g1` or `:sha-1a2b3c4`) that picks one version of the image (ADR-010). |
 | Jinja2 template | An HTML file with `{{ ... }}` placeholders and `{% ... %}` loops that FastAPI fills in to draw a page; ours are in `app/templates/`. |
+| JMESPath | The small language the Azure CLI's `--query` flag uses to pick fields out of a command's JSON result before it is printed (like `tables[0].rows`). |
 | Job | One group of steps in a workflow that runs on its own fresh machine; ours are `test` and `image`, and `image` waits for `test`. |
+| KQL | Kusto Query Language: the language for searching App Insights and Log Analytics data (like `exceptions \| where timestamp > ago(1h)`); passed with `--analytics-query`. |
 | Load generator | `src/load-generator/`: a small program that places orders at a steady rate so the order service has real traffic and throughput numbers. |
 | Managed identity | An Azure-managed login for an app (no password to store) that can be granted access to other resources, like our app reading Key Vault. |
 | Merge commit | A commit that joins a branch into `main` while keeping every original commit; we never squash (ADR-003). |

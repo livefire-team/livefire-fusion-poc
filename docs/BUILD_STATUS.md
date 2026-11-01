@@ -4,7 +4,7 @@
 > exactly where we stopped. Keep it accurate. Update after every step and PR, and before ending any session.
 
 **Last updated:** 2026-11-01 (PR #16: `reset.sh` waits for the restart; `drill.sh` waits out the secret refresh
-window, neutral comments; drill PASS FAIL FAIL PASS ×3, twice)
+window, neutral comments; drill PASS FAIL FAIL PASS ×3, twice; App Insights `exceptions` match)
 **Current gate target:** G2 (Nov 2)
 
 ## FIRST THING THE NEXT SESSION SHOULD DO
@@ -97,6 +97,11 @@ Status values: not started | in progress | PR open | merged | blocked
     10, same as `main.parameters.json`). Its comments now only name the four referee runs (ADR-004).
   - After that fix: `drill-20261101-1200-cb37`, `drill-20261101-1203-18e8`, `drill-20261101-1206-2828` all
     PASS FAIL FAIL PASS; r1-to-r2 gap 15.9 s, 15.9 s, 15.6 s; r2 and r3 both `SecretUnavailable` with 0 orders.
+  - App Insights check (12:46 UTC): `exceptions` rows whose `customDimensions.drill_id` starts with `drill-` in the
+    last hour were exactly 6, r2 and r3 of each of those three drills, all `SecretUnavailable` / `order failed`;
+    none for r1 or r4. Note: `az monitor app-insights query -o table` prints nothing (its result is nested), so add
+    `--query "tables[0].rows[*].{timestamp:[0], run_id:[1], exception:[2], message:[3]}"` (use `rows[*]`, not
+    `rows[]`, and don't name a column `type`, which table output hides), or use `-o tsv --query "tables[0].rows"`.
   - Open question for the WS1 owner (ADR-004): `README-WS2.md` lines 5 and 10 still name the drill and its
     verdict pattern, and the last line of `drill.sh` compares with the pattern (it is the loop's pass check).
 - Key Vault access propagation measured 2026-10-31 (`./scripts/measure-propagation.sh 3`, drill
@@ -116,7 +121,8 @@ Status values: not started | in progress | PR open | merged | blocked
   measurement on a twin provisioned with `kvPermissionModel=rbac`.
 - Branch: `ws2-starter` ([PR #16](https://github.com/livefire-team/livefire-fusion-poc/pull/16)). Next: owner
   review of PR #16, pick the Key Vault permission model for the joint drill, then the lab checks and joint drill.
-- Last commands run (WS2 Mac, with `.venv` active): `for i in 1 2 3; do ./scripts/drill.sh || break; done`
+- Last commands run (WS2 Mac, with `.venv` active): the App Insights `exceptions` query (above); before that
+  `for i in 1 2 3; do ./scripts/drill.sh || break; done`
   (PASS FAIL FAIL PASS ×3, run twice, above); before that `./scripts/reset.sh` alone (old replica gone after 58 s) and
   `./scripts/measure-propagation.sh 3`; earlier on the WS1 PC:
   `pytest -q src/order-service --cov=src/order-service/app`: 59 passed, coverage 99%
