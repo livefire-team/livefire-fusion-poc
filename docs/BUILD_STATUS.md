@@ -62,7 +62,7 @@ if `git`/`gh`/`az`/`docker` are "not recognized". ODBC Driver 18 is not installe
 | 14 | docs: architecture note (G2) | `docs/architecture.md` — the only file WS3 indexes | merged | [PR #13](https://github.com/livefire-team/livefire-fusion-poc/pull/13) |
 
 Outside PRs (with WS2, needs Azure): agree `SECRET_REFRESH_SECONDS` with WS2/WS5; check twin after first
-`azd provision` (Phase 7 steps 5–6); joint drill PASS, FAIL, FAIL, PASS ×3 (Phase 7 step 7).
+`azd provision` (Phase 7 steps 5–6); joint drill with WS2 (Phase 7 step 7).
 If time runs short before Nov 2, cut #13 then #12 first.
 
 Status values: not started | in progress | PR open | merged | blocked
