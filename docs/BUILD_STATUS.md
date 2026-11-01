@@ -121,6 +121,10 @@ Status values: not started | in progress | PR open | merged | blocked
   `PATH_A_CONTROLS` off), so the measurement above applies and no `rbac` measurement is needed.
 - 2026-11-01: G1 drill evidence summary for the three 12:00-12:06 drills (verdicts, delays, screenshots, trace
   paths) written on the WS2 Mac in `evidence/` only (git-ignored, ADR-004).
+- 2026-11-01, pending: `PATH_A_CONTROLS=on` with the vault kept on `accessPolicy` (subscription-wide deny of new
+  Owner, Contributor and User Access Administrator assignments, plus `ops-access.bicep`). Waiting for the other
+  workstreams to confirm none of their identities needs those roles. Then: `azd env set PATH_A_CONTROLS on`,
+  `azd provision`, check `./scripts/recover.sh broad` reports `RequestDisallowedByPolicy`, add ADR-017.
 - Branch: `ws2-starter` ([PR #16](https://github.com/livefire-team/livefire-fusion-poc/pull/16)). Next: owner
   review of PR #16 (including ADR-016), then the lab checks and joint drill.
 - Last commands run (WS2 Mac, with `.venv` active): the App Insights `exceptions` query (above); before that
