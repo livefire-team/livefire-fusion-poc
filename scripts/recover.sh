@@ -14,7 +14,7 @@ case "${1:?broad|narrow}" in
       event recover.broad UNEXPECTED_ALLOW; echo "ALLOWED and removed: the policy is not in effect yet"; exit 3
     fi
     CODE=$(grep -oE 'RequestDisallowedByPolicy|AuthorizationFailed' <<<"$OUT" | head -1 || true)
-    if [ -z "$CODE" ]; then    # an outage or a typo is not a refusal
+    if [ -z "$CODE" ]; then
       event recover.broad error '{"code":"unknown"}'
       echo "broad option failed without a policy or authorization code:" >&2
       echo "$OUT" >&2

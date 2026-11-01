@@ -37,7 +37,7 @@ def read_counts() -> tuple[int, int]:
 def main() -> int:
     try:
         orders, auths = read_counts()
-    except Exception as exc:  # every failure here means "no answer", which must not read as wrong counts
+    except Exception as exc:
         # Only the first argument: the SQLSTATE for a pyodbc error, the setting's name for a missing one.
         detail = exc.args[0] if exc.args else ""
         print(f"assert_order: {type(exc).__name__}: {detail}", file=sys.stderr)

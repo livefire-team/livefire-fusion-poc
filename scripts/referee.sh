@@ -3,8 +3,7 @@
 #   PASS          journey passed and the SQL counts are right (exit 0)
 #   FAIL          both checks ran and at least one of them failed (exit 1)
 #   INCONCLUSIVE  a check could not run, so there is no answer (exit 2)
-# Any abort before a verdict is written (refused by lib.sh, unset setting, jq error) also exits 2, so that an
-# infrastructure problem can't read as FAIL.
+# Any abort before a verdict is written (refused by lib.sh, unset setting, jq error) also exits 2.
 VERDICT_WRITTEN=""
 trap '[ -n "$VERDICT_WRITTEN" ] || exit 2' EXIT
 source "$(dirname "$0")/lib.sh"
