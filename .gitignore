@@ -25,6 +25,9 @@ htmlcov/
 # Azure / azd
 .azure/
 
+# Drill output from scripts/ (events, CSVs, referee results) stays local
+evidence/
+
 # Claude Code agent worktrees
 .claude/worktrees/
 
