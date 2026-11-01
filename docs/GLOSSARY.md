@@ -43,10 +43,12 @@ One-sentence definitions of terms used in this project, added the first time eac
 | Merge commit | A commit that joins a branch into `main` while keeping every original commit; we never squash (ADR-003). |
 | Monkeypatch | A pytest helper that temporarily replaces a function or object during one test (like the database calls) and puts it back afterwards. |
 | Noreply email | A private address GitHub gives you for commits, so your real email is not public. |
+| OpenSSL | The library programs use for encrypted connections (TLS); ODBC Driver 18 needs version 1.0, 1.1 or 3, not 4. |
 | OpenTelemetry | An open standard and library for traces, metrics and logs; `azure-monitor-opentelemetry` sends ours to Application Insights. |
 | Organisation (GitHub org) | A shared GitHub account that several people can own; ours is `livefire-team`. |
 | PATH | The list of folders Windows searches when you type a command like `git`; programs started before an install keep the old list. |
 | pip-audit | A tool that checks our pinned Python packages against databases of known vulnerabilities. |
+| Playwright | A tool that drives a real browser from code; `journeys/test_order_journey.py` uses it to place an order like a customer. |
 | PR (pull request) | A request on GitHub to merge a branch into `main`, where changes are reviewed and checks run before merging. |
 | Probe | A regular HTTP check the platform makes on a container (liveness: restart it if it fails; readiness: stop sending it traffic if it fails); ours both call `/health` (ADR-006). |
 | Public / private repo | Who can read the code: anyone (public) or only invited people (private). Ours is public (ADR-002). |
@@ -61,6 +63,7 @@ One-sentence definitions of terms used in this project, added the first time eac
 | sqlcmd | Microsoft's command-line tool for running SQL against SQL Server; we run it inside the SQL container. |
 | Squash merge | Merging a PR as one combined commit; forbidden here because it rewrites commit history (ADR-003). |
 | Stand-in | A simple local replacement for a real service, used so the app can run without it; our local stand-in for Key Vault is the file `.local/secret.txt` (ADR-012). |
+| Symlink (symbolic link) | A file that just points to another file or folder, like a shortcut; Homebrew's `opt/openssl` is one. |
 | TestClient | FastAPI's in-process test browser: it calls the app's endpoints without starting a server. |
 | Token | A long secret string proving to a service that it is you; never pasted into chat or files. |
 | Trivy | A scanner for known vulnerabilities and misconfigurations in files, Dockerfiles and container images. |

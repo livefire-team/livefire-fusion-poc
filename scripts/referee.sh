@@ -6,7 +6,7 @@ export RUN_ID="$DRILL_ID-r$N" OUTDIR="evidence/$DRILL_ID/r$N-$LABEL"
 mkdir -p "$OUTDIR"; STARTED="$(date -u +%FT%TZ)"
 
 J=0; pytest journeys/test_order_journey.py --browser chromium \
-  --tracing retain-on-failure --output "$OUTDIR" -q || J=$?
+  --tracing retain-on-failure --output "$OUTDIR/playwright" -q || J=$?   # plugin wipes --output at start
 S=0; SQL="$(python referee/assert_order.py)" || S=$?
 [ -n "$SQL" ] || SQL='{"orders_persisted":null,"payment_auths_persisted":null}'
 VERDICT=FAIL; [ "$J" -eq 0 ] && [ "$S" -eq 0 ] && VERDICT=PASS
