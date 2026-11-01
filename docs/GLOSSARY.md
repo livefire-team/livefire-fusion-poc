@@ -7,6 +7,7 @@ One-sentence definitions of terms used in this project, added the first time eac
 | Access policy (Key Vault) | The older way to grant Key Vault access: a list on the vault itself saying which identity may do what (e.g. get and list secrets); the alternative is RBAC. |
 | ADR | Architecture Decision Record: a short note in `docs/ADR.md` saying what we decided, why, and what else we considered. |
 | Architecture note | `docs/architecture.md`: a one-page description of the order service's parts, request flow, settings and telemetry. |
+| Azure Policy | Rules Azure checks on every create or change request, after the role check; a `deny` rule refuses the request even for an Owner (error `RequestDisallowedByPolicy`). |
 | Backlog (load generator) | The load generator's in-memory list of orders that failed and will be tried again later, with growing waits between tries. |
 | Bicep | Microsoft's language for describing Azure resources as code; `az bicep build` checks it compiles. |
 | Bicep module | A reusable Bicep file that another Bicep file calls with parameters and reads outputs from; ours is `infra/modules/twin.bicep`, called by WS2's `main.bicep`. |
@@ -52,6 +53,7 @@ One-sentence definitions of terms used in this project, added the first time eac
 | PATH | The list of folders Windows searches when you type a command like `git`; programs started before an install keep the old list. |
 | pip-audit | A tool that checks our pinned Python packages against databases of known vulnerabilities. |
 | Playwright | A tool that drives a real browser from code; `journeys/test_order_journey.py` uses it to place an order like a customer. |
+| Policy exemption | A record that switches an Azure Policy off for one scope (like a resource group) without deleting the policy; anyone who can manage policies, such as an Owner, can create one. |
 | PR (pull request) | A request on GitHub to merge a branch into `main`, where changes are reviewed and checks run before merging. |
 | Probe | A regular HTTP check the platform makes on a container (liveness: restart it if it fails; readiness: stop sending it traffic if it fails); ours both call `/health` (ADR-006). |
 | Propagation | The delay between changing a setting in Azure (like removing access) and every part of Azure acting on it; `scripts/measure-propagation.sh` measures it for Key Vault access. |
