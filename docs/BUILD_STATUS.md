@@ -91,7 +91,7 @@ Status values: not started | in progress | PR open | merged | blocked
 
   The first poll saw the new state every time. The stopwatch starts only after `fault.sh` finishes its two
   `az keyvault show` checks, so read it as "within about 5 s", not "instant". `/health/dependencies` makes a fresh
-  Key Vault read on every call, so no cached secret hides the change. Not measured: the `rbac` model. The lab probe
+  Key Vault read on every call. Not measured: the `rbac` model. The lab probe
   says Path A (real role removal) applies, and `lib.sh` and `main.bicep` default to `rbac`; role changes can take
   up to about 10 minutes. Open question for WS1/WS2: which model the joint drill uses. If `rbac`, rerun this
   measurement on a twin provisioned with `kvPermissionModel=rbac`.
