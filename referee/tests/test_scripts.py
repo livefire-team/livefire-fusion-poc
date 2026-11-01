@@ -1,4 +1,4 @@
-"""referee.sh and drill.sh behaviour, driven through fake commands (no Azure needed)."""
+"""recover.sh, reset.sh, referee.sh and drill.sh behaviour, driven through fake commands (no Azure needed)."""
 import json
 import os
 import shutil
@@ -62,10 +62,82 @@ esac
 """
 
 
+# ---- recover.sh ----
+
+def az_grant_refused(message):
+    return f"""case "$*" in
+  "account show"*) echo {SUB} ;;
+  "role assignment create"*) echo "{message}" >&2; exit 1 ;;
+esac
+"""
+
+
+AZ_GRANT_THEN_DELETE_FAILS = f"""case "$*" in
+  "account show"*) echo {SUB} ;;
+  "role assignment create"*) exit 0 ;;
+  "role assignment delete"*) echo "delete failed" >&2; exit 1 ;;
+esac
+"""
+
+AZ_GRANT_THEN_DELETE_WORKS = AZ_GRANT_THEN_DELETE_FAILS.replace('echo "delete failed" >&2; exit 1', "exit 0")
+
+
+@pytest.mark.parametrize("code", ["RequestDisallowedByPolicy", "AuthorizationFailed"])
+def test_broad_grant_refused_with_a_policy_or_authorization_code_is_recorded_as_denied(sandbox, code):
+    result = run_script(sandbox, "recover.sh", "broad", az_body=az_grant_refused(f"({code}) not allowed"))
+    assert result.returncode == 0
+    assert f"denied: {code}" in result.stdout
+    assert [(e["result"], e["details"]["code"]) for e in events(sandbox)] == [("denied", code)]
+
+
+def test_broad_grant_failing_for_any_other_reason_is_recorded_as_an_error(sandbox):
+    result = run_script(sandbox, "recover.sh", "broad", az_body=az_grant_refused("connection timed out"))
+    assert result.returncode == 4
+    assert "connection timed out" in result.stderr
+    assert [e["result"] for e in events(sandbox)] == ["error"]
+
+
+def test_broad_grant_that_cannot_be_removed_tells_the_operator_to_remove_it_by_hand(sandbox):
+    result = run_script(sandbox, "recover.sh", "broad", az_body=AZ_GRANT_THEN_DELETE_FAILS)
+    assert result.returncode == 3
+    assert "REMOVE MANUALLY" in result.stderr
+    assert PRINCIPAL in result.stderr
+    assert [e["result"] for e in events(sandbox)] == ["UNEXPECTED_ALLOW_NOT_REMOVED"]
+
+
+def test_broad_grant_that_is_removed_is_reported_as_allowed_and_removed(sandbox):
+    result = run_script(sandbox, "recover.sh", "broad", az_body=AZ_GRANT_THEN_DELETE_WORKS)
+    assert result.returncode == 3
+    assert "ALLOWED and removed" in result.stdout and "REMOVE MANUALLY" not in result.stderr
+    assert [e["result"] for e in events(sandbox)] == ["UNEXPECTED_ALLOW"]
+
+
+# ---- reset.sh ----
+
 def copied_scripts(sandbox):
     copy = sandbox / "scripts"
     shutil.copytree(SCRIPTS, copy)
     return copy
+
+
+def reset_scripts(sandbox, status_output):
+    copy = copied_scripts(sandbox)
+    fake(copy / "fault.sh", f'if [ "$1" = status ]; then printf "{status_output}"; else touch "{sandbox.as_posix()}/restored"; fi\n')
+    fake(copy / "wait-for.sh", "exit 0\n")
+    return copy
+
+
+def test_reset_continues_and_leaves_access_alone_when_the_entry_count_is_unknown(sandbox):
+    copy = reset_scripts(sandbox, "")
+    result = run_script(sandbox, "reset.sh", scripts=copy)
+    assert result.returncode == 0 and "reset done" in result.stdout
+    assert not (sandbox / "restored").exists()
+
+
+def test_reset_restores_access_when_there_are_no_entries(sandbox):
+    copy = reset_scripts(sandbox, "access entries: 0\n")
+    result = run_script(sandbox, "reset.sh", scripts=copy)
+    assert result.returncode == 0 and (sandbox / "restored").exists()
 
 
 # ---- referee.sh ----
