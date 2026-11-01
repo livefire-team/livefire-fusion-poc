@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# One False Green drill by hand (G1). Expected verdicts: PASS FAIL FAIL PASS.
+# One drill by hand (G1): the referee runs at baseline, during the fault, after restore and after restart.
 #   for i in 1 2 3; do ./scripts/drill.sh || break; done
 set -uo pipefail
 cd "$(dirname "$0")/.." || exit 1
@@ -8,12 +8,14 @@ set -a; eval "$(azd env get-values)"; set +a
 verdict() { if ./scripts/referee.sh "$1" >&2; then echo PASS; else echo FAIL; fi; }
 
 ./scripts/reset.sh || exit 1
-A=$(verdict baseline)
+A=$(verdict baseline); A_DONE=$(date +%s)
 ./scripts/fault.sh inject && ./scripts/wait-for.sh forbidden || exit 1
-B=$(verdict during-fault)                       # this attempt latches the bug
+# Let the app's secret refresh window pass, so the next order makes a fresh Key Vault read.
+WAIT=$(( A_DONE + ${SECRET_REFRESH_SECONDS:-10} + 1 - $(date +%s) )); [ "$WAIT" -le 0 ] || sleep "$WAIT"
+B=$(verdict during-fault)
 ./scripts/fault.sh restore && ./scripts/wait-for.sh ok || exit 1
 curl -s "$ORDER_APP_URL/health/dependencies" > "evidence/$DRILL_ID/health-after-restore.json"
-C=$(verdict after-restore)                      # the False Green
+C=$(verdict after-restore)
 ./scripts/reset.sh || exit 1
 D=$(verdict after-restart)
 

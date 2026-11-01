@@ -3,7 +3,8 @@
 > Purpose: if a session ends (usage limit, closed laptop), the next Claude session reads THIS file and continues
 > exactly where we stopped. Keep it accurate. Update after every step and PR, and before ending any session.
 
-**Last updated:** 2026-10-31 (PR #16: `reset.sh` waits for the restart to finish; drill PASS FAIL FAIL PASS ×3)
+**Last updated:** 2026-11-01 (PR #16: `reset.sh` waits for the restart; `drill.sh` waits out the secret refresh
+window, neutral comments; drill PASS FAIL FAIL PASS ×3, twice)
 **Current gate target:** G2 (Nov 2)
 
 ## FIRST THING THE NEXT SESSION SHOULD DO
@@ -90,10 +91,14 @@ Status values: not started | in progress | PR open | merged | blocked
     listed. A reset now takes about 70 s (old replica gone after 50-58 s).
   - After the fix: `drill-20261101-0428-28c3`, `drill-20261101-0430-5bb6`, `drill-20261101-0433-d591` all
     PASS FAIL FAIL PASS; `health-after-restore.json` was `{"keyvault":"ok","sql":"ok"}` each time.
-  - Timing margin to watch: the gap between the r1 order and the r2 order was 12.0 s, 11.4 s and 11.2 s
-    (App Insights), against `SECRET_REFRESH_SECONDS=10`. If the steps between them get about 2 s faster, r2 reads
-    the cached password and passes. Open question for WS1/WS2: add a wait in `drill.sh`, or settle it when
-    agreeing `SECRET_REFRESH_SECONDS` (owner action 5).
+  - Timing margin: the gap between the r1 order and the r2 order was 12.0 s, 11.4 s and 11.2 s (App Insights),
+    against `SECRET_REFRESH_SECONDS=10`; about 2 s faster and r2 would have used the cached password. Fixed
+    2026-11-01: `drill.sh` now waits until `SECRET_REFRESH_SECONDS` + 1 s have passed since r1 before r2 (default
+    10, same as `main.parameters.json`). Its comments now only name the four referee runs (ADR-004).
+  - After that fix: `drill-20261101-1200-cb37`, `drill-20261101-1203-18e8`, `drill-20261101-1206-2828` all
+    PASS FAIL FAIL PASS; r1-to-r2 gap 15.9 s, 15.9 s, 15.6 s; r2 and r3 both `SecretUnavailable` with 0 orders.
+  - Open question for the WS1 owner (ADR-004): `README-WS2.md` lines 5 and 10 still name the drill and its
+    verdict pattern, and the last line of `drill.sh` compares with the pattern (it is the loop's pass check).
 - Key Vault access propagation measured 2026-10-31 (`./scripts/measure-propagation.sh 3`, drill
   `drill-20261101-0106-9260`, model `accessPolicy`):
 
@@ -112,11 +117,10 @@ Status values: not started | in progress | PR open | merged | blocked
 - Branch: `ws2-starter` ([PR #16](https://github.com/livefire-team/livefire-fusion-poc/pull/16)). Next: owner
   review of PR #16, pick the Key Vault permission model for the joint drill, then the lab checks and joint drill.
 - Last commands run (WS2 Mac, with `.venv` active): `for i in 1 2 3; do ./scripts/drill.sh || break; done`
-  (PASS FAIL FAIL PASS ×3, above); before that `./scripts/reset.sh` alone (old replica gone after 58 s) and
+  (PASS FAIL FAIL PASS ×3, run twice, above); before that `./scripts/reset.sh` alone (old replica gone after 58 s) and
   `./scripts/measure-propagation.sh 3`; earlier on the WS1 PC:
   `pytest -q src/order-service --cov=src/order-service/app`: 59 passed, coverage 99%
-- Uncommitted / unpushed files: `scripts/reset.sh`, `docs/BUILD_STATUS.md`, `docs/GLOSSARY.md` until committed
-  (`evidence/` is local drill output and is not committed)
+- Uncommitted / unpushed files: none expected (`evidence/` is local drill output and is not committed)
 - Test status: order-service unit tests green 2026-10-29. Twin deployed to Azure by WS2 via `main.bicep`; baseline PASS.
 
 ## Done (with evidence)
@@ -181,6 +185,8 @@ Status values: not started | in progress | PR open | merged | blocked
 See `docs/ADR.md` (latest: ADR-015).
 
 ## Session log (newest first)
+- 2026-11-01: `drill.sh` waits out the secret refresh window before r2 (gap now about 16 s) and its comments are
+  neutral (ADR-004); drill PASS FAIL FAIL PASS ×3 again.
 - 2026-10-31: drill gave PASS FAIL PASS PASS because the rolling restart landed mid-drill; `reset.sh` now waits for
   the old replica to go; drill PASS FAIL FAIL PASS ×3; r1-to-r2 timing margin only about 1-2 s.
 - 2026-10-31: Key Vault propagation measured (`accessPolicy`: within about 5 s, 3 runs); `lib.sh` event timestamps
