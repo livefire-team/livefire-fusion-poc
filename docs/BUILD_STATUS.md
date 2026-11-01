@@ -4,7 +4,7 @@
 > exactly where we stopped. Keep it accurate. Update after every step and PR, and before ending any session.
 
 **Last updated:** 2026-11-01 (PR #16: `reset.sh` waits for the restart; `drill.sh` waits out the secret refresh
-window, neutral comments; drill PASS FAIL FAIL PASS ×3, twice; App Insights `exceptions` match)
+window, neutral comments; drill PASS FAIL FAIL PASS ×3, twice; App Insights `exceptions` match; ADR-016 Path B)
 **Current gate target:** G2 (Nov 2)
 
 ## FIRST THING THE NEXT SESSION SHOULD DO
@@ -117,10 +117,12 @@ Status values: not started | in progress | PR open | merged | blocked
   `az keyvault show` checks, so read it as "within about 5 s", not "instant". `/health/dependencies` makes a fresh
   Key Vault read on every call, so no cached secret hides the change. Not measured: the `rbac` model. The lab probe
   says Path A (real role removal) applies, and `lib.sh` and `main.bicep` default to `rbac`; role changes can take
-  up to about 10 minutes. Open question for WS1/WS2: which model the joint drill uses. If `rbac`, rerun this
-  measurement on a twin provisioned with `kvPermissionModel=rbac`.
+  up to about 10 minutes. Decided 2026-11-01 (ADR-016): the joint drill stays on Path B (`accessPolicy`,
+  `PATH_A_CONTROLS` off), so the measurement above applies and no `rbac` measurement is needed.
+- 2026-11-01: G1 drill evidence summary for the three 12:00-12:06 drills (verdicts, delays, screenshots, trace
+  paths) written on the WS2 Mac in `evidence/` only (git-ignored, ADR-004).
 - Branch: `ws2-starter` ([PR #16](https://github.com/livefire-team/livefire-fusion-poc/pull/16)). Next: owner
-  review of PR #16, pick the Key Vault permission model for the joint drill, then the lab checks and joint drill.
+  review of PR #16 (including ADR-016), then the lab checks and joint drill.
 - Last commands run (WS2 Mac, with `.venv` active): the App Insights `exceptions` query (above); before that
   `for i in 1 2 3; do ./scripts/drill.sh || break; done`
   (PASS FAIL FAIL PASS ×3, run twice, above); before that `./scripts/reset.sh` alone (old replica gone after 58 s) and
