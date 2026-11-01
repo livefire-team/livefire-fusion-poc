@@ -11,7 +11,7 @@ DRILL_ID="${DRILL_ID:?run: export DRILL_ID=\$(./scripts/new-drill.sh)}"
 [[ "$(az account show --query id -o tsv)" == "$AZURE_SUBSCRIPTION_ID" ]] || { echo "refused: wrong subscription"; exit 2; }
 
 mkdir -p "evidence/$DRILL_ID"
-event() {  # event <action> <result> [json-details]
+event() {  # event <action> <result> [json-details]; ts in whole seconds (macOS date has no %N)
   printf '{"ts":"%s","drill_id":"%s","action":"%s","result":"%s","details":%s}\n' \
-    "$(date -u +%Y-%m-%dT%H:%M:%S.%3NZ)" "$DRILL_ID" "$1" "$2" "${3:-"{}"}" >> "evidence/$DRILL_ID/events.jsonl"
+    "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$DRILL_ID" "$1" "$2" "${3:-"{}"}" >> "evidence/$DRILL_ID/events.jsonl"
 }
