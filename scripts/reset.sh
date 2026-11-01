@@ -3,7 +3,7 @@
 # Run it before every drill. For G1 it is also the kill switch.
 source "$(dirname "$0")/lib.sh"
 HERE="$(dirname "$0")"
-ENTRIES="$("$HERE/fault.sh" status | grep -o '[0-9]*$')"
+ENTRIES="$("$HERE/fault.sh" status | grep -o '[0-9]*$' || true)"   # empty means unknown: leave access alone
 if [ "$ENTRIES" = "0" ]; then "$HERE/fault.sh" restore; fi
 REV="$(az containerapp show -g "$TWIN_RG" -n "$ORDER_APP_NAME" --query properties.latestRevisionName -o tsv)"
 az containerapp revision restart -g "$TWIN_RG" -n "$ORDER_APP_NAME" --revision "$REV" -o none

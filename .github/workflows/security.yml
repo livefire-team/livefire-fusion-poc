@@ -72,6 +72,8 @@ jobs:
           pip-audit --desc on \
             -r src/load-generator/requirements.txt \
             -r src/load-generator/requirements-dev.txt
+      - name: Audit the referee's pinned dependencies
+        run: pip-audit --desc on -r referee/requirements.txt
 
   codeql:
     runs-on: ubuntu-latest
