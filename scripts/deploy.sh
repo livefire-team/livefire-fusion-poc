@@ -61,7 +61,9 @@ phase_images() {
     elif [ -z "$build" ]; then
       local creds=()
       [ -z "${GHCR_TOKEN:-}" ] || creds=(--username "${GHCR_USER:?set GHCR_USER with GHCR_TOKEN}" --password "$GHCR_TOKEN")
-      az acr import -n "$REGISTRY_NAME" --source "ghcr.io/$GHCR_OWNER/$c:$short" --image "$c:$tag" "${creds[@]}" -o none
+      # ${creds[@]+...}: macOS bash 3.2 treats an empty array as unset under set -u
+      az acr import -n "$REGISTRY_NAME" --source "ghcr.io/$GHCR_OWNER/$c:$short" --image "$c:$tag" \
+        ${creds[@]+"${creds[@]}"} -o none
       echo "imported ghcr.io/$GHCR_OWNER/$c:$short -> $image"
     else
       local dir; dir="$(mktemp -d)"
