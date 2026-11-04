@@ -111,10 +111,13 @@ phase_policy() {
 
 phase_policy_off() {
   load
-  say "removing the deny policy and id-lf-ops's broad-attempt role"
-  az policy assignment delete --name lf-deny-broad-roles --scope "/subscriptions/$AZURE_SUBSCRIPTION_ID" -o none || true
-  az role assignment delete --assignee "$OPS_PRINCIPAL_ID" --role "Role Based Access Control Administrator" \
-    --scope "/subscriptions/$AZURE_SUBSCRIPTION_ID" -o none || true
+  local scope="/subscriptions/$AZURE_SUBSCRIPTION_ID" role="Role Based Access Control Administrator"
+  say "removing id-lf-ops's broad-attempt role, then the deny policy"
+  az role assignment delete --assignee "$OPS_PRINCIPAL_ID" --role "$role" --scope "$scope" -o none || true
+  # the policy is what refuses id-lf-ops's Contributor attempt, so it stays until the role is gone
+  [ "$(az role assignment list --assignee "$OPS_PRINCIPAL_ID" --role "$role" --scope "$scope" --query 'length(@)' -o tsv)" = 0 ] \
+    || { echo "id-lf-ops still holds $role on the subscription: the deny policy stays"; exit 1; }
+  az policy assignment delete --name lf-deny-broad-roles --scope "$scope" -o none || true
   azd env set DENY_BROAD_POLICY off
   azd env set BROAD_ATTEMPT_ROLE off
   az policy assignment list --query "[?name=='lf-deny-broad-roles'].name" -o tsv

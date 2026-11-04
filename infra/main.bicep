@@ -96,7 +96,7 @@ resource denyBroadAssign 'Microsoft.Authorization/policyAssignments@2023-04-01' 
 
 module broadAttempt 'modules/broad-attempt-access.bicep' = if (denyBroadPolicy == 'on' && broadAttemptRole == 'on') {
   name: 'broad-attempt-access'
-  params: { opsPrincipalId: control.outputs.opsPrincipalId }
+  params: { opsPrincipalId: control.outputs.opsPrincipalId, appPrincipalId: twin.outputs.appIdentityPrincipalId }
   dependsOn: [denyBroadAssign]
 }
 

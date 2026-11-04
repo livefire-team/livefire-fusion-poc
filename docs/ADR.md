@@ -342,7 +342,8 @@ Status values: Proposed | Accepted | Superseded | Rejected
 - **Decision:** `DENY_BROAD_POLICY=on` assigns `lf-deny-broad-roles` at subscription scope (Owner, Contributor and
   User Access Administrator assignments are denied for everyone). After it is proven in effect,
   `BROAD_ATTEMPT_ROLE=on` gives `id-lf-ops` RBAC Administrator on the subscription with a condition that allows only
-  Contributor, so its attempt reaches Azure Policy. No team Bicep assigns any of the three denied roles.
+  Contributor, and only for the order app's identity, so its attempt reaches Azure Policy. `policy-off` removes that
+  role first and keeps the policy until it is gone. No team Bicep assigns any of the three denied roles.
 - **Consequences:** Nobody in the lab can assign those three roles while the policy is on, including the team. If the
   policy were removed, `id-lf-ops` could grant Contributor; the Ops Service removes any such grant at once and
   records `UNEXPECTED_ALLOW`.

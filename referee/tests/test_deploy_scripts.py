@@ -23,6 +23,8 @@ CONTROL_KEYVAULT_NAME=kv-lfc-test
 REFEREE_SQL_PASSWORD=existing-referee-pw
 REGISTRY_NAME=acrlftest
 REGISTRY_SERVER=acrlftest.azurecr.io
+AZURE_SUBSCRIPTION_ID=00000000-0000-0000-0000-000000000000
+OPS_PRINCIPAL_ID=11111111-1111-1111-1111-111111111111
 """
 
 
@@ -179,3 +181,36 @@ def test_images_picks_each_components_last_merge_on_main_and_imports_it(sandbox,
     assert f"azd env set OPS_IMAGE acrlftest.azurecr.io/ops-service:sha-{ops_merge}" in calls
     assert f"azd env set REFEREE_IMAGE acrlftest.azurecr.io/referee:sha-{referee_merge}" in calls
     assert any(c.startswith("azd env set ORDER_IMAGE acrlftest.azurecr.io/order-service:sha-") for c in calls)
+
+
+# ---- deploy.sh policy-off ----
+def copy_deploy(sandbox):
+    scripts = sandbox / "scripts"
+    scripts.mkdir(exist_ok=True)
+    shutil.copy(SCRIPTS / "deploy.sh", scripts)
+    return scripts / "deploy.sh"
+
+
+AZ_ROLE_GONE = """echo "az $*" >> LOG
+case "$*" in "role assignment list"*) echo 0 ;; esac
+"""
+AZ_ROLE_STAYS = """echo "az $*" >> LOG
+case "$*" in "role assignment list"*) echo 1 ;; esac
+"""
+
+
+def test_policy_off_removes_the_broad_attempt_role_before_the_policy(sandbox):
+    result = run(sandbox, copy_deploy(sandbox).as_posix(), "policy-off", az_body=AZ_ROLE_GONE)
+    assert result.returncode == 0, result.stderr
+    calls = log_lines(sandbox)
+    role = next(i for i, c in enumerate(calls) if c.startswith("az role assignment delete"))
+    policy = next(i for i, c in enumerate(calls) if c.startswith("az policy assignment delete"))
+    assert role < policy and "azd env set DENY_BROAD_POLICY off" in calls
+
+
+def test_policy_off_keeps_the_policy_while_the_role_is_still_there(sandbox):
+    result = run(sandbox, copy_deploy(sandbox).as_posix(), "policy-off", az_body=AZ_ROLE_STAYS)
+    calls = log_lines(sandbox)
+    assert result.returncode != 0 and "still holds" in result.stdout
+    assert not any(c.startswith("az policy assignment delete") for c in calls)
+    assert "azd env set DENY_BROAD_POLICY off" not in calls
