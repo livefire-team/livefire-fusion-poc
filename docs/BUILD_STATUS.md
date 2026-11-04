@@ -3,8 +3,8 @@
 > Purpose: if a session ends (usage limit, closed laptop), the next Claude session reads THIS file and continues
 > exactly where we stopped. Keep it accurate. Update after every step and PR, and before ending any session.
 
-**Last updated:** 2026-11-04 (WS2 G2 start: `ws2/g1-carryover` merges the 7 unmerged `ws2-starter` commits into
-`main`; `test_scripts.py`'s fake `az` answers `containerapp replica list`)
+**Last updated:** 2026-11-04 (WS2 G2: PR #20 G1 carry-over, PR #21 Ops Service and Referee job, G2 platform PR on
+`ws2/g2-platform`; Mac checks done, nothing provisioned yet)
 **Current gate target:** G2 (Mon Nov 9; moved from Nov 2)
 
 ## FIRST THING THE NEXT SESSION SHOULD DO
@@ -108,13 +108,21 @@ Status values: not started | in progress | PR open | merged | blocked
   `PATH_A_CONTROLS` off), so the measurement above applies and no `rbac` measurement is needed.
 - 2026-11-01: G1 drill evidence summary for the three 12:00-12:06 drills (verdicts, delays, screenshots, trace
   paths) written on the WS2 Mac in `evidence/` only (git-ignored, ADR-004).
-- 2026-11-01, pending: `PATH_A_CONTROLS=on` with the vault kept on `accessPolicy` (subscription-wide deny of new
-  Owner, Contributor and User Access Administrator assignments, plus `ops-access.bicep`). Waiting for the other
-  workstreams to confirm none of their identities needs those roles. Then: `azd env set PATH_A_CONTROLS on`,
-  `azd provision`, check `./scripts/recover.sh broad` reports `RequestDisallowedByPolicy`, add ADR-017.
-- Branch: `ws2/g1-carryover` (G2 PR 1). PR #16 merged on 2026-11-01, but the 7 `ws2-starter` commits made after it
-  (the `reset.sh` replica wait, the `drill.sh` refresh-window wait, ADR-016, status and glossary notes) only reach
-  `main` through this branch. Next (WS2 G2): PR 2 Ops Service and Referee job code, PR 3 G2 platform.
+- Pending (replaces the 2026-11-01 `PATH_A_CONTROLS` plan, ADR-019): the subscription-wide deny of new Owner,
+  Contributor and User Access Administrator assignments now comes from `scripts/deploy.sh policy`
+  (`DENY_BROAD_POLICY=on`, then `BROAD_ATTEMPT_ROLE=on` for `id-lf-ops`). Still waiting for every workstream to
+  confirm none of their identities needs those roles; `ops-access.bicep` is replaced by `ops-twin-access.bicep`.
+- WS2 G2 branches (G2 Mon Nov 9):
+  - `ws2/g1-carryover`, [PR #20](https://github.com/livefire-team/livefire-fusion-poc/pull/20): PR #16 merged on
+    2026-11-01, but the 7 `ws2-starter` commits made after it (the `reset.sh` replica wait, the `drill.sh`
+    refresh-window wait, ADR-016, status and glossary notes) only reach `main` through this branch.
+  - `ws2/ops-service`, [PR #21](https://github.com/livefire-team/livefire-fusion-poc/pull/21): `src/ops-service/`,
+    `referee/run.py`, their workflows. Merges before the platform PR, so `main` publishes both images to GHCR.
+  - `ws2/g2-platform` (stacked on `ws2/g1-carryover`): Bicep for the control plane, private registry, evidence
+    store, `ca-ops`, `job-referee` and the deny policy; `scripts/deploy.sh`; `contracts/ops-actions.md`; ADR-017
+    to ADR-019. WS1 reviews `twin.bicep`, `order-service.yml` and the contract row. Merge only after `smoke all`
+    has passed once in the lab, so `main` never holds Bicep that hasn't run.
+  - Next: the lab steps (provision the control plane, evidence check, images into the registry, `ca-ops`).
 - Last commands run (WS2 Mac, with `.venv` active): the App Insights `exceptions` query (above); before that
   `for i in 1 2 3; do ./scripts/drill.sh || break; done`
   (three drills, run twice, above); before that `./scripts/reset.sh` alone (old replica gone after 58 s) and
@@ -182,9 +190,15 @@ Status values: not started | in progress | PR open | merged | blocked
 - [ ] WS5: metric names (orders_completed, orders_failed{reason}, loadgen_orders_sent, loadgen_orders_dropped, loadgen_backlog_size)
 
 ## Decisions log pointer
-See `docs/ADR.md` (latest: ADR-016).
+See `docs/ADR.md` (latest: ADR-019).
 
 ## Session log (newest first)
+- 2026-11-04: WS2 G2 Mac checks of the whole starter in a scratch worktree: Ops Service 105 passed, coverage 81.65%;
+  `referee/tests` 58 of 59 (the `deploy.sh images` test failed on `/bin/bash` 3.2: an empty array under `set -u`;
+  fixed on `ws2/g2-platform`, all pass); `az bicep build` and lint clean; ShellCheck clean. Ops Service on the fake
+  twin: `smoke policy` and `smoke drill` passed; `smoke auth` failed only "tag not in the registry" (the fake
+  registry accepts every tag). PR #21 opened. Owner (org owner): make GHCR packages `ops-service` and `referee`
+  public after PR #21's first `main` run.
 - 2026-11-04: WS2 G2 started. `ws2/g1-carryover` merges `ws2-starter` into `main` (one conflict, `scripts/drill.sh`,
   resolved to `main`'s INCONCLUSIVE handling plus the refresh-window wait); `pytest referee/tests -q` 43 passed.
   WS2 Mac notes (M1, with the Intel Homebrew in `/usr/local`, which no longer gets bottles): ShellCheck comes from
