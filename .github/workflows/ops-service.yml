@@ -1,0 +1,152 @@
+name: ops-service
+
+# Pull requests run `test` and `image`. Pushes to main also `publish` the exact smoke-tested image to GHCR as
+# :sha-<short sha>, and `acr` pushes it to the lab's private registry as :sha-<full sha> when the acr-push environment
+# has been set up for the current lab (scripts/deploy.sh github). Actions are pinned to full commit SHAs (ADR-011).
+on:
+  push:
+    branches: [main]
+    paths: ['src/ops-service/**', '.github/workflows/ops-service.yml']
+  pull_request:
+    paths: ['src/ops-service/**', '.github/workflows/ops-service.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ops-service-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: '3.12'
+      - name: System library for pyodbc
+        run: sudo apt-get update && sudo apt-get install -y unixodbc
+      - name: Install dependencies
+        run: pip install -r src/ops-service/requirements-dev.txt
+      - name: Unit and contract tests with coverage
+        working-directory: src/ops-service
+        run: pytest -q --cov=ops --cov-fail-under=80
+
+  image:
+    needs: test
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    outputs:
+      image-id: ${{ steps.save.outputs.image-id }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Build image
+        run: docker build --build-arg "GIT_SHA=$GITHUB_SHA" -t ops-service:ci src/ops-service
+      # The fake twin needs no Azure: /health must answer, and a runner-key call must reach an action.
+      - name: Smoke test
+        run: |
+          key() { head -c 32 /dev/urandom | od -An -tx1 | tr -d ' \n'; }
+          RUNNER_KEY="$(key)"
+          docker run -d --name smoke -p 127.0.0.1:8080:8080 -e TWIN_BACKEND=fake -e EVENT_SOURCE=dir:/tmp/evidence \
+            -e OPS_RUNNER_KEY="$RUNNER_KEY" -e OPS_AGENT_KEY="$(key)" -e RECOVERY_GRANT_KEY="$(key)" ops-service:ci
+          for i in $(seq 1 30); do curl -fsS http://127.0.0.1:8080/health && break; sleep 1; done
+          code=$(curl -sS -o out.json -w '%{http_code}' -H "Authorization: Bearer $RUNNER_KEY" \
+            -H 'Content-Type: application/json' -d '{"drill_id":"drill-ci-0001"}' \
+            http://127.0.0.1:8080/actions/check_drift)
+          echo "check_drift -> $code $(cat out.json)"
+          [ "$code" = 200 ]
+          code=$(curl -sS -o /dev/null -w '%{http_code}' -d '{"drill_id":"drill-ci-0001"}' \
+            http://127.0.0.1:8080/actions/inject_fault)
+          [ "$code" = 401 ] || { echo "no key must be 401, got $code"; exit 1; }
+      - name: Container logs (on failure)
+        if: failure()
+        run: docker logs smoke || true
+      - name: Remove smoke container
+        if: always()
+        run: docker rm -f smoke || true
+      - name: Save the tested image
+        id: save
+        run: |
+          echo "image-id=$(docker image inspect --format '{{.Id}}' ops-service:ci)" >> "$GITHUB_OUTPUT"
+          docker save ops-service:ci | gzip > ops-service-image.tar.gz
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: ops-service-image
+          path: ops-service-image.tar.gz
+          retention-days: 1
+          compression-level: 0
+          if-no-files-found: error
+
+  publish:
+    needs: image
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: ops-service-image
+      - name: Load the tested image and check it is the same one
+        env:
+          EXPECTED_ID: ${{ needs.image.outputs.image-id }}
+        run: |
+          gunzip -c ops-service-image.tar.gz | docker load
+          [ "$(docker image inspect --format '{{.Id}}' ops-service:ci)" = "$EXPECTED_ID" ] || { echo "image ID mismatch"; exit 1; }
+      - name: Log in to GHCR
+        uses: docker/login-action@81c6f93d4bc991e510b342a00b419b3bb4efc5c6 # v4.7.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Push :sha-<short sha>
+        run: |
+          IMAGE="ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/ops-service:sha-${GITHUB_SHA::7}"
+          docker tag ops-service:ci "$IMAGE" && docker push "$IMAGE"
+
+  acr:
+    needs: image
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment: acr-push
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: ops-service-image
+      - name: Push :sha-<full sha> to the lab registry (OIDC, no stored secret)
+        env:
+          EXPECTED_ID: ${{ needs.image.outputs.image-id }}
+          AZURE_CLIENT_ID: ${{ vars.AZURE_CLIENT_ID }}
+          AZURE_TENANT_ID: ${{ vars.AZURE_TENANT_ID }}
+          AZURE_SUBSCRIPTION_ID: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+          ACR_NAME: ${{ vars.ACR_NAME }}
+          ACR_SERVER: ${{ vars.ACR_SERVER }}
+        run: |
+          if [ -z "$ACR_NAME" ]; then echo "no lab registry configured; run scripts/deploy.sh github"; exit 0; fi
+          gunzip -c ops-service-image.tar.gz | docker load
+          [ "$(docker image inspect --format '{{.Id}}' ops-service:ci)" = "$EXPECTED_ID" ] || { echo "image ID mismatch"; exit 1; }
+          token=$(curl -sSf -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
+            "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=api://AzureADTokenExchange" | jq -r .value)
+          az login --service-principal -u "$AZURE_CLIENT_ID" -t "$AZURE_TENANT_ID" --federated-token "$token" \
+            --allow-no-subscriptions -o none
+          az account set --subscription "$AZURE_SUBSCRIPTION_ID"
+          az acr login -n "$ACR_NAME"
+          docker tag ops-service:ci "$ACR_SERVER/ops-service:sha-$GITHUB_SHA"
+          docker push "$ACR_SERVER/ops-service:sha-$GITHUB_SHA"
