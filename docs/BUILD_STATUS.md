@@ -200,7 +200,8 @@ See `docs/ADR.md` (latest: ADR-015).
 ## Session log (newest first)
 - 2026-11-04: WS2 G2 started. `ws2/g1-carryover` merges `ws2-starter` into `main` (one conflict, `scripts/drill.sh`,
   resolved to `main`'s INCONCLUSIVE handling plus the refresh-window wait); `pytest referee/tests -q` 43 passed.
-  WS2 Mac (Intel) notes: Homebrew has no ShellCheck bottle, so it comes from `pip install shellcheck-py` in `.venv`;
+  WS2 Mac notes (M1, with the Intel Homebrew in `/usr/local`, which no longer gets bottles): ShellCheck comes from
+  `pip install shellcheck-py` in `.venv`; the only bash is `/bin/bash` 3.2;
   `referee/requirements.txt` and `src/ops-service/requirements-dev.txt` pin different pytest versions, so install
   `src/ops-service/requirements.txt` and `pytest-cov` next to the referee's pytest instead of both files at once.
 - 2026-11-01: WS2 Mac has a private drill guide at `docs/reference/drill-guide.md` (git-ignored, ADR-004): purpose,
