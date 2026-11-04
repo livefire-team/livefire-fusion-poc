@@ -152,7 +152,7 @@ async def main(argv: list[str]) -> int:
     p.add_argument("part", choices=["all", "auth", "policy", "drill", "kill", "baselines"], nargs="?",
                    default="all")
     p.add_argument("--candidate", help="<IMAGE_REPO>:sha-<40 hex> to deploy after the restore")
-    p.add_argument("--fixed", action="store_true", help="the candidate carries the repair (after-refault PASS)")
+    p.add_argument("--fixed", action="store_true", help="expect PASS from the after-refault run")
     a = p.parse_args(argv)
     e = os.environ
     candidate = a.candidate or (e.get("CANDIDATE_IMAGE", "") if e.get("CANDIDATE_IMAGE") != "none" else "")

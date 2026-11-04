@@ -251,9 +251,8 @@ def _delete_rows(s: Settings) -> int:
 
 
 class FakeTwin:
-    """In-memory twin for laptop runs and tests. It behaves like the real one where the workflow can see it:
-    removing access makes dependencies report forbidden; an order attempted while access is missing leaves the app
-    unable to order until it restarts or a new revision is deployed; a non-base revision does not get stuck."""
+    """In-memory twin for laptop runs and tests: access entries, dependencies, image, revisions, restarts and
+    orders, as the Ops Service observes them on the real twin."""
     model = "fake"
     simulated = True
 
