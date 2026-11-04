@@ -26,8 +26,23 @@
     "refreshSeconds": {
       "value": "${SECRET_REFRESH_SECONDS=10}"
     },
-    "pathAControls": {
-      "value": "${PATH_A_CONTROLS=off}"
+    "denyBroadPolicy": {
+      "value": "${DENY_BROAD_POLICY=off}"
+    },
+    "broadAttemptRole": {
+      "value": "${BROAD_ATTEMPT_ROLE=off}"
+    },
+    "opsImage": {
+      "value": "${OPS_IMAGE}"
+    },
+    "refereeImage": {
+      "value": "${REFEREE_IMAGE}"
+    },
+    "evidenceRetentionDays": {
+      "value": "${EVIDENCE_RETENTION_DAYS=1}"
+    },
+    "githubRepos": {
+      "value": "${GITHUB_REPOS=livefire-team/livefire-fusion-poc}"
     }
   }
 }
