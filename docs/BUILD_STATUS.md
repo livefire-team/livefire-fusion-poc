@@ -3,9 +3,9 @@
 > Purpose: if a session ends (usage limit, closed laptop), the next Claude session reads THIS file and continues
 > exactly where we stopped. Keep it accurate. Update after every step and PR, and before ending any session.
 
-**Last updated:** 2026-11-01 (PR #16: `reset.sh` waits for the restart; `drill.sh` waits out the secret refresh
-window, neutral comments; drill PASS FAIL FAIL PASS ×3, twice; App Insights `exceptions` match; ADR-016 Path B)
-**Current gate target:** G2 (Nov 2)
+**Last updated:** 2026-11-04 (WS2 G2 start: `ws2/g1-carryover` merges the 7 unmerged `ws2-starter` commits into
+`main`; `test_scripts.py`'s fake `az` answers `containerapp replica list`)
+**Current gate target:** G2 (Mon Nov 9; moved from Nov 2)
 
 ## FIRST THING THE NEXT SESSION SHOULD DO
 All WS1 PRs (#1-#14) are merged into `main` (2026-10-30, merge commits; last merge 8e37fd0); every `main` run is green.
@@ -125,8 +125,9 @@ Status values: not started | in progress | PR open | merged | blocked
   Owner, Contributor and User Access Administrator assignments, plus `ops-access.bicep`). Waiting for the other
   workstreams to confirm none of their identities needs those roles. Then: `azd env set PATH_A_CONTROLS on`,
   `azd provision`, check `./scripts/recover.sh broad` reports `RequestDisallowedByPolicy`, add ADR-017.
-- Branch: `ws2-starter` ([PR #16](https://github.com/livefire-team/livefire-fusion-poc/pull/16)). Next: owner
-  review of PR #16 (including ADR-016), then the lab checks and joint drill.
+- Branch: `ws2/g1-carryover` (G2 PR 1). PR #16 merged on 2026-11-01, but the 7 `ws2-starter` commits made after it
+  (the `reset.sh` replica wait, the `drill.sh` refresh-window wait, ADR-016, status and glossary notes) only reach
+  `main` through this branch. Next (WS2 G2): PR 2 Ops Service and Referee job code, PR 3 G2 platform.
 - Last commands run (WS2 Mac, with `.venv` active): the App Insights `exceptions` query (above); before that
   `for i in 1 2 3; do ./scripts/drill.sh || break; done`
   (PASS FAIL FAIL PASS ×3, run twice, above); before that `./scripts/reset.sh` alone (old replica gone after 58 s) and
@@ -197,6 +198,11 @@ Status values: not started | in progress | PR open | merged | blocked
 See `docs/ADR.md` (latest: ADR-015).
 
 ## Session log (newest first)
+- 2026-11-04: WS2 G2 started. `ws2/g1-carryover` merges `ws2-starter` into `main` (one conflict, `scripts/drill.sh`,
+  resolved to `main`'s INCONCLUSIVE handling plus the refresh-window wait); `pytest referee/tests -q` 43 passed.
+  WS2 Mac (Intel) notes: Homebrew has no ShellCheck bottle, so it comes from `pip install shellcheck-py` in `.venv`;
+  `referee/requirements.txt` and `src/ops-service/requirements-dev.txt` pin different pytest versions, so install
+  `src/ops-service/requirements.txt` and `pytest-cov` next to the referee's pytest instead of both files at once.
 - 2026-11-01: WS2 Mac has a private drill guide at `docs/reference/drill-guide.md` (git-ignored, ADR-004): purpose,
   how to run, twin-only checks. It exists only on that Mac.
 - 2026-11-01: `drill.sh` waits out the secret refresh window before r2 (gap now about 16 s) and its comments are
