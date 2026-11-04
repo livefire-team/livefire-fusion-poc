@@ -19,7 +19,10 @@ RUN set -eu \
  && rm -rf "$GNUPGHOME" /tmp/microsoft.asc /var/lib/apt/lists/*
 WORKDIR /referee
 COPY referee/requirements.txt ./referee/
-RUN pip install --no-cache-dir --break-system-packages -r referee/requirements.txt
+# virtualenv comes with the base image and is unused here; removing it drops its HIGH CVEs from the scan.
+RUN pip install --no-cache-dir --break-system-packages -r referee/requirements.txt \
+ && pip uninstall -y --break-system-packages virtualenv \
+ && rm -rf /root/.local/share/virtualenv
 COPY journeys/ ./journeys/
 COPY referee/assert_order.py referee/run.py ./referee/
 ARG GIT_SHA=unknown
