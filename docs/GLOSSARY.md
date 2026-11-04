@@ -7,6 +7,7 @@ One-sentence definitions of terms used in this project, added the first time eac
 | Access policy (Key Vault) | The older way to grant Key Vault access: a list on the vault itself saying which identity may do what (e.g. get and list secrets); the alternative is RBAC. |
 | ADR | Architecture Decision Record: a short note in `docs/ADR.md` saying what we decided, why, and what else we considered. |
 | Architecture note | `docs/architecture.md`: a one-page description of the order service's parts, request flow, settings and telemetry. |
+| Azure Policy | Rules Azure checks on every create or change request, after the role check; a `deny` rule refuses the request even for an Owner (error `RequestDisallowedByPolicy`). |
 | Backlog (load generator) | The load generator's in-memory list of orders that failed and will be tried again later, with growing waits between tries. |
 | Bicep | Microsoft's language for describing Azure resources as code; `az bicep build` checks it compiles. |
 | Bicep module | A reusable Bicep file that another Bicep file calls with parameters and reads outputs from; ours is `infra/modules/twin.bicep`, called by WS2's `main.bicep`. |
@@ -38,7 +39,9 @@ One-sentence definitions of terms used in this project, added the first time eac
 | Idempotent | Safe to run more than once: the second run changes nothing and doesn't fail. Our SQL scripts must be. |
 | Image tag | The label after the colon in an image name (like `:g1` or `:sha-1a2b3c4`) that picks one version of the image (ADR-010). |
 | Jinja2 template | An HTML file with `{{ ... }}` placeholders and `{% ... %}` loops that FastAPI fills in to draw a page; ours are in `app/templates/`. |
+| JMESPath | The small language the Azure CLI's `--query` flag uses to pick fields out of a command's JSON result before it is printed (like `tables[0].rows`). |
 | Job | One group of steps in a workflow that runs on its own fresh machine; ours are `test` and `image`, and `image` waits for `test`. |
+| KQL | Kusto Query Language: the language for searching App Insights and Log Analytics data (like `exceptions \| where timestamp > ago(1h)`); passed with `--analytics-query`. |
 | Load generator | `src/load-generator/`: a small program that places orders at a steady rate so the order service has real traffic and throughput numbers. |
 | Managed identity | An Azure-managed login for an app (no password to store) that can be granted access to other resources, like our app reading Key Vault. |
 | Merge commit | A commit that joins a branch into `main` while keeping every original commit; we never squash (ADR-003). |
@@ -50,14 +53,16 @@ One-sentence definitions of terms used in this project, added the first time eac
 | PATH | The list of folders Windows searches when you type a command like `git`; programs started before an install keep the old list. |
 | pip-audit | A tool that checks our pinned Python packages against databases of known vulnerabilities. |
 | Playwright | A tool that drives a real browser from code; `journeys/test_order_journey.py` uses it to place an order like a customer. |
+| Policy exemption | A record that switches an Azure Policy off for one scope (like a resource group) without deleting the policy; anyone who can manage policies, such as an Owner, can create one. |
 | PR (pull request) | A request on GitHub to merge a branch into `main`, where changes are reviewed and checks run before merging. |
 | Probe | A regular HTTP check the platform makes on a container (liveness: restart it if it fails; readiness: stop sending it traffic if it fails); ours both call `/health` (ADR-006). |
 | Propagation | The delay between changing a setting in Azure (like removing access) and every part of Azure acting on it; `scripts/measure-propagation.sh` measures it for Key Vault access. |
 | Public / private repo | Who can read the code: anyone (public) or only invited people (private). Ours is public (ADR-002). |
 | pytest | Python's test runner: it finds functions named `test_...` and reports which pass or fail. |
 | RBAC | Role-Based Access Control: Azure grants access by assigning a role (like "Key Vault Secrets User") to an identity on a resource. |
-| Replica | One running copy of a container app; the twin runs exactly one (ADR-006). |
+| Replica | One running copy of a container app; the twin runs exactly one (ADR-006), except for a few seconds during a rolling restart. |
 | Revision | An immutable version of a Container App's settings and image; a new one is created when the app's template changes. |
+| Rolling restart | A restart that starts the new replica first and stops the old one only once the new one is ready, so the app never goes down. `az containerapp revision restart` works this way and returns before the swap is done. |
 | SARIF | A standard JSON format for scanner results; CodeQL uploads SARIF so findings show in GitHub's Security tab. |
 | Seed data | Starting rows loaded into a fresh database; ours is the two products in `sql/seed.sql`. |
 | Smoke test | A quick check that something basically works, like starting the container and calling `/health`, before deeper testing or publishing. |

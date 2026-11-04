@@ -55,8 +55,11 @@ def events(sandbox):
     return [json.loads(line) for line in lines]
 
 
+# The first replica list (before the restart) shows the old replica; later ones show its replacement.
 AZ_APP = f"""case "$*" in
   "account show"*) echo {SUB} ;;
+  "containerapp replica list"*)
+    if [ -f replica-listed ]; then echo replica-new; else touch replica-listed; echo replica-old; fi ;;
   *) echo rev-1 ;;
 esac
 """

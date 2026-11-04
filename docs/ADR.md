@@ -279,6 +279,27 @@ Status values: Proposed | Accepted | Superseded | Rejected
   must be made public like `order-service`. The rate is capped at 600 per minute.
 - **Implemented in:** PR #14 (`src/load-generator/`, `infra/modules/loadgen.bicep`, `.github/workflows/load-generator.yml`)
 
+## ADR-016: Key Vault access-policy model (Path B) for the twin's access fault
+- **Date:** 2026-11-01
+- **Status:** Accepted (WS2)
+- **Context:** The lab probe (`docs/lab-probe-2026-10-30.md`) allows both ways of removing the app's Key Vault access:
+  Path A, the `rbac` model (delete the Key Vault Secrets User role assignment, plus the deny policy and
+  `id-lf-ops`'s limited role from `PATH_A_CONTROLS=on`), and Path B, the `accessPolicy` model (delete the app
+  identity's access policy entry). The twin in `rg-lf-twin-lf-eh` is provisioned with `accessPolicy`, where the
+  change showed in `/health/dependencies` within about 5 s (3 runs). `rbac` role changes can take up to about
+  10 minutes and were not measured. G2 is Nov 2.
+- **Options considered:** (1) Path A: reprovision with `KV_PERMISSION_MODEL=rbac` and `PATH_A_CONTROLS=on`, then
+  measure propagation again; (2) Path B: keep `KV_PERMISSION_MODEL=accessPolicy` and `PATH_A_CONTROLS=off`.
+- **Decision:** Option 2. No deny policy and no `ops-access.bicep` roles are deployed.
+- **Consequences:** No reprovisioning, and the measured propagation applies. `lib.sh`, `main.bicep` and
+  `main.parameters.json` still default to `rbac`, so every new azd environment needs
+  `azd env set KV_PERMISSION_MODEL accessPolicy`. `id-lf-ops` gets no role on the twin vault; an access-policy
+  restore needs `Microsoft.KeyVault/vaults/accessPolicies/write`, so the identity that runs it must be granted that
+  separately. With no deny policy, `recover.sh broad` is refused only if the identity running it lacks role
+  assignment rights; run as the lab's subscription Owner it is allowed (the script then removes the assignment and
+  exits 3).
+- **Implemented in:** azd environment settings only (no code change)
+
 <!-- Copy the block below for each new decision -->
 
 ## ADR-00N: <short title>

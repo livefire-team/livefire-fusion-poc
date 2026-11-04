@@ -3,8 +3,9 @@
 > Purpose: if a session ends (usage limit, closed laptop), the next Claude session reads THIS file and continues
 > exactly where we stopped. Keep it accurate. Update after every step and PR, and before ending any session.
 
-**Last updated:** 2026-10-31 (PR #16: Key Vault access propagation measured, macOS event timestamp fix)
-**Current gate target:** G2 (Nov 2)
+**Last updated:** 2026-11-04 (WS2 G2 start: `ws2/g1-carryover` merges the 7 unmerged `ws2-starter` commits into
+`main`; `test_scripts.py`'s fake `az` answers `containerapp replica list`)
+**Current gate target:** G2 (Mon Nov 9; moved from Nov 2)
 
 ## FIRST THING THE NEXT SESSION SHOULD DO
 All WS1 PRs (#1-#14) are merged into `main` (2026-10-30, merge commits; last merge 8e37fd0); every `main` run is green.
@@ -79,7 +80,17 @@ Status values: not started | in progress | PR open | merged | blocked
   `...T01:06:20.3NZ`; they are now whole seconds (`...T01:11:57Z`). Needs WS1 owner review before merge.
 - Twin provisioned in `rg-lf-twin-lf-eh`; every `postprovision.sh` step is in place (firewall rule, schema + seed,
   `order_app` / `referee_ro`, Key Vault `db-password`, `REFEREE_SQL_PASSWORD`). Baseline drill
-  `drill-20261101-0058-4514` PASS (journey confirmed, 1 order, 1 payment authorization). Next: `./scripts/drill.sh`.
+  `drill-20261101-0058-4514` PASS (journey confirmed, 1 order, 1 payment authorization).
+- Drills by hand 2026-10-31 and 2026-11-01 (`for i in 1 2 3; do ./scripts/drill.sh || break; done`, model
+  `accessPolicy`). Drill IDs, verdicts and App Insights rows are in the WS2 Mac's git-ignored notes (ADR-004).
+  - `az containerapp revision restart` is a rolling restart: it returns at once, and the old replica keeps serving
+    for about 20 s until the new one is ready. `reset.sh` now notes the replica names before the restart, then
+    waits (max 300 s) until none of them is listed. A reset takes about 70 s (old replica gone after 50-58 s).
+  - `drill.sh` now waits until `SECRET_REFRESH_SECONDS` + 1 s have passed since the baseline run before the next
+    run (default 10, same as `main.parameters.json`); the measured gap is now about 16 s.
+  - App Insights tip: `az monitor app-insights query -o table` prints nothing (its result is nested), so add
+    `--query "tables[0].rows[*].{timestamp:[0], run_id:[1], exception:[2], message:[3]}"` (use `rows[*]`, not
+    `rows[]`, and don't name a column `type`, which table output hides), or use `-o tsv --query "tables[0].rows"`.
 - Key Vault access propagation measured 2026-10-31 (`./scripts/measure-propagation.sh 3`, drill
   `drill-20261101-0106-9260`, model `accessPolicy`):
 
@@ -93,13 +104,22 @@ Status values: not started | in progress | PR open | merged | blocked
   `az keyvault show` checks, so read it as "within about 5 s", not "instant". `/health/dependencies` makes a fresh
   Key Vault read on every call. Not measured: the `rbac` model. The lab probe
   says Path A (real role removal) applies, and `lib.sh` and `main.bicep` default to `rbac`; role changes can take
-  up to about 10 minutes. Open question for WS1/WS2: which model the joint drill uses. If `rbac`, rerun this
-  measurement on a twin provisioned with `kvPermissionModel=rbac`.
-- Branch: `ws2-starter` ([PR #16](https://github.com/livefire-team/livefire-fusion-poc/pull/16)). Next: owner
-  review of PR #16, pick the Key Vault permission model for the joint drill, then the lab checks and joint drill.
-- Last commands run (WS2 Mac): `./scripts/measure-propagation.sh 3` (results above), `./scripts/wait-for.sh ok`
-  (event timestamp now valid); before that `./scripts/referee.sh baseline` (PASS);
-  earlier on the WS1 PC: `pytest -q src/order-service --cov=src/order-service/app`: 59 passed, coverage 99%
+  up to about 10 minutes. Decided 2026-11-01 (ADR-016): the joint drill stays on Path B (`accessPolicy`,
+  `PATH_A_CONTROLS` off), so the measurement above applies and no `rbac` measurement is needed.
+- 2026-11-01: G1 drill evidence summary for the three 12:00-12:06 drills (verdicts, delays, screenshots, trace
+  paths) written on the WS2 Mac in `evidence/` only (git-ignored, ADR-004).
+- 2026-11-01, pending: `PATH_A_CONTROLS=on` with the vault kept on `accessPolicy` (subscription-wide deny of new
+  Owner, Contributor and User Access Administrator assignments, plus `ops-access.bicep`). Waiting for the other
+  workstreams to confirm none of their identities needs those roles. Then: `azd env set PATH_A_CONTROLS on`,
+  `azd provision`, check `./scripts/recover.sh broad` reports `RequestDisallowedByPolicy`, add ADR-017.
+- Branch: `ws2/g1-carryover` (G2 PR 1). PR #16 merged on 2026-11-01, but the 7 `ws2-starter` commits made after it
+  (the `reset.sh` replica wait, the `drill.sh` refresh-window wait, ADR-016, status and glossary notes) only reach
+  `main` through this branch. Next (WS2 G2): PR 2 Ops Service and Referee job code, PR 3 G2 platform.
+- Last commands run (WS2 Mac, with `.venv` active): the App Insights `exceptions` query (above); before that
+  `for i in 1 2 3; do ./scripts/drill.sh || break; done`
+  (three drills, run twice, above); before that `./scripts/reset.sh` alone (old replica gone after 58 s) and
+  `./scripts/measure-propagation.sh 3`; earlier on the WS1 PC:
+  `pytest -q src/order-service --cov=src/order-service/app`: 59 passed, coverage 99%
 - Uncommitted / unpushed files: none expected (`evidence/` is local drill output and is not committed)
 - Test status: order-service unit tests green 2026-10-29. Twin deployed to Azure by WS2 via `main.bicep`; baseline PASS.
 
@@ -162,9 +182,21 @@ Status values: not started | in progress | PR open | merged | blocked
 - [ ] WS5: metric names (orders_completed, orders_failed{reason}, loadgen_orders_sent, loadgen_orders_dropped, loadgen_backlog_size)
 
 ## Decisions log pointer
-See `docs/ADR.md` (latest: ADR-015).
+See `docs/ADR.md` (latest: ADR-016).
 
 ## Session log (newest first)
+- 2026-11-04: WS2 G2 started. `ws2/g1-carryover` merges `ws2-starter` into `main` (one conflict, `scripts/drill.sh`,
+  resolved to `main`'s INCONCLUSIVE handling plus the refresh-window wait); `pytest referee/tests -q` 43 passed.
+  WS2 Mac notes (M1, with the Intel Homebrew in `/usr/local`, which no longer gets bottles): ShellCheck comes from
+  `pip install shellcheck-py` in `.venv`; the only bash is `/bin/bash` 3.2;
+  `referee/requirements.txt` and `src/ops-service/requirements-dev.txt` pin different pytest versions, so install
+  `src/ops-service/requirements.txt` and `pytest-cov` next to the referee's pytest instead of both files at once.
+- 2026-11-01: WS2 Mac has a private drill guide at `docs/reference/drill-guide.md` (git-ignored, ADR-004): purpose,
+  how to run, twin-only checks. It exists only on that Mac.
+- 2026-11-01: `drill.sh` waits out the secret refresh window before r2 (gap now about 16 s) and its comments are
+  neutral (ADR-004); three drills again.
+- 2026-10-31: the rolling restart landed mid-drill; `reset.sh` now waits for the old replica to go; three drills;
+  r1-to-r2 timing margin only about 1-2 s.
 - 2026-10-31: Key Vault propagation measured (`accessPolicy`: within about 5 s, 3 runs); `lib.sh` event timestamps
   fixed for macOS; `rbac` still unmeasured.
 - 2026-10-31: PR #16 referee fix (evidence folder kept); WS2 Mac OpenSSL link fixed; twin baseline PASS.
