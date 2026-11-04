@@ -20,9 +20,9 @@ class SettingsError(RuntimeError):
 @dataclass(frozen=True)
 class Settings:
     backend: str                      # azure | fake
-    runner_key: str
-    agent_key: str
-    grant_key: str
+    runner_key: str = field(repr=False)
+    agent_key: str = field(repr=False)
+    grant_key: str = field(repr=False)
     event_source: str
     kv_model: str = "rbac"            # rbac | accessPolicy
     subscription_id: str = ""

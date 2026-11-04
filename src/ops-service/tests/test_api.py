@@ -2,7 +2,7 @@ import asyncio
 
 import httpx
 import pytest
-from conftest import AGENT, DRILL, RUNNER
+from conftest import AGENT, DRILL, GRANT_KEY, RUNNER
 
 from ops.main import create_app
 
@@ -39,10 +39,19 @@ def test_unknown_body_key_is_refused(call, twin):
     assert twin.calls == []
 
 
-@pytest.mark.parametrize("drill", ["", "prod-1", "drill-", "drill-" + "x" * 65, "drill-a/../b"])
+@pytest.mark.parametrize("drill", ["", "prod-1", "drill-", "drill-" + "x" * 65, "drill-a/../b", "drill-a\n"])
 def test_bad_drill_id_is_refused(call, drill):
     status, body = call("check_drift", drill=drill)
     assert status == 422 and body["result"] == "refused"
+
+
+def test_a_drill_id_with_a_trailing_newline_changes_nothing(call, twin):
+    assert call("inject_fault", drill="drill-a\n")[0] == 422 and twin.entries == 1
+
+
+def test_settings_repr_hides_the_keys(service):
+    shown = repr(service.s)
+    assert RUNNER not in shown and AGENT not in shown and GRANT_KEY not in shown
 
 
 def test_unknown_action_is_refused(call):

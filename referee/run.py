@@ -95,7 +95,7 @@ def upload(evidence_url: str, client_id: str, outdir: Path, prefix: str) -> list
 def main(env: dict | None = None, runner=subprocess.run, uploader=upload) -> int:
     env = dict(os.environ if env is None else env)
     missing = [k for k in ("DRILL_ID", "RUN_ID", "LABEL", "RUN_DIR", "ORDER_APP_URL") if not env.get(k)]
-    if missing or not DRILL.match(env.get("DRILL_ID", "")) or not RUN_DIR.match(env.get("RUN_DIR", "")) \
+    if missing or not DRILL.fullmatch(env.get("DRILL_ID", "")) or not RUN_DIR.fullmatch(env.get("RUN_DIR", "")) \
             or not env.get("RUN_ID", "").startswith(env.get("DRILL_ID", "") + "-r"):
         print(f"referee: bad or missing settings {missing or ['DRILL_ID/RUN_ID/RUN_DIR']}", file=sys.stderr)
         return 2

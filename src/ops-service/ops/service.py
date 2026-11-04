@@ -2,9 +2,10 @@
 
 Rules every action follows:
 - The caller never names a resource; the twin's targets come from Settings.
-- Mutating actions run one at a time (409 otherwise); wait_for, check_drift and kill never wait for that lock.
+- Mutating actions run one at a time (409 otherwise); wait_for and check_drift never wait for that lock. kill
+  cancels the running action, waits for it to unwind, then resets the twin while holding the lock.
 - Every action writes its events to the drill's append-only log. After a kill, an action that started earlier
-  writes nothing more and returns 409.
+  writes nothing more and returns 409, whichever drill the kill named.
 """
 import asyncio
 import re
@@ -86,6 +87,7 @@ class OpsService:
         self.image_repo = s.image_repo or self.base_image.split(":", 1)[0]
         self.lock = asyncio.Lock()
         self.generation: dict[str, int] = {}
+        self.running: tuple[str, asyncio.Task] | None = None
         self.used_grants: set[str] = set()
 
     # ---- plumbing ----
@@ -95,7 +97,7 @@ class OpsService:
         if caller == "agent" and action not in AGENT_ACTIONS:
             raise Forbidden(f"the agent key can't call {action}")
         drill = body.get("drill_id")
-        if not isinstance(drill, str) or not DRILL.match(drill):
+        if not isinstance(drill, str) or not DRILL.fullmatch(drill):
             raise Refused("drill_id must match ^drill-[A-Za-z0-9-]{1,64}$")
         extra = set(body) - BODY_KEYS[action] - {"drill_id"}
         if extra:
@@ -107,7 +109,21 @@ class OpsService:
         if self.lock.locked():
             raise Busy("another action is running on the twin")
         async with self.lock:
-            return await getattr(self, action)(drill, body, caller, self.generation.get(drill, 0))
+            return await self._run(action, drill, body, caller)
+
+    async def _run(self, action: str, drill: str, body: dict, caller: str) -> Reply:
+        """Runs a locked action as its own task, so kill can cancel it."""
+        gen = self.generation.get(drill, 0)
+        task = asyncio.ensure_future(getattr(self, action)(drill, body, caller, gen))
+        self.running = (drill, task)
+        try:
+            return await task
+        except asyncio.CancelledError:
+            if task.cancelled() and self.generation.get(drill, 0) != gen:
+                raise Stopped("stopped by the kill switch") from None
+            raise
+        finally:
+            self.running = None
 
     def _live(self, drill: str, gen: int) -> None:
         if self.generation.get(drill, 0) != gen:
@@ -257,7 +273,7 @@ class OpsService:
     # ---- the Referee ----
     async def run_referee(self, drill: str, body: dict, caller: str, gen: int) -> Reply:
         label = body.get("label")
-        if not isinstance(label, str) or not LABEL.match(label):
+        if not isinstance(label, str) or not LABEL.fullmatch(label):
             raise Refused("label must match ^[a-z][a-z0-9-]{0,31}$")
         n = 1 + sum(1 for e in await self._events(drill) if str(e.get("action", "")).startswith("referee."))
         run_id, run_dir = f"{drill}-r{n}", f"r{n}-{label}"
@@ -333,5 +349,10 @@ class OpsService:
         return await self._reset(drill, gen, "workflow")
 
     async def kill(self, drill: str) -> Reply:
-        self.generation[drill] = self.generation.get(drill, 0) + 1
-        return await self._reset(drill, self.generation[drill], "kill")
+        running = self.running
+        for d in {drill, running[0]} if running else {drill}:
+            self.generation[d] = self.generation.get(d, 0) + 1
+        if running:
+            running[1].cancel()
+        async with self.lock:                          # taken once the cancelled action has unwound
+            return await self._reset(drill, self.generation[drill], "kill")

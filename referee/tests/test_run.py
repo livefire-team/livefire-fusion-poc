@@ -90,7 +90,8 @@ def test_a_failed_upload_is_exit_3(tmp_path):
 
 
 @pytest.mark.parametrize("change", [{"DRILL_ID": "prod-1"}, {"RUN_DIR": "../../x"}, {"RUN_ID": "drill-other-r1"},
-                                    {"ORDER_APP_URL": ""}])
+                                    {"ORDER_APP_URL": ""}, {"RUN_DIR": "r2-during-fault\n"},
+                                    {"DRILL_ID": f"{DRILL}\n", "RUN_ID": f"{DRILL}\n-r2"}])
 def test_bad_settings_are_refused_before_anything_runs(tmp_path, change):
     calls = []
     assert run.main(env(tmp_path, **change), lambda *a, **k: calls.append(a), Uploads()) == 2 and calls == []

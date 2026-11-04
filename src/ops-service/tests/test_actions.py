@@ -3,9 +3,14 @@ from datetime import datetime, timedelta, timezone
 
 import httpx
 import pytest
-from conftest import BASE, CANDIDATE, DRILL, REPO, RUNNER
+from conftest import AGENT, BASE, CANDIDATE, DRILL, GRANT_KEY, REPO, RUNNER
 
+from ops.livefire_events import DirEventStore
 from ops.main import create_app
+from ops.referee import FakeReferee
+from ops.service import OpsService, Stopped
+from ops.settings import Settings
+from ops.twin import FakeTwin
 
 
 @pytest.mark.parametrize("image", [
@@ -60,7 +65,7 @@ def test_wait_conformant_and_drifted(call, events):
     assert [e["action"] for e in events()] == ["wait.ok", "fault.inject", "wait.drifted"]
 
 
-@pytest.mark.parametrize("label", ["Baseline", "1st", "a" * 33, "after fix", "", None])
+@pytest.mark.parametrize("label", ["Baseline", "1st", "a" * 33, "after fix", "", None, "baseline\n"])
 def test_bad_labels_are_refused(call, label):
     assert call("run_referee", label=label)[0] == 422
 
@@ -87,12 +92,12 @@ def test_reset_fails_cleanly_when_the_base_image_is_gone(call, twin):
 
 
 class SlowReferee:
-    def __init__(self):
-        self.started = asyncio.Event()
+    def __init__(self, seconds=0.5):
+        self.started, self.seconds = asyncio.Event(), seconds
 
     async def run(self, drill_id, run_id, label, run_dir, timeout_s):
         self.started.set()
-        await asyncio.sleep(0.5)
+        await asyncio.sleep(self.seconds)
         return {"verdict": "PASS"}
 
 
@@ -116,3 +121,66 @@ def test_kill_stops_an_action_in_flight_and_resets(service, twin, events):
     assert run.status_code == 409 and run.json()["details"]["reason"] == "stopped by the kill switch"
     assert [e["action"] for e in events()] == ["reset"] and events()[0]["details"]["by"] == "kill"
     assert twin.entries == 1
+
+
+def test_the_twin_is_free_right_after_kill(service):
+    service.referee = SlowReferee(seconds=30)
+
+    async def go():
+        run = asyncio.create_task(service.handle("run_referee", {"drill_id": DRILL, "label": "baseline"}, "runner"))
+        await service.referee.started.wait()
+        await service.handle("kill", {"drill_id": DRILL}, "runner")
+        reset = await service.handle("reset_twin", {"drill_id": DRILL}, "runner")
+        with pytest.raises(Stopped):
+            await run
+        return reset
+
+    assert asyncio.run(asyncio.wait_for(go(), 5)).result == "ok"
+
+
+class SlowTwin(FakeTwin):
+    """Each change is still in flight for a moment after it is asked for, like an ARM call."""
+
+    async def remove_access(self):
+        await asyncio.sleep(0.2)
+        await super().remove_access()
+
+    async def deploy_image(self, ref, timeout_s):
+        if ref not in self.base_refs:
+            await asyncio.sleep(0.2)
+        return await super().deploy_image(ref, timeout_s)
+
+
+@pytest.fixture
+def slow(evidence):
+    twin = SlowTwin(BASE)
+    s = Settings(backend="fake", runner_key=RUNNER, agent_key=AGENT, grant_key=GRANT_KEY,
+                 event_source=f"dir:{evidence}", base_image=BASE)
+    return OpsService(s, twin, FakeReferee(twin), DirEventStore(str(evidence)), poll_s=0.01), twin
+
+
+def kill_during(service, action, body, kill_drill=DRILL):
+    """Starts an action, presses kill while it is in flight; returns the kill reply and how the action ended."""
+    async def go():
+        running = asyncio.create_task(service.handle(action, {"drill_id": DRILL, **body}, "runner"))
+        await asyncio.sleep(0.05)
+        kill = await service.handle("kill", {"drill_id": kill_drill}, "runner")
+        try:
+            await running
+        except Stopped:
+            return kill, "stopped"
+        return kill, "finished"
+    return asyncio.run(go())
+
+
+@pytest.mark.parametrize("kill_drill", [DRILL, "drill-other-0002"])
+def test_kill_during_a_fault_leaves_access_in_place(slow, kill_drill):
+    service, twin = slow
+    kill, ended = kill_during(service, "inject_fault", {}, kill_drill)
+    assert kill.result == "ok" and ended == "stopped" and twin.entries == 1
+
+
+def test_kill_during_a_deploy_leaves_the_base_image(slow):
+    service, twin = slow
+    kill, ended = kill_during(service, "deploy_revision", {"image": CANDIDATE})
+    assert kill.result == "ok" and ended == "stopped" and twin.image in twin.base_refs
