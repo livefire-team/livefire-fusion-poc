@@ -18,8 +18,10 @@ verdict() {
 }
 
 ./scripts/reset.sh || exit 1
-A=$(verdict baseline)
+A=$(verdict baseline); A_DONE=$(date +%s)
 ./scripts/fault.sh inject && ./scripts/wait-for.sh forbidden || exit 1
+# Let the app's secret refresh window pass, so the next order makes a fresh Key Vault read.
+WAIT=$(( A_DONE + ${SECRET_REFRESH_SECONDS:-10} + 1 - $(date +%s) )); [ "$WAIT" -le 0 ] || sleep "$WAIT"
 B=$(verdict during-fault)
 ./scripts/fault.sh restore && ./scripts/wait-for.sh ok || exit 1
 curl -s "$ORDER_APP_URL/health/dependencies" > "evidence/$DRILL_ID/health-after-restore.json"
