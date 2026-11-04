@@ -10,7 +10,7 @@ Version: 1 (2026-10-28) — copied from the WS2 guide's Phase 2 contract via the
 | Item | Contract | Delivered in |
 |---|---|---|
 | Resource group | `rg-lf-twin-<env>`, created by WS2's `main.bicep` | WS2 |
-| `twin.bicep` parameters | `location`, `principalId`, `kvPermissionModel` (`rbac` or `accessPolicy`), `orderImage`, `sqlAdminPassword`; optional `secretRefreshSeconds` (default `30`) and `principalType` (default `User`) | `twin.bicep` |
+| `twin.bicep` parameters | `location`, `principalId`, `kvPermissionModel` (`rbac` or `accessPolicy`), `orderImage`, `sqlAdminPassword`; optional `secretRefreshSeconds` (default `30`) and `principalType` (default `User`); WS2 addition (G2): optional `registryServer` and `pullIdentityId` (default empty) | `twin.bicep` |
 | `twin.bicep` outputs | `keyVaultName`, `keyVaultId`, `appIdentityPrincipalId`, `appAccessAssignmentName`, `orderAppName`, `orderAppUrl`, `sqlServerFqdn`, `sqlDbName`, `appInsightsConnectionString`, `logAnalyticsWorkspaceName`, `logAnalyticsCustomerId` | `twin.bicep` |
 | SQL admin login | `lfadmin` | `twin.bicep` |
 | App database user | `order_app`, created by WS2's hook; its password lives in Key Vault secret `db-password` | WS2 hook; `db.py` reads it |
@@ -40,6 +40,7 @@ Version: 1 (2026-10-28) — copied from the WS2 guide's Phase 2 contract via the
 | Image | `ghcr.io/livefire-team/order-service:g1` (org name lowercase) | `.github/workflows/order-service.yml` |
 | Image (WS1 addition) | Immutable `sha-<commit>` tags for rehearsals; package public (ADR-002) | `.github/workflows/order-service.yml` |
 | Image (WS1 addition, G2) | `candidate-<drill-id>-<attempt>` tags, pushed from `candidate/<drill-id>-<attempt>` branches (lowercase drill ID, attempt 1-99; ADR-014) | `.github/workflows/order-service.yml` |
+| Image (WS2 addition, G2) | The twin runs `<lab registry>/order-service:sha-<full commit>` from the lab's private registry, pulled by `id-lf-acrpull` (ADR-017). CI pushes the same tested image there from `main` and candidate branches once the `acr-push` environment is set up | `order-service.yml` `acr` job, `scripts/deploy.sh images` |
 
 ## Additions WS2 needs to know about
 1. New output `appInsightsConnectionString`. WS2 adds to `main.bicep`:
@@ -60,3 +61,4 @@ Version: 1 (2026-10-28) — copied from the WS2 guide's Phase 2 contract via the
 | 2026-10-29 | WS1 addition (G2): `candidate-<drill-id>-<attempt>` image tags (ADR-014) | pending |
 | 2026-10-29 | WS1 addition (G2): load generator module, image and `loadgen_*` metrics (ADR-015) | pending |
 | 2026-10-31 | WS2 addition: `twin.bicep` outputs `logAnalyticsWorkspaceName` and `logAnalyticsCustomerId` (used by WS2's `main.bicep`) | pending |
+| 2026-11-05 | WS2 addition (G2): `twin.bicep` parameters `registryServer` and `pullIdentityId`; the twin's image comes from the lab's private registry (ADR-017) | pending |

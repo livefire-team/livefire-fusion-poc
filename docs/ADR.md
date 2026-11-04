@@ -302,6 +302,53 @@ Status values: Proposed | Accepted | Superseded | Rejected
 
 <!-- Copy the block below for each new decision -->
 
+## ADR-017: Private registry for what runs in the lab; GHCR stays the build output
+- **Date:** 2026-11-04
+- **Status:** Accepted (WS2)
+- **Context:** WS3's and WS4's Bicep pull images with an AcrPull-only identity, and the Ops Service must deploy an
+  immutable image it can resolve itself. CI already publishes tested images to public GHCR.
+- **Options considered:** (1) keep pulling from GHCR; (2) a private Azure Container Registry per lab, filled from
+  GHCR or by CI over OIDC.
+- **Decision:** Option 2. `control.bicep` creates the registry (Basic, no admin user), `id-lf-acrpull` (AcrPull only)
+  and `id-lf-ci` (AcrPush only, trusted by the repo's `acr-push` environment). `scripts/deploy.sh images` imports
+  each component's last `main` build from GHCR as `:sha-<full commit>`; CI's `acr` jobs push the same tested image
+  for later commits and candidate branches. The Ops Service deploys only `<registry>/order-service:sha-<40 hex>`,
+  resolved to its digest.
+- **Consequences:** Each new lab needs `scripts/deploy.sh images` and, for CI pushes, `scripts/deploy.sh github`
+  (repo admin). No registry password exists anywhere.
+- **Implemented in:** `infra/modules/control.bicep`, `scripts/deploy.sh`, the `acr` jobs in `.github/workflows/`
+
+## ADR-018: The Ops Service is the only path from the control plane into the twin
+- **Date:** 2026-11-04
+- **Status:** Accepted (WS2)
+- **Context:** The Drill Runner (WS4) and the Recovery tools (WS3) need to change the twin without holding Azure
+  rights themselves.
+- **Decision:** `ca-ops` (internal ingress, one replica, `id-lf-ops`) implements `contracts/ops-actions.md` v2.1.
+  Callers never name a resource; startup fails unless every target sits in `rg-lf-twin-*`. Two keys: the runner key
+  for every action, the agent key for `recover`, `attempt_unsafe` and `check_drift` with a signed single-use grant.
+  The Referee runs as `job-referee` with its own identity and read-only SQL login; the Ops Service may only start it
+  and read its executions. Events go to an append-only Blob container (version-level immutability, unlocked).
+  `id-lf-ops` gets custom roles scoped to the order app, the twin vault's access policies (or, on the `rbac`
+  model, a conditional RBAC Administrator limited to Key Vault Secrets User), and starting `job-referee`.
+- **Consequences:** Only the `identity-rbac` fault is enabled; the other v2.0 faults are refused until their rights
+  exist. Laptop scripts in `scripts/` remain for manual drills.
+- **Implemented in:** `src/ops-service/`, `referee/run.py`, `infra/modules/ops.bicep`, `infra/modules/ops-twin-access.bicep`
+
+## ADR-019: Subscription-wide deny of broad roles, with the access-policy model kept
+- **Date:** 2026-11-04
+- **Status:** Accepted (WS2); amends ADR-016's "no deny policy"
+- **Context:** The broad recovery option must be refused by the platform, and by Azure Policy rather than by a
+  missing right. ADR-016 kept the vault on the access-policy model; that choice is independent of the deny policy.
+- **Decision:** `DENY_BROAD_POLICY=on` assigns `lf-deny-broad-roles` at subscription scope (Owner, Contributor and
+  User Access Administrator assignments are denied for everyone). After it is proven in effect,
+  `BROAD_ATTEMPT_ROLE=on` gives `id-lf-ops` RBAC Administrator on the subscription with a condition that allows only
+  Contributor, and only for the order app's identity, so its attempt reaches Azure Policy. `policy-off` removes that
+  role first and keeps the policy until it is gone. No team Bicep assigns any of the three denied roles.
+- **Consequences:** Nobody in the lab can assign those three roles while the policy is on, including the team. If the
+  policy were removed, `id-lf-ops` could grant Contributor; the Ops Service removes any such grant at once and
+  records `UNEXPECTED_ALLOW`.
+- **Implemented in:** `infra/main.bicep`, `infra/modules/broad-attempt-access.bicep`
+
 ## ADR-00N: <short title>
 - **Date:**
 - **Status:** Proposed

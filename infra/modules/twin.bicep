@@ -21,6 +21,12 @@ param sqlAdminPassword string
 @description('How long the order path caches the DB password; 10 while testing')
 param secretRefreshSeconds int = 30
 
+@description('Private registry login server (WS2 control.bicep); empty keeps the public-registry setup')
+param registryServer string = ''
+
+@description('Resource ID of the identity that pulls from the private registry (AcrPull only)')
+param pullIdentityId string = ''
+
 var suffix = uniqueString(resourceGroup().id)
 var kvSecretsUserRoleId = '4633458b-17de-408a-b874-0445c86b69e6'
 var kvSecretsOfficerRoleId = 'b86a8fe4-44ce-4948-aee5-eccb2c155cd7'
@@ -148,18 +154,24 @@ resource cae 'Microsoft.App/managedEnvironments@2024-03-01' = {
   }
 }
 
-// The image is public on GHCR (ADR-002), so no registry credentials are configured.
+// A public GHCR image needs no registry settings (ADR-002). With registryServer set, images from the private
+// registry are pulled by pullIdentityId, which can only pull; the app's own identity is unchanged.
+var usePrivateRegistry = !empty(registryServer) && !empty(pullIdentityId)
+
 resource orderApp 'Microsoft.App/containerApps@2024-03-01' = {
   name: 'ca-order'
   location: location
   identity: {
     type: 'UserAssigned'
-    userAssignedIdentities: { '${appIdentity.id}': {} }
+    userAssignedIdentities: usePrivateRegistry
+      ? { '${appIdentity.id}': {}, '${pullIdentityId}': {} }
+      : { '${appIdentity.id}': {} }
   }
   properties: {
     managedEnvironmentId: cae.id
     configuration: {
       activeRevisionsMode: 'Single'
+      registries: usePrivateRegistry ? [{ server: registryServer, identity: pullIdentityId }] : []
       ingress: {
         external: true
         targetPort: appPort
