@@ -74,6 +74,11 @@ jobs:
             -r src/load-generator/requirements-dev.txt
       - name: Audit the referee's pinned dependencies
         run: pip-audit --desc on -r referee/requirements.txt
+      - name: Audit the Ops Service's pinned dependencies
+        run: |
+          pip-audit --desc on \
+            -r src/ops-service/requirements.txt \
+            -r src/ops-service/requirements-dev.txt
 
   codeql:
     runs-on: ubuntu-latest
@@ -126,3 +131,15 @@ jobs:
         run: |
           "$RUNNER_TEMP/trivy" image --scanners vuln \
             --severity HIGH,CRITICAL --ignore-unfixed --exit-code 1 load-generator:scan
+      - name: Build the ops-service image
+        run: docker build -t ops-service:scan src/ops-service
+      - name: Scan the ops-service image
+        run: |
+          "$RUNNER_TEMP/trivy" image --scanners vuln \
+            --severity HIGH,CRITICAL --ignore-unfixed --exit-code 1 ops-service:scan
+      - name: Build the referee image
+        run: docker build -t referee:scan -f referee/Dockerfile .
+      - name: Scan the referee image
+        run: |
+          "$RUNNER_TEMP/trivy" image --scanners vuln \
+            --severity HIGH,CRITICAL --ignore-unfixed --exit-code 1 referee:scan
