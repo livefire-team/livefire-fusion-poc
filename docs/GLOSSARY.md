@@ -36,7 +36,6 @@ One-sentence definitions of terms used in this project, added the first time eac
 | Exponential backoff | Waiting longer after each failed retry (2 s, 4 s, 8 s ... up to a cap) so a struggling service is not flooded. |
 | Fake twin | An in-memory stand-in for the Azure twin inside the Ops Service (`TWIN_BACKEND=fake`), for tests and local runs without Azure. |
 | Federated credential (OIDC) | A trust set up on an Azure identity so a GitHub Actions job can sign in with a short-lived token GitHub issues, with no stored password. |
-| Token subject (OIDC `sub`) | The line in GitHub's sign-in token that says which repo and environment the job runs in. Azure accepts the token only if it exactly matches a federated credential's subject. With GitHub's *immutable subject* format it also carries the org's and repo's permanent numeric IDs (`repo:livefire-team@349630330/livefire-fusion-poc@1437908536:environment:acr-push`). |
 | `gh` | The GitHub command-line tool: log in, create repos, open and merge PRs from the terminal. |
 | GHCR | GitHub Container Registry (`ghcr.io`): where our order-service container image is stored; names must be lowercase. |
 | GitHub Actions | GitHub's built-in CI service: it runs the workflows in `.github/workflows/` on GitHub's machines. |
@@ -86,6 +85,7 @@ One-sentence definitions of terms used in this project, added the first time eac
 | Symlink (symbolic link) | A file that just points to another file or folder, like a shortcut; Homebrew's `opt/openssl` is one. |
 | TestClient | FastAPI's in-process test browser: it calls the app's endpoints without starting a server. |
 | Token | A long secret string proving to a service that it is you; never pasted into chat or files. |
+| Token subject (OIDC `sub`) | The line in GitHub's sign-in token that says which repo and environment the job runs in. Azure accepts the token only if it exactly matches a federated credential's subject. With GitHub's *immutable subject* format it also carries the org's and repo's permanent numeric IDs (`repo:livefire-team@349630330/livefire-fusion-poc@1437908536:environment:acr-push`). |
 | Trivy | A scanner for known vulnerabilities and misconfigurations in files, Dockerfiles and container images. |
 | TTL / refresh window | How long a cached value is trusted before it is fetched again; for the DB password it is `SECRET_REFRESH_SECONDS`. |
 | UAC prompt | The Windows "Allow this app to make changes?" dialog; only you click it. |

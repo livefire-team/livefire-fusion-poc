@@ -303,7 +303,7 @@ Status values: Proposed | Accepted | Superseded | Rejected
 <!-- Copy the block below for each new decision -->
 
 ## ADR-017: Private registry for what runs in the lab; GHCR stays the build output
-- **Date:** 2026-11-04
+- **Date:** 2026-11-04 (updated 2026-11-05: immutable OIDC subject)
 - **Status:** Accepted (WS2)
 - **Context:** WS3's and WS4's Bicep pull images with an AcrPull-only identity, and the Ops Service must deploy an
   immutable image it can resolve itself. CI already publishes tested images to public GHCR.
@@ -318,10 +318,12 @@ Status values: Proposed | Accepted | Superseded | Rejected
   (repo admin). No registry password exists anywhere. GitHub signs this repo's OIDC tokens with the immutable
   subject (`repo:livefire-team@349630330/livefire-fusion-poc@1437908536:environment:acr-push`; the numbers are the
   org's and repo's permanent IDs, so a deleted and re-created repo of the same name gets no access). `GITHUB_REPOS`
-  entries therefore carry those IDs; a repo on the older format is listed as `owner/name`. To add a repo, read its
-  format with `gh api repos/<owner>/<name>/actions/oidc/customization/sub` and its IDs with
-  `gh api repos/<owner>/<name> --jq '"\(.owner.login)@\(.owner.id)/\(.name)@\(.id)"'`.
-- **Implemented in:** `infra/modules/control.bicep`, `scripts/deploy.sh`, the `acr` jobs in `.github/workflows/`
+  entries therefore carry those IDs, one entry per repo; a repo on the older format is listed as `owner/name`. To
+  add a repo, take its entry from `gh api repos/<owner>/<name>/actions/oidc/customization/sub --jq
+  '.sub_claim_prefix | ltrimstr("repo:")'`; that repo must answer `"use_default": true` there (custom claim keys
+  never match `repo:<entry>:environment:acr-push`).
+- **Implemented in:** `infra/modules/control.bicep`, `infra/main.bicep`, `infra/main.parameters.json`,
+  `scripts/deploy.sh`, the `acr` jobs in `.github/workflows/`
 
 ## ADR-018: The Ops Service is the only path from the control plane into the twin
 - **Date:** 2026-11-04

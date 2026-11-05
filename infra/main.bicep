@@ -24,7 +24,7 @@ param broadAttemptRole string = 'off'
 param opsImage string = ''
 @description('G2: <registry>/referee:sha-<40 hex>')
 param refereeImage string = ''
-@description('Comma-separated repos whose acr-push GitHub environment may push images: owner@ownerId/name@repoId (immutable subjects) or owner/name')
+@description('Comma-separated repos whose acr-push GitHub environment may push images, one entry per repo: owner@ownerId/name@repoId (immutable subjects) or owner/name')
 param githubRepos string = 'livefire-team@349630330/livefire-fusion-poc@1437908536'
 @description('Days each evidence version stays immutable (unlocked policy)')
 param evidenceRetentionDays string = '1'
@@ -54,7 +54,7 @@ module control 'modules/control.bicep' = { // WS2: identities, registry, environ
     principalId: principalId
     principalType: principalType
     keyVaultName: controlKeyVaultName
-    githubRepos: map(split(githubRepos, ','), r => trim(r))
+    githubRepos: filter(map(split(githubRepos, ','), r => trim(r)), r => !empty(r))
     evidenceRetentionDays: int(evidenceRetentionDays)
   }
 }
