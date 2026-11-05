@@ -347,7 +347,10 @@ Status values: Proposed | Accepted | Superseded | Rejected
 - **Consequences:** Nobody in the lab can assign those three roles while the policy is on, including the team. If the
   policy were removed, `id-lf-ops` could grant Contributor; the Ops Service removes any such grant at once and
   records `UNEXPECTED_ALLOW`.
-- **Implemented in:** `infra/main.bicep`, `infra/modules/broad-attempt-access.bicep`
+- **Implemented in:** `infra/main.bicep`, `infra/modules/broad-attempt-access.bicep`. Proven in the lab (`lf-eh`)
+  on 2026-11-05: the first `RequestDisallowedByPolicy` from `id-lf-ops` was drill
+  `drill-smoke-policy-20261105-0216-6e1e` at 02:16:12 UTC (`smoke policy`, through the Ops Service with a signed
+  grant; the `recover.broad` event's `refused_by` is `Azure Policy`).
 
 ## ADR-00N: <short title>
 - **Date:**

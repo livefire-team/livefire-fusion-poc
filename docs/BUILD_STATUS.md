@@ -3,8 +3,8 @@
 > Purpose: if a session ends (usage limit, closed laptop), the next Claude session reads THIS file and continues
 > exactly where we stopped. Keep it accurate. Update after every step and PR, and before ending any session.
 
-**Last updated:** 2026-11-05 (WS2 G2: lab sections 5-7 done on `lf-eh`: control plane, evidence check, images in
-the private registry, `ca-ops` and the jobs, `smoke auth` passed; next is section 8, the deny policy)
+**Last updated:** 2026-11-05 (WS2 G2: lab sections 5-8 done on `lf-eh`: control plane, evidence check, images in
+the private registry, `ca-ops` and the jobs, `smoke auth` passed, deny policy ON and proven; next is section 9)
 **Current gate target:** G2 (Mon Nov 9; moved from Nov 2)
 
 ## FIRST THING THE NEXT SESSION SHOULD DO
@@ -139,6 +139,16 @@ Status values: not started | in progress | PR open | merged | blocked
       PASS), `ca-ops` internal with 1 replica and "Application startup complete", `job-referee`, `job-ops-smoke`,
       the three custom roles. From outside Azure, `OPS_URL` gets Azure's 404 "Unavailable" page.
     - `deploy.sh smoke auth`: SMOKE PASSED (7 of 7 rows).
+  - Lab section 8 done 2026-11-05 02:08-02:18 UTC, after every workstream agreed:
+    - `deploy.sh policy`: the deny policy refused `recover.sh broad` (as the WS2 owner) on the first attempt
+      (`RequestDisallowedByPolicy`, nothing granted), then `id-lf-ops` got its conditioned RBAC Administrator role.
+      Both provisions' baselines PASS.
+    - `deploy.sh smoke policy`: SMOKE PASSED. `id-lf-ops`, through the Ops Service with a signed grant: denied
+      `RequestDisallowedByPolicy`, `refused_by: Azure Policy`; the same grant again and a forged grant: 422.
+      Recorded in ADR-019's "Implemented in".
+    - **The deny policy is ON for the whole lab subscription.** Nobody can create Owner, Contributor or User
+      Access Administrator assignments until `scripts/deploy.sh policy-off` runs. Run it before the lab ends or
+      before any teardown.
   - Lab notes:
     - Activate `.venv` before every `deploy.sh` or `azd` command: the postprovision hook runs `referee.sh`,
       which needs `python` and `pytest` (without them the baseline is INCONCLUSIVE and the hook fails).
@@ -149,10 +159,9 @@ Status values: not started | in progress | PR open | merged | blocked
     - `deploy.sh smoke` waits 90 s for the job's console log, but it took about 3 minutes to reach Log
       Analytics. Rerun the query it prints (`ContainerAppConsoleLogs_CL`, `ContainerGroupName_s startswith
       '<execution>'`) a little later.
-  - Next, in order: send `OPS_URL` to WS3 and WS4 (section 7 step 6), with their section 14 notes. Section 8 (Fri
-    Nov 6): get a yes from every workstream before the deny policy goes on, then `deploy.sh policy`,
-    `recover.sh broad` as you and `smoke policy` as `id-lf-ops`; ADR-019's "Implemented in" line goes in a new PR.
-    Then section 9: `smoke all` three times in a row.
+  - Next, in order: tell the lead the refusal is Azure Policy from `id-lf-ops` (G2 Must met) and that
+    `policy-off` exists. Section 9 (planned Fri Nov 6): `smoke all` three times in a row, then read one smoke
+    drill's events from Blob.
   - Follow-up from the lab: `scripts/evidence_check.py` never deletes the event log itself, and its version
     delete of the event log is refused for being the current version (`OperationNotAllowedOnRootBlob`), not by
     the policy. Add a "delete the event log" step that must be refused by the policy, with a test.
@@ -163,7 +172,8 @@ Status values: not started | in progress | PR open | merged | blocked
     identity (WS1 file, see section 11); the control vault name is fixed, so reprovisioning after `azd down`
     needs `--purge`. Not done on purpose: a `predown` hook that runs `policy-off`, because the policy is
     subscription-wide and a teardown of a second environment would remove it for `lf-eh` too.
-- Last commands run (WS2 Mac, with `.venv` active): `scripts/deploy.sh smoke auth` (lab sections 5-7 above);
+- Last commands run (WS2 Mac, with `.venv` active): `scripts/deploy.sh smoke policy`; before that
+  `scripts/deploy.sh policy`; before that `scripts/deploy.sh smoke auth` (lab sections 5-8 above);
   before that the read-only checks (`az account show`,
   `azd env get-values`, `az provider operation show -n Microsoft.App`); before that the App Insights
   `exceptions` query (above); before that
@@ -236,6 +246,8 @@ Status values: not started | in progress | PR open | merged | blocked
 See `docs/ADR.md` (latest: ADR-019).
 
 ## Session log (newest first)
+- 2026-11-05: WS2 G2 lab section 8: every workstream agreed; deny policy ON; `id-lf-ops` refused by Azure Policy
+  through the Ops Service (`smoke policy` passed); ADR-019 "Implemented in" updated.
 - 2026-11-05: WS2 G2 lab sections 5-7 on `lf-eh`: control plane provisioned, evidence check passed, images
   imported into the private registry, `ca-ops` and the jobs deployed, `smoke auth` passed. Platform hand-off
   posted to WS3, WS4 and WS5.
