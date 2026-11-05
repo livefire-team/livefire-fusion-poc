@@ -3,8 +3,8 @@
 > Purpose: if a session ends (usage limit, closed laptop), the next Claude session reads THIS file and continues
 > exactly where we stopped. Keep it accurate. Update after every step and PR, and before ending any session.
 
-**Last updated:** 2026-11-05 (WS2 G2: lab sections 5-11 done on `lf-eh`; CI pushes to the lab registry over OIDC
-after the immutable-subject fix (PR #26); the `acr-push` branch restriction still needs a repo admin; next is 12)
+**Last updated:** 2026-11-05 (WS2 G2: lab sections 5-11 done on `lf-eh`, section 11 run twice; CI pushes to the lab
+registry over OIDC after the immutable-subject fix (PR #26); `acr-push` branch restriction saved; next is 12)
 **Current gate target:** G2 (Mon Nov 9; moved from Nov 2)
 
 ## FIRST THING THE NEXT SESSION SHOULD DO
@@ -180,12 +180,26 @@ Status values: not started | in progress | PR open | merged | blocked
       for that tag (the old one stays in the registry, untagged).
     - Step 3: `smoke drill --candidate <registry>/order-service:sha-<40>`: SMOKE PASSED. `deploy_revision` took
       92 s, and the `deploy.revision` event records image, digest and revision.
-  - Section 10 addendum: `deploy_revision` (92 s) plus `after-fix` (30 s) is well over the 7-minute run's 40 s
-    budget, so per the guide that segment uses WS5's labelled replay in the 7-minute run; the walkthrough is
-    unchanged. Decision with the lead pending.
-  - Next, in order: a repo admin saves the `acr-push` branch restriction; merge PR #26; the lead decides on
-    section 10; tell WS5 the `trace_url` format and send the evidence-check table. Then section 12
-    (`smoke baselines`) and section 13 (timed rebuild in a throwaway environment, at least 90 minutes of lab).
+  - Section 11 run again 2026-11-05 22:44-22:56 UTC:
+    - Step 1: the branch restriction is now saved (`main` and `candidate/*` only), so the gap above is closed.
+    - Step 2: only the `acr` job was rerun, reusing the stored image, so nothing was rebuilt: OIDC push from
+      `main` through the branch restriction worked, and the digest stayed the same.
+    - Step 3: the twin was still on the candidate's digest, so a deploy of the same digest would have changed
+      nothing (`deploy_image` returns at once when the image is unchanged). `az containerapp update --image
+      <registry>/order-service:sha-<40>` put it back on the tag first (a new revision), then the candidate drill
+      passed in Azure with a real new revision; `deploy_revision` took 115 s. The Mac's own polling stopped
+      partway with a DNS `NameResolutionError` for `management.azure.com`, so the report came from Log
+      Analytics.
+    - After a candidate drill whose candidate is the base image, the twin stays on that digest revision. Before
+      repeating step 3, set the tag again (as above) or run `deploy.sh apps`.
+  - Section 10 addendum: `deploy_revision` (92 s and 115 s) plus `after-fix` (30 s) is well over the 7-minute
+    run's 40 s budget, so per the guide that segment uses WS5's labelled replay in the 7-minute run; the
+    walkthrough is unchanged. Decision with the lead pending.
+  - Follow-up from the lab: `deploy.sh smoke` stops on the first failed `az containerapp job execution show`
+    (`set -e`), even when the job is still running fine. It could retry a failed status call a few times.
+  - Next, in order: merge PR #26 before the next `lf-eh` provision; the lead decides on section 10; tell WS5 the
+    `trace_url` format and send the evidence-check table. Then section 12 (`smoke baselines`) and section 13
+    (timed rebuild in a throwaway environment, at least 90 minutes of lab).
   - Follow-up from the lab: `scripts/evidence_check.py` never deletes the event log itself, and its version
     delete of the event log is refused for being the current version (`OperationNotAllowedOnRootBlob`), not by
     the policy. Add a "delete the event log" step that must be refused by the policy, with a test.
@@ -271,6 +285,8 @@ Status values: not started | in progress | PR open | merged | blocked
 See `docs/ADR.md` (latest: ADR-019).
 
 ## Session log (newest first)
+- 2026-11-05: WS2 G2 lab section 11 run again: branch restriction saved; OIDC push from `main` (no rebuild); twin put
+  back on its tag, then the candidate drill passed with a real new revision (`deploy_revision` 115 s).
 - 2026-11-05: WS2 G2 lab section 11: CI's `acr` job refused by Azure (immutable OIDC subject); fixed in PR #26 and
   in the lab, then the OIDC push worked; candidate deploy by digest passed (`deploy_revision` 92 s). The
   `acr-push` branch restriction still needs a repo admin.
