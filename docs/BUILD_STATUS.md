@@ -3,8 +3,8 @@
 > Purpose: if a session ends (usage limit, closed laptop), the next Claude session reads THIS file and continues
 > exactly where we stopped. Keep it accurate. Update after every step and PR, and before ending any session.
 
-**Last updated:** 2026-11-04 (WS2 G2: PR #20 G1 carry-over, PR #21 Ops Service and Referee job, G2 platform PR on
-`ws2/g2-platform`; Mac checks done, nothing provisioned yet)
+**Last updated:** 2026-11-04 (WS2 G2: PRs #20, #21 and #22 merged; images on GHCR; nothing provisioned yet, the
+lab work starts Nov 5)
 **Current gate target:** G2 (Mon Nov 9; moved from Nov 2)
 
 ## FIRST THING THE NEXT SESSION SHOULD DO
@@ -112,25 +112,28 @@ Status values: not started | in progress | PR open | merged | blocked
   Contributor and User Access Administrator assignments now comes from `scripts/deploy.sh policy`
   (`DENY_BROAD_POLICY=on`, then `BROAD_ATTEMPT_ROLE=on` for `id-lf-ops`). Still waiting for every workstream to
   confirm none of their identities needs those roles; `ops-access.bicep` is replaced by `ops-twin-access.bicep`.
-- WS2 G2 branches (G2 Mon Nov 9):
-  - `ws2/g1-carryover`, [PR #20](https://github.com/livefire-team/livefire-fusion-poc/pull/20): PR #16 merged on
-    2026-11-01, but the 7 `ws2-starter` commits made after it (the `reset.sh` replica wait, the `drill.sh`
-    refresh-window wait, ADR-016, status and glossary notes) only reach `main` through this branch.
-  - `ws2/ops-service`, [PR #21](https://github.com/livefire-team/livefire-fusion-poc/pull/21): `src/ops-service/`,
-    `referee/run.py`, their workflows. Merges before the platform PR, so `main` publishes both images to GHCR.
-  - `ws2/g2-platform`, [PR #22](https://github.com/livefire-team/livefire-fusion-poc/pull/22) (stacked on
-    `ws2/g1-carryover`): Bicep for the control plane, private registry, evidence store, `ca-ops`, `job-referee`
-    and the deny policy; `scripts/deploy.sh`; `contracts/ops-actions.md`; ADR-017 to ADR-019. WS1 reviews
-    `twin.bicep`, `order-service.yml` and the contract row. Merge only after `smoke all` has passed once in the
-    lab, so `main` never holds Bicep that hasn't run.
-  - 2026-11-04 end of day: #20 and #21 green, reviewed and approved by the WS2 owner; the merge itself is done by
-    the owner (`gh pr merge 20 --merge`, then `gh pr merge 21 --merge`), because Claude Code's auto mode refuses it.
-  - Next, in order: merge #20 and #21; check the `main` runs publish `ghcr.io/livefire-team/ops-service:sha-<7>`
-    and `referee:sha-<7>`; org owner makes both packages public; then the lab (provision the control plane,
-    evidence check, images into the registry, `ca-ops`). Before the first provision, run the read-only
-    `az provider operation show -n Microsoft.App --query "resourceTypes[?name=='jobs'].operations[].name"` to
-    confirm the job action names in `ops-twin-access.bicep`. If the first `deploy.sh apps` fails with "unable to
-    fetch secret" or `RoleDefinitionDoesNotExist`, the new roles haven't applied yet: wait 5 minutes and rerun.
+- WS2 G2 (G2 Mon Nov 9). All three PRs are merged into `main` with merge commits (2026-11-04):
+  - [PR #20](https://github.com/livefire-team/livefire-fusion-poc/pull/20), `ws2/g1-carryover` (25541d4): the 7
+    `ws2-starter` commits made after PR #16 (the `reset.sh` replica wait, the `drill.sh` refresh-window wait,
+    ADR-016, status and glossary notes).
+  - [PR #21](https://github.com/livefire-team/livefire-fusion-poc/pull/21), `ws2/ops-service` (d507fe3):
+    `src/ops-service/`, `referee/run.py`, their workflows.
+  - [PR #22](https://github.com/livefire-team/livefire-fusion-poc/pull/22), `ws2/g2-platform` (f014dd6, approved
+    and merged by WS1): Bicep for the control plane, private registry, evidence store, `ca-ops`, `job-referee`
+    and the deny policy; `scripts/deploy.sh`; `contracts/ops-actions.md`; ADR-017 to ADR-019. It merged before
+    the lab run, so the lab proves `main` as it is. A fix found in the lab goes in a new PR, and so do the lab
+    records the guide puts "in PR 3" (ADR-019's "Implemented in" line, `docs/rebuild-timing.md`).
+  - GHCR: the tags `deploy.sh images` picks from `main` are `order-service:sha-f014dd6`,
+    `ops-service:sha-d507fe3` and `referee:sha-f014dd6`; all three pull without signing in, so the packages
+    are public.
+  - Checked 2026-11-04 (read-only): every `Microsoft.App` action in `ops-twin-access.bicep` and `ops.bicep`
+    exists (`az provider operation show -n Microsoft.App`).
+  - Next, in order (lab, Thu Nov 5): `azd env set AZURE_PRINCIPAL_TYPE User` (it is `ServicePrincipal`, but the
+    lab sign-in is a user, and G2 creates your first role assignments); `ORDER_IMAGE` to
+    `ghcr.io/livefire-team/order-service:sha-f014dd6`; `deploy.sh infra`; post the platform hand-off to WS3, WS4
+    and WS5; evidence check; `deploy.sh images`, then `apps`; `smoke auth`; send `OPS_URL`. If the first
+    `deploy.sh apps` fails with "unable to fetch secret" or `RoleDefinitionDoesNotExist`, the new roles haven't
+    applied yet: wait 5 minutes and rerun.
   - PR #22 review follow-ups (not fixed): `infra`/`all` could refuse `BROAD_ATTEMPT_ROLE=on` until the policy
     assignment exists; `job-ops-smoke` could get its own identity; the order-app operator role could be assigned
     on `ca-order`, `cae-lf-twin` and `id-order-app` instead of the twin resource group; `apps` could check
@@ -138,7 +141,9 @@ Status values: not started | in progress | PR open | merged | blocked
     identity (WS1 file, see section 11); the control vault name is fixed, so reprovisioning after `azd down`
     needs `--purge`. Not done on purpose: a `predown` hook that runs `policy-off`, because the policy is
     subscription-wide and a teardown of a second environment would remove it for `lf-eh` too.
-- Last commands run (WS2 Mac, with `.venv` active): the App Insights `exceptions` query (above); before that
+- Last commands run (WS2 Mac, with `.venv` active): the read-only checks above (`az account show`,
+  `azd env get-values`, `az provider operation show -n Microsoft.App`); before that the App Insights
+  `exceptions` query (above); before that
   `for i in 1 2 3; do ./scripts/drill.sh || break; done`
   (three drills, run twice, above); before that `./scripts/reset.sh` alone (old replica gone after 58 s) and
   `./scripts/measure-propagation.sh 3`; earlier on the WS1 PC:
@@ -208,6 +213,10 @@ Status values: not started | in progress | PR open | merged | blocked
 See `docs/ADR.md` (latest: ADR-019).
 
 ## Session log (newest first)
+- 2026-11-04: #20 and #21 merged by the WS2 owner, #22 approved and merged by WS1 (merge commits); every `main`
+  run green, all three images published. Read-only lab checks: signed in as a user, `lf-eh` on `accessPolicy`
+  with `SECRET_REFRESH_SECONDS=10`, `AZURE_PRINCIPAL_TYPE` still to change to `User`; the Bicep's
+  `Microsoft.App` actions all exist.
 - 2026-11-04: review passes on #20, #21 and #22. #20: drill results moved out of this file (ADR-004). #21: `kill`
   now cancels the running action and resets under the lock; `drill_id`/`label` use `fullmatch`; keys left out of
   the `Settings` repr; the Referee image drops the unused `virtualenv` (Trivy HIGH); 113 tests, coverage 81.83%,
