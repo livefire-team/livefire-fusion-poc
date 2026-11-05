@@ -3,8 +3,8 @@
 > Purpose: if a session ends (usage limit, closed laptop), the next Claude session reads THIS file and continues
 > exactly where we stopped. Keep it accurate. Update after every step and PR, and before ending any session.
 
-**Last updated:** 2026-11-04 (WS2 G2: PRs #20, #21 and #22 merged; images on GHCR; nothing provisioned yet, the
-lab work starts Nov 5)
+**Last updated:** 2026-11-05 (WS2 G2: lab sections 5-7 done on `lf-eh`: control plane, evidence check, images in
+the private registry, `ca-ops` and the jobs, `smoke auth` passed; next is section 8, the deny policy)
 **Current gate target:** G2 (Mon Nov 9; moved from Nov 2)
 
 ## FIRST THING THE NEXT SESSION SHOULD DO
@@ -128,12 +128,34 @@ Status values: not started | in progress | PR open | merged | blocked
     are public.
   - Checked 2026-11-04 (read-only): every `Microsoft.App` action in `ops-twin-access.bicep` and `ops.bicep`
     exists (`az provider operation show -n Microsoft.App`).
-  - Next, in order (lab, Thu Nov 5): `azd env set AZURE_PRINCIPAL_TYPE User` (it is `ServicePrincipal`, but the
-    lab sign-in is a user, and G2 creates your first role assignments); `ORDER_IMAGE` to
-    `ghcr.io/livefire-team/order-service:sha-f014dd6`; `deploy.sh infra`; post the platform hand-off to WS3, WS4
-    and WS5; evidence check; `deploy.sh images`, then `apps`; `smoke auth`; send `OPS_URL`. If the first
-    `deploy.sh apps` fails with "unable to fetch secret" or `RoleDefinitionDoesNotExist`, the new roles haven't
-    applied yet: wait 5 minutes and rerun.
+  - Lab sections 5-7 done 2026-11-05 01:28-01:56 UTC on `lf-eh`, from `main` at f014dd6 (results in the WS2
+    Mac's git-ignored `docs/reference/g2-evidence.md`, ADR-004):
+    - `AZURE_PRINCIPAL_TYPE` set to `User` (it was `ServicePrincipal`; the lab sign-in is a user).
+    - `deploy.sh infra`: control plane deployed, the hook seeded the five control-vault secrets, baseline PASS.
+      Platform hand-off posted to WS3, WS4 and WS5.
+    - `evidence_check.py`: EVIDENCE CHECK PASSED. A plain delete of the event log, tried by hand, was also refused
+      by the policy (409 `BlobImmutableDueToPolicy`).
+    - `deploy.sh images` (GHCR import, no build), then `deploy.sh apps`: the twin on the registry image (baseline
+      PASS), `ca-ops` internal with 1 replica and "Application startup complete", `job-referee`, `job-ops-smoke`,
+      the three custom roles. From outside Azure, `OPS_URL` gets Azure's 404 "Unavailable" page.
+    - `deploy.sh smoke auth`: SMOKE PASSED (7 of 7 rows).
+  - Lab notes:
+    - Activate `.venv` before every `deploy.sh` or `azd` command: the postprovision hook runs `referee.sh`,
+      which needs `python` and `pytest` (without them the baseline is INCONCLUSIVE and the hook fails).
+    - `azd provision` prints no hook output when the hook succeeds. The newest `evidence/drill-*/r1-baseline`
+      folder shows the baseline ran.
+    - azd's warning that `AllowAllWindowsAzureIps` contains a reserved word is a false alarm: that is the name
+      Azure itself uses for "allow Azure services", and the deployment succeeds.
+    - `deploy.sh smoke` waits 90 s for the job's console log, but it took about 3 minutes to reach Log
+      Analytics. Rerun the query it prints (`ContainerAppConsoleLogs_CL`, `ContainerGroupName_s startswith
+      '<execution>'`) a little later.
+  - Next, in order: send `OPS_URL` to WS3 and WS4 (section 7 step 6), with their section 14 notes. Section 8 (Fri
+    Nov 6): get a yes from every workstream before the deny policy goes on, then `deploy.sh policy`,
+    `recover.sh broad` as you and `smoke policy` as `id-lf-ops`; ADR-019's "Implemented in" line goes in a new PR.
+    Then section 9: `smoke all` three times in a row.
+  - Follow-up from the lab: `scripts/evidence_check.py` never deletes the event log itself, and its version
+    delete of the event log is refused for being the current version (`OperationNotAllowedOnRootBlob`), not by
+    the policy. Add a "delete the event log" step that must be refused by the policy, with a test.
   - PR #22 review follow-ups (not fixed): `infra`/`all` could refuse `BROAD_ATTEMPT_ROLE=on` until the policy
     assignment exists; `job-ops-smoke` could get its own identity; the order-app operator role could be assigned
     on `ca-order`, `cae-lf-twin` and `id-order-app` instead of the twin resource group; `apps` could check
@@ -141,7 +163,8 @@ Status values: not started | in progress | PR open | merged | blocked
     identity (WS1 file, see section 11); the control vault name is fixed, so reprovisioning after `azd down`
     needs `--purge`. Not done on purpose: a `predown` hook that runs `policy-off`, because the policy is
     subscription-wide and a teardown of a second environment would remove it for `lf-eh` too.
-- Last commands run (WS2 Mac, with `.venv` active): the read-only checks above (`az account show`,
+- Last commands run (WS2 Mac, with `.venv` active): `scripts/deploy.sh smoke auth` (lab sections 5-7 above);
+  before that the read-only checks (`az account show`,
   `azd env get-values`, `az provider operation show -n Microsoft.App`); before that the App Insights
   `exceptions` query (above); before that
   `for i in 1 2 3; do ./scripts/drill.sh || break; done`
@@ -213,6 +236,9 @@ Status values: not started | in progress | PR open | merged | blocked
 See `docs/ADR.md` (latest: ADR-019).
 
 ## Session log (newest first)
+- 2026-11-05: WS2 G2 lab sections 5-7 on `lf-eh`: control plane provisioned, evidence check passed, images
+  imported into the private registry, `ca-ops` and the jobs deployed, `smoke auth` passed. Platform hand-off
+  posted to WS3, WS4 and WS5.
 - 2026-11-04: #20 and #21 merged by the WS2 owner, #22 approved and merged by WS1 (merge commits); every `main`
   run green, all three images published. Read-only lab checks: signed in as a user, `lf-eh` on `accessPolicy`
   with `SECRET_REFRESH_SECONDS=10`, `AZURE_PRINCIPAL_TYPE` still to change to `User`; the Bicep's
