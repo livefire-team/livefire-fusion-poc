@@ -3,8 +3,8 @@
 > Purpose: if a session ends (usage limit, closed laptop), the next Claude session reads THIS file and continues
 > exactly where we stopped. Keep it accurate. Update after every step and PR, and before ending any session.
 
-**Last updated:** 2026-11-05 (WS2 G2: lab sections 5-8 done on `lf-eh`: control plane, evidence check, images in
-the private registry, `ca-ops` and the jobs, `smoke auth` passed, deny policy ON and proven; next is section 9)
+**Last updated:** 2026-11-05 (WS2 G2: lab sections 5-9 done on `lf-eh`, `smoke all` passed three times in a row;
+section 10 timing table done, decision with the lead pending; next is section 11)
 **Current gate target:** G2 (Mon Nov 9; moved from Nov 2)
 
 ## FIRST THING THE NEXT SESSION SHOULD DO
@@ -159,9 +159,19 @@ Status values: not started | in progress | PR open | merged | blocked
     - `deploy.sh smoke` waits 90 s for the job's console log, but it took about 3 minutes to reach Log
       Analytics. Rerun the query it prints (`ContainerAppConsoleLogs_CL`, `ContainerGroupName_s startswith
       '<execution>'`) a little later.
-  - Next, in order: tell the lead the refusal is Azure Policy from `id-lf-ops` (G2 Must met) and that
-    `policy-off` exists. Section 9 (planned Fri Nov 6): `smoke all` three times in a row, then read one smoke
-    drill's events from Blob.
+  - Lab section 9 done 2026-11-05 02:25-02:49 UTC: `smoke all` passed three times in a row (about 8 minutes
+    each), every row as the guide expects. One smoke drill's events read back from Blob: every action is there,
+    written by `ca-ops`. `trace_url` is `null` on passing Referee runs and a path inside the evidence account
+    (`evidence/<drill>/r<n>-<label>/playwright/.../trace.zip`) on failing ones; tell WS5.
+  - Section 10: the timing table is in the local evidence note. The Referee job's `after-restore` run has a
+    median of 29.4 s (budget 45 s), so it stays on the live path for both formats. The night's first Referee run
+    took 62 s (cold start): for the 7-minute run, start a baseline in the 2 minutes before the clock.
+    `deploy_revision` is timed in section 11. Decision with the lead pending.
+  - Next, in order: the lead decides on section 10; tell WS5 the `trace_url` format and send the evidence-check
+    table. Section 11 needs a repo admin (venkataare or an org owner) to run `scripts/deploy.sh github
+    livefire-team/livefire-fusion-poc` once, then rerun the `ops-service` workflow on `main` to prove the OIDC
+    push, then `scripts/deploy.sh smoke drill --candidate "$(azd env get-value ORDER_IMAGE)"`. Then section 12
+    (`smoke baselines`) and section 13 (timed rebuild in a throwaway environment, at least 90 minutes of lab).
   - Follow-up from the lab: `scripts/evidence_check.py` never deletes the event log itself, and its version
     delete of the event log is refused for being the current version (`OperationNotAllowedOnRootBlob`), not by
     the policy. Add a "delete the event log" step that must be refused by the policy, with a test.
@@ -172,7 +182,8 @@ Status values: not started | in progress | PR open | merged | blocked
     identity (WS1 file, see section 11); the control vault name is fixed, so reprovisioning after `azd down`
     needs `--purge`. Not done on purpose: a `predown` hook that runs `policy-off`, because the policy is
     subscription-wide and a teardown of a second environment would remove it for `lf-eh` too.
-- Last commands run (WS2 Mac, with `.venv` active): `scripts/deploy.sh smoke policy`; before that
+- Last commands run (WS2 Mac, with `.venv` active): `for i in 1 2 3; do scripts/deploy.sh smoke all || break;
+  done`; before that `scripts/deploy.sh smoke policy`; before that
   `scripts/deploy.sh policy`; before that `scripts/deploy.sh smoke auth` (lab sections 5-8 above);
   before that the read-only checks (`az account show`,
   `azd env get-values`, `az provider operation show -n Microsoft.App`); before that the App Insights
@@ -246,6 +257,8 @@ Status values: not started | in progress | PR open | merged | blocked
 See `docs/ADR.md` (latest: ADR-019).
 
 ## Session log (newest first)
+- 2026-11-05: WS2 G2 lab section 9: `smoke all` passed three times in a row; events read back from Blob.
+  Section 10 timing table made (Referee median 29.4 s); the lead's decision is pending.
 - 2026-11-05: WS2 G2 lab section 8: every workstream agreed; deny policy ON; `id-lf-ops` refused by Azure Policy
   through the Ops Service (`smoke policy` passed); ADR-019 "Implemented in" updated.
 - 2026-11-05: WS2 G2 lab sections 5-7 on `lf-eh`: control plane provisioned, evidence check passed, images
