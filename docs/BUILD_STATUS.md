@@ -3,8 +3,8 @@
 > Purpose: if a session ends (usage limit, closed laptop), the next Claude session reads THIS file and continues
 > exactly where we stopped. Keep it accurate. Update after every step and PR, and before ending any session.
 
-**Last updated:** 2026-11-05 (WS2 G2: lab sections 5-9 done on `lf-eh`, `smoke all` passed three times in a row;
-section 10 timing table done, decision with the lead pending; next is section 11)
+**Last updated:** 2026-11-05 (WS2 G2: lab sections 5-11 done on `lf-eh`; CI pushes to the lab registry over OIDC
+after the immutable-subject fix (PR #26); the `acr-push` branch restriction still needs a repo admin; next is 12)
 **Current gate target:** G2 (Mon Nov 9; moved from Nov 2)
 
 ## FIRST THING THE NEXT SESSION SHOULD DO
@@ -167,10 +167,24 @@ Status values: not started | in progress | PR open | merged | blocked
     median of 29.4 s (budget 45 s), so it stays on the live path for both formats. The night's first Referee run
     took 62 s (cold start): for the 7-minute run, start a baseline in the 2 minutes before the clock.
     `deploy_revision` is timed in section 11. Decision with the lead pending.
-  - Next, in order: the lead decides on section 10; tell WS5 the `trace_url` format and send the evidence-check
-    table. Section 11 needs a repo admin (venkataare or an org owner) to run `scripts/deploy.sh github
-    livefire-team/livefire-fusion-poc` once, then rerun the `ops-service` workflow on `main` to prove the OIDC
-    push, then `scripts/deploy.sh smoke drill --candidate "$(azd env get-value ORDER_IMAGE)"`. Then section 12
+  - Section 11 done 2026-11-05 21:41-21:59 UTC:
+    - Step 1: the five `acr-push` variables were set by hand in the GitHub UI and match `lf-eh`. **The branch
+      restriction (`main`, `candidate/*`) is not saved yet** (`deployment_branch_policy` is `null`). Until a repo
+      admin saves it, any branch can run a job in `acr-push`, and Azure lets that job push to the lab registry.
+    - Step 2: the `acr` job was first refused by Azure (AADSTS700213): this repo's OIDC tokens use GitHub's
+      immutable subject (`repo:livefire-team@349630330/livefire-fusion-poc@1437908536:environment:acr-push`).
+      PR #26 makes the Bicep trust that subject. The lab credential was updated by hand to match it, and an Azure
+      what-if shows no change for it with PR #26 (a provision from `main` would undo it, so merge #26 before the
+      next `lf-eh` provision). The rerun `acr` job then pushed `ops-service:sha-<40>` over OIDC; `az account set`
+      works with AcrPush only. The rerun rebuilt commit d507fe3, so GHCR and the registry now hold a new digest
+      for that tag (the old one stays in the registry, untagged).
+    - Step 3: `smoke drill --candidate <registry>/order-service:sha-<40>`: SMOKE PASSED. `deploy_revision` took
+      92 s, and the `deploy.revision` event records image, digest and revision.
+  - Section 10 addendum: `deploy_revision` (92 s) plus `after-fix` (30 s) is well over the 7-minute run's 40 s
+    budget, so per the guide that segment uses WS5's labelled replay in the 7-minute run; the walkthrough is
+    unchanged. Decision with the lead pending.
+  - Next, in order: a repo admin saves the `acr-push` branch restriction; merge PR #26; the lead decides on
+    section 10; tell WS5 the `trace_url` format and send the evidence-check table. Then section 12
     (`smoke baselines`) and section 13 (timed rebuild in a throwaway environment, at least 90 minutes of lab).
   - Follow-up from the lab: `scripts/evidence_check.py` never deletes the event log itself, and its version
     delete of the event log is refused for being the current version (`OperationNotAllowedOnRootBlob`), not by
@@ -178,12 +192,12 @@ Status values: not started | in progress | PR open | merged | blocked
   - PR #22 review follow-ups (not fixed): `infra`/`all` could refuse `BROAD_ATTEMPT_ROLE=on` until the policy
     assignment exists; `job-ops-smoke` could get its own identity; the order-app operator role could be assigned
     on `ca-order`, `cae-lf-twin` and `id-order-app` instead of the twin resource group; `apps` could check
-    `ORDER_IMAGE` is a registry `sha-<40>` tag; `order-service.yml`'s `az account set` may fail for an AcrPush-only
-    identity (WS1 file, see section 11); the control vault name is fixed, so reprovisioning after `azd down`
+    `ORDER_IMAGE` is a registry `sha-<40>` tag; the control vault name is fixed, so reprovisioning after `azd down`
     needs `--purge`. Not done on purpose: a `predown` hook that runs `policy-off`, because the policy is
     subscription-wide and a teardown of a second environment would remove it for `lf-eh` too.
-- Last commands run (WS2 Mac, with `.venv` active): `for i in 1 2 3; do scripts/deploy.sh smoke all || break;
-  done`; before that `scripts/deploy.sh smoke policy`; before that
+- Last commands run (WS2 Mac, with `.venv` active): `scripts/deploy.sh smoke drill --candidate "$(azd env
+  get-value ORDER_IMAGE)"`; before that `gh run rerun 41860883124 --failed`; before that `for i in 1 2 3; do
+  scripts/deploy.sh smoke all || break; done`; before that `scripts/deploy.sh smoke policy`; before that
   `scripts/deploy.sh policy`; before that `scripts/deploy.sh smoke auth` (lab sections 5-8 above);
   before that the read-only checks (`az account show`,
   `azd env get-values`, `az provider operation show -n Microsoft.App`); before that the App Insights
@@ -257,6 +271,9 @@ Status values: not started | in progress | PR open | merged | blocked
 See `docs/ADR.md` (latest: ADR-019).
 
 ## Session log (newest first)
+- 2026-11-05: WS2 G2 lab section 11: CI's `acr` job refused by Azure (immutable OIDC subject); fixed in PR #26 and
+  in the lab, then the OIDC push worked; candidate deploy by digest passed (`deploy_revision` 92 s). The
+  `acr-push` branch restriction still needs a repo admin.
 - 2026-11-05: WS2 G2 lab section 9: `smoke all` passed three times in a row; events read back from Blob.
   Section 10 timing table made (Referee median 29.4 s); the lead's decision is pending.
 - 2026-11-05: WS2 G2 lab section 8: every workstream agreed; deny policy ON; `id-lf-ops` refused by Azure Policy
