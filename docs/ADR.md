@@ -315,7 +315,12 @@ Status values: Proposed | Accepted | Superseded | Rejected
   for later commits and candidate branches. The Ops Service deploys only `<registry>/order-service:sha-<40 hex>`,
   resolved to its digest.
 - **Consequences:** Each new lab needs `scripts/deploy.sh images` and, for CI pushes, `scripts/deploy.sh github`
-  (repo admin). No registry password exists anywhere.
+  (repo admin). No registry password exists anywhere. GitHub signs this repo's OIDC tokens with the immutable
+  subject (`repo:livefire-team@349630330/livefire-fusion-poc@1437908536:environment:acr-push`; the numbers are the
+  org's and repo's permanent IDs, so a deleted and re-created repo of the same name gets no access). `GITHUB_REPOS`
+  entries therefore carry those IDs; a repo on the older format is listed as `owner/name`. To add a repo, read its
+  format with `gh api repos/<owner>/<name>/actions/oidc/customization/sub` and its IDs with
+  `gh api repos/<owner>/<name> --jq '"\(.owner.login)@\(.owner.id)/\(.name)@\(.id)"'`.
 - **Implemented in:** `infra/modules/control.bicep`, `scripts/deploy.sh`, the `acr` jobs in `.github/workflows/`
 
 ## ADR-018: The Ops Service is the only path from the control plane into the twin
