@@ -3,8 +3,8 @@
 > Purpose: if a session ends (usage limit, closed laptop), the next Claude session reads THIS file and continues
 > exactly where we stopped. Keep it accurate. Update after every step and PR, and before ending any session.
 
-**Last updated:** 2026-11-06 (WS2 G2: lab sections 5-13 done; section 14 hand-offs drafted for the owner to post;
-the deny policy is OFF since `policy-off` on 2026-11-06; next is the section 15 gate check)
+**Last updated:** 2026-11-06 (WS2 G2: gate check compiled, 11 of 13 items met; open: the lead's section 10 decision
+and confirming the section 14 hand-offs were posted; the deny policy is OFF since `policy-off` on 2026-11-06)
 **Current gate target:** G2 (Mon Nov 9; moved from Nov 2)
 
 ## FIRST THING THE NEXT SESSION SHOULD DO
@@ -219,9 +219,16 @@ Status values: not started | in progress | PR open | merged | blocked
     add: the policy is off now, the `trace_url` format and the evidence-check table (WS5), `deploy_revision` timings
     (WS4), and the section 10 decision and admin items (lead). All four GHCR packages are public (checked by an
     anonymous pull), and the `acr-push` environment is set up, so the lead's two admin-only items are done.
-  - Next, in order: merge this status PR; the owner posts the section 14 messages; the lead decides on section 10;
-    then the section 15 gate check. Turn the deny policy back on (`scripts/deploy.sh policy`) before the next
-    drill rehearsal.
+  - Section 15 gate check, 2026-11-06: compiled at the top of the WS2 Mac's git-ignored
+    `docs/reference/g2-evidence.md`, one drill ID or output line per item (ADR-004). 11 of 13 met. The live items
+    were re-checked read-only: `ca-ops` internal with one replica, the three keys in the control vault,
+    `job-referee`'s SQL password from the control vault, and all 13 platform outputs set. Open:
+    - the lead's section 10 decision (proposal: the Referee stays live in both formats; the 7-minute run uses WS5's
+      labelled replay for the deploy segment)
+    - confirmation that the section 14 messages were posted, and WS4's approval of `contracts/ops-actions.md`
+  - Next, in order: the owner posts the section 14 messages and gets the lead's OK, then ticks the last two gate
+    items. Before the gate review (Mon Nov 9), if the refusal must be shown live: `scripts/deploy.sh policy`, then
+    `scripts/deploy.sh smoke policy`. Run `scripts/deploy.sh policy-off` again before that lab ends.
   - Follow-up from the teardown rehearsal: a second environment's teardown has to remove its `id-lf-ops`'s
     subscription-scope role by hand (`policy-off` would also remove the shared deny policy), and an `azd down` that
     fails partway leaves the vaults it deleted unpurged. Both are written up in `docs/rebuild-timing.md`; a script
@@ -316,6 +323,8 @@ Status values: not started | in progress | PR open | merged | blocked
 See `docs/ADR.md` (latest: ADR-019).
 
 ## Session log (newest first)
+- 2026-11-06: WS2 G2 section 15: gate check compiled in the local evidence note, 11 of 13 met; open are the lead's
+  section 10 decision and confirming the hand-offs were posted. PR #29 merged.
 - 2026-11-06: WS2 G2 section 14: hand-off messages drafted for WS1, WS3, WS4, WS5 and the lead; `policy-off` run by
   the owner after section 13 (deny policy now off); PR #28 merged.
 - 2026-11-06: WS2 G2 lab section 13: timed rebuild in `lf-rb` (10.4 minutes, `smoke all` passed), teardown completed
