@@ -3,8 +3,8 @@
 > Purpose: if a session ends (usage limit, closed laptop), the next Claude session reads THIS file and continues
 > exactly where we stopped. Keep it accurate. Update after every step and PR, and before ending any session.
 
-**Last updated:** 2026-11-06 (WS2 G2: gate check compiled, 11 of 13 items met; open: the lead's section 10 decision
-and confirming the section 14 hand-offs were posted; the deny policy is OFF since `policy-off` on 2026-11-06)
+**Last updated:** 2026-11-06 (WS2 G2: all 13 gate items met; the lead agreed the section 10 decision and the
+section 14 hand-offs are posted; the deny policy is OFF since `policy-off` on 2026-11-06)
 **Current gate target:** G2 (Mon Nov 9; moved from Nov 2)
 
 ## FIRST THING THE NEXT SESSION SHOULD DO
@@ -168,7 +168,7 @@ Status values: not started | in progress | PR open | merged | blocked
   - Section 10: the timing table is in the local evidence note. The Referee job's `after-restore` run has a
     median of 29.4 s (budget 45 s), so it stays on the live path for both formats. The night's first Referee run
     took 62 s (cold start): for the 7-minute run, start a baseline in the 2 minutes before the clock.
-    `deploy_revision` is timed in section 11. Decision with the lead pending.
+    `deploy_revision` is timed in section 11. The lead agreed on 2026-11-06 (see the addendum below).
   - Section 11 done 2026-11-05 21:41-21:59 UTC:
     - Step 1: the five `acr-push` variables were set by hand in the GitHub UI and match `lf-eh`. **The branch
       restriction (`main`, `candidate/*`) is not saved yet** (`deployment_branch_policy` is `null`). Until a repo
@@ -196,7 +196,8 @@ Status values: not started | in progress | PR open | merged | blocked
       repeating step 3, set the tag again (as above) or run `deploy.sh apps`.
   - Section 10 addendum: `deploy_revision` (92 s and 115 s) plus `after-fix` (30 s) is well over the 7-minute
     run's 40 s budget, so per the guide that segment uses WS5's labelled replay in the 7-minute run; the
-    walkthrough is unchanged. Decision with the lead pending.
+    walkthrough is unchanged. The lead agreed to this, and to the Referee staying live in both formats, in the team
+    channel on 2026-11-06.
   - Follow-up from the lab: `deploy.sh smoke` stops on the first failed `az containerapp job execution show`
     (`set -e`), even when the job is still running fine. It could retry a failed status call a few times.
   - Lab section 12 done 2026-11-06 01:08-01:19 UTC:
@@ -215,20 +216,21 @@ Status values: not started | in progress | PR open | merged | blocked
       subscription-scope role assignment (orphaned). The deny policy stayed, as designed.
     - Back on `lf-eh` (the default azd environment), which was not touched: `ca-order` and `ca-ops` running.
   - Section 14, 2026-11-06: one final hand-off message each for WS1, WS3, WS4, WS5 and the lead, drafted from
-    `lf-eh`'s current values; the owner posts them in the team channel. They repeat the section 5 and 7 posts and
+    `lf-eh`'s current values; the owner posted them in the team channel the same day. They repeat the section 5 and 7 posts and
     add: the policy is off now, the `trace_url` format and the evidence-check table (WS5), `deploy_revision` timings
     (WS4), and the section 10 decision and admin items (lead). All four GHCR packages are public (checked by an
     anonymous pull), and the `acr-push` environment is set up, so the lead's two admin-only items are done.
   - Section 15 gate check, 2026-11-06: compiled at the top of the WS2 Mac's git-ignored
-    `docs/reference/g2-evidence.md`, one drill ID or output line per item (ADR-004). 11 of 13 met. The live items
-    were re-checked read-only: `ca-ops` internal with one replica, the three keys in the control vault,
-    `job-referee`'s SQL password from the control vault, and all 13 platform outputs set. Open:
-    - the lead's section 10 decision (proposal: the Referee stays live in both formats; the 7-minute run uses WS5's
-      labelled replay for the deploy segment)
-    - confirmation that the section 14 messages were posted, and WS4's approval of `contracts/ops-actions.md`
-  - Next, in order: the owner posts the section 14 messages and gets the lead's OK, then ticks the last two gate
-    items. Before the gate review (Mon Nov 9), if the refusal must be shown live: `scripts/deploy.sh policy`, then
-    `scripts/deploy.sh smoke policy`. Run `scripts/deploy.sh policy-off` again before that lab ends.
+    `docs/reference/g2-evidence.md`, one drill ID or output line per item (ADR-004). The live items were re-checked
+    read-only: `ca-ops` internal with one replica, the three keys in the control vault, `job-referee`'s SQL
+    password from the control vault, and all 13 platform outputs set. 11 of 13 were met at first; the last two
+    were met the same afternoon, when the lead agreed the section 10 decision and the owner posted the section 14
+    messages. **All 13 met; WS2 is ready for the G2 gate review.**
+  - Still awaited, not a gate item: WS4's approval of `contracts/ops-actions.md` and its `CONTRACT_VERSION` bump
+    (asked for in the section 14 message). If WS4 asks for changes, the contract file and `ca-ops` change together.
+  - Before the gate review (Mon Nov 9), only if the refusal must be shown live: `scripts/deploy.sh policy` (allow
+    up to 30 minutes), then `scripts/deploy.sh smoke policy`. Run `scripts/deploy.sh policy-off` again before that
+    lab ends.
   - Follow-up from the teardown rehearsal: a second environment's teardown has to remove its `id-lf-ops`'s
     subscription-scope role by hand (`policy-off` would also remove the shared deny policy), and an `azd down` that
     fails partway leaves the vaults it deleted unpurged. Both are written up in `docs/rebuild-timing.md`; a script
@@ -323,6 +325,8 @@ Status values: not started | in progress | PR open | merged | blocked
 See `docs/ADR.md` (latest: ADR-019).
 
 ## Session log (newest first)
+- 2026-11-06: WS2 G2 gate: all 13 items met. The lead agreed the section 10 decision and the section 14 hand-offs
+  were posted; WS4's contract approval is still awaited (not a gate item). PR #30 merged.
 - 2026-11-06: WS2 G2 section 15: gate check compiled in the local evidence note, 11 of 13 met; open are the lead's
   section 10 decision and confirming the hand-offs were posted. PR #29 merged.
 - 2026-11-06: WS2 G2 section 14: hand-off messages drafted for WS1, WS3, WS4, WS5 and the lead; `policy-off` run by
