@@ -46,8 +46,11 @@ def main(argv: list[str]) -> int:
                 removed += 1
             if getattr(b, "has_legal_hold", False):
                 client.set_legal_hold(False, version_id=b.version_id)
-            client.delete_blob(version_id=b.version_id)
-            deleted += 1
+            if b.is_current_version:
+                client.delete_blob()  # Azure refuses a current version by id (OperationNotAllowedOnRootBlob)
+            else:
+                client.delete_blob(version_id=b.version_id)
+                deleted += 1
         except ResourceNotFoundError:
             continue
         except HttpResponseError as exc:
