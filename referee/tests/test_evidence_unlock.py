@@ -37,10 +37,15 @@ class FakeContainer:
     """A versioned container with version-level immutability. A current version can't be deleted by its id
     (403 OperationNotAllowedOnRootBlob); deleting the blob itself keeps the current version as a previous one."""
 
-    def __init__(self, blobs):
-        self.blobs = blobs  # name -> [Version]
+    def __init__(self, blobs, gone=False):
+        self.blobs, self.gone = blobs, gone  # name -> [Version]; gone: the container was already deleted
+
+    def exists(self):
+        return not self.gone
 
     def list_blobs(self, include=None):
+        if self.gone:
+            raise FakeNotFound("ContainerNotFound")
         return [types.SimpleNamespace(name=name, version_id=v.version_id, is_current_version=v.current,
                                       immutability_policy=types.SimpleNamespace(
                                           expiry_time="2026-11-07T00:00:00Z" if v.policy else None),
@@ -107,7 +112,10 @@ def run_unlock(monkeypatch, capsys):
                              "azure.storage": types.ModuleType("azure.storage"), "azure.storage.blob": blob}.items():
             monkeypatch.setitem(sys.modules, name, module)
 
+        calls = []
+
         def fake_run(cmd, **_kwargs):  # azd env get-values, then az: the container's default policy is already gone
+            calls.append(cmd)
             out = json.dumps(VALUES) if cmd[0] == "azd" else ""
             return subprocess.CompletedProcess(cmd, 0, stdout=out, stderr="")
         monkeypatch.setattr(subprocess, "run", fake_run)
@@ -117,7 +125,7 @@ def run_unlock(monkeypatch, capsys):
             code = 0
         except SystemExit as stop:
             code = stop.code
-        return types.SimpleNamespace(code=code, out=capsys.readouterr().out)
+        return types.SimpleNamespace(code=code, out=capsys.readouterr().out, calls=calls)
     return run
 
 
@@ -139,6 +147,13 @@ def test_it_empties_the_container_including_current_versions(run_unlock):
     assert "version policies removed: 3, versions deleted: 3, versions left: 0, failures: 0" in result.out
 
 
+def test_an_empty_container_is_deleted_so_azd_down_can_delete_the_account(run_unlock):
+    result = run_unlock(FakeContainer({"d/events.jsonl": [Version("v1", current=True)]}), "--yes")
+    assert result.code == 0, result.out
+    assert ["az", "storage", "container-rm", "delete", "--storage-account", "stlfevtest", "-g", "rg-lf-control-test",
+            "-n", "evidence", "--yes", "-o", "none"] in result.calls
+
+
 def test_a_legal_hold_is_released_before_the_delete(run_unlock):
     container = FakeContainer({"d/events.jsonl": [Version("v1", current=True, policy=False, hold=True)]})
     result = run_unlock(container, "--yes")
@@ -146,11 +161,19 @@ def test_a_legal_hold_is_released_before_the_delete(run_unlock):
     assert container.versions_left() == 0
 
 
+def test_a_rerun_after_the_container_is_gone_exits_zero(run_unlock):
+    result = run_unlock(FakeContainer({}, gone=True), "--yes")
+    assert result.code == 0, result.out
+    assert "already gone" in result.out
+    assert not [c for c in result.calls if "container-rm" in c]
+
+
 def test_versions_still_there_at_the_end_exit_one(run_unlock):
     container = FakeContainer({"d/events.jsonl": [Version("v1", current=True, busy=True)]})
     result = run_unlock(container, "--yes")
     assert result.code == 1
     assert "versions left: 1" in result.out
+    assert not [c for c in result.calls if "container-rm" in c]
 
 
 def test_a_version_it_cannot_unlock_is_reported_and_exits_one(run_unlock):
