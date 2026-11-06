@@ -183,7 +183,7 @@ resource evidence 'Microsoft.Storage/storageAccounts/blobServices/containers@202
 }
 
 // Unlocked on purpose: still enforced for overwrites and deletes, but removable, so azd down works after
-// scripts/evidence-unlock.sh. Locking it is a production step.
+// scripts/evidence_unlock.py. Locking it is a production step.
 resource evidencePolicy 'Microsoft.Storage/storageAccounts/blobServices/containers/immutabilityPolicies@2023-05-01' = {
   parent: evidence
   name: 'default'
@@ -193,7 +193,7 @@ resource evidencePolicy 'Microsoft.Storage/storageAccounts/blobServices/containe
   }
 }
 
-// The lab owner checks the store and, before teardown, removes the unlocked policies (scripts/evidence-unlock.sh)
+// The lab owner checks the store and, before teardown, removes the unlocked policies (scripts/evidence_unlock.py)
 resource deployerEvidence 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
   name: guid(evidence.id, principalId, roles.blobDataOwner)
   scope: evidence

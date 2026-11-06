@@ -12,10 +12,6 @@ SCRIPT = Path(__file__).resolve().parents[2] / "scripts" / "evidence_unlock.py"
 VALUES = {"EVIDENCE_BLOB_URL": "https://stlfevtest.blob.core.windows.net/evidence", "CONTROL_RG": "rg-lf-control-test"}
 
 
-class FakeNotFound(Exception):
-    """Stands in for azure.core.exceptions.ResourceNotFoundError."""
-
-
 class FakeHttpError(Exception):
     """Stands in for azure.core.exceptions.HttpResponseError."""
 
@@ -24,9 +20,17 @@ class FakeHttpError(Exception):
         self.status_code, self.error_code = status_code, error_code
 
 
+class FakeNotFound(FakeHttpError):
+    """Stands in for azure.core.exceptions.ResourceNotFoundError, a kind of HttpResponseError as in azure-core."""
+
+    def __init__(self, what):
+        super().__init__(404, "BlobNotFound")
+
+
 class Version:
-    def __init__(self, version_id, current, policy=True, locked=False):
+    def __init__(self, version_id, current, policy=True, locked=False, hold=False, busy=False):
         self.version_id, self.current, self.policy, self.locked = version_id, current, policy, locked
+        self.hold, self.busy = hold, busy  # busy: every delete by id answers 503
 
 
 class FakeContainer:
@@ -40,7 +44,7 @@ class FakeContainer:
         return [types.SimpleNamespace(name=name, version_id=v.version_id, is_current_version=v.current,
                                       immutability_policy=types.SimpleNamespace(
                                           expiry_time="2026-11-07T00:00:00Z" if v.policy else None),
-                                      has_legal_hold=False)
+                                      has_legal_hold=v.hold)
                 for name, versions in self.blobs.items() for v in list(versions)]
 
     def get_blob_client(self, name):
@@ -67,7 +71,7 @@ class FakeBlob:
         v.policy = False
 
     def set_legal_hold(self, hold, version_id):
-        pass
+        self._version(version_id).hold = hold
 
     def delete_blob(self, version_id=None):
         versions = self.container.blobs.get(self.name, [])
@@ -75,15 +79,17 @@ class FakeBlob:
             current = next((v for v in versions if v.current), None)
             if current is None:
                 raise FakeNotFound(self.name)
-            if current.policy:
+            if current.policy or current.hold:
                 raise FakeHttpError(409, "BlobImmutableDueToPolicy")
             current.current = False
             return
         v = self._version(version_id)
         if v.current:
             raise FakeHttpError(403, "OperationNotAllowedOnRootBlob")
-        if v.policy:
+        if v.policy or v.hold:
             raise FakeHttpError(409, "BlobImmutableDueToPolicy")
+        if v.busy:
+            raise FakeHttpError(503, "ServerBusy")
         versions.remove(v)
 
 
@@ -130,7 +136,21 @@ def test_it_empties_the_container_including_current_versions(run_unlock):
     result = run_unlock(container, "--yes")
     assert result.code == 0, result.out
     assert container.versions_left() == 0
-    assert "failures: 0" in result.out
+    assert "version policies removed: 3, versions deleted: 3, versions left: 0, failures: 0" in result.out
+
+
+def test_a_legal_hold_is_released_before_the_delete(run_unlock):
+    container = FakeContainer({"d/events.jsonl": [Version("v1", current=True, policy=False, hold=True)]})
+    result = run_unlock(container, "--yes")
+    assert result.code == 0, result.out
+    assert container.versions_left() == 0
+
+
+def test_versions_still_there_at_the_end_exit_one(run_unlock):
+    container = FakeContainer({"d/events.jsonl": [Version("v1", current=True, busy=True)]})
+    result = run_unlock(container, "--yes")
+    assert result.code == 1
+    assert "versions left: 1" in result.out
 
 
 def test_a_version_it_cannot_unlock_is_reported_and_exits_one(run_unlock):

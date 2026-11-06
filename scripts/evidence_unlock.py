@@ -63,8 +63,11 @@ def main(argv: list[str]) -> int:
             deleted += 1
         except (ResourceNotFoundError, HttpResponseError):
             pass
-    print(f"version policies removed: {removed}, versions deleted: {deleted}, failures: {failed}")
-    return 1 if failed else 0
+    # that pass ignores its errors, so whatever is still listed is what azd down would trip over
+    left = sum(1 for _ in container.list_blobs(include=["versions"]))
+    print(f"version policies removed: {removed}, versions deleted: {deleted}, versions left: {left}, "
+          f"failures: {failed}")
+    return 1 if failed or left else 0
 
 
 if __name__ == "__main__":
