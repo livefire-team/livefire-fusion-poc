@@ -11,8 +11,8 @@ param principalType string = 'User'
 @description('Control Key Vault name, computed in main.bicep so other modules can reference it with existing')
 param keyVaultName string
 
-@description('owner/name of each GitHub repo whose acr-push environment may push images (OIDC, no secrets)')
-param githubRepos array = ['livefire-team/livefire-fusion-poc']
+@description('Each GitHub repo whose acr-push environment may push images (OIDC, no secrets), as it appears in the token subject: owner@ownerId/name@repoId for repos on immutable subjects, otherwise owner/name')
+param githubRepos array = ['livefire-team@349630330/livefire-fusion-poc@1437908536']
 
 @description('Days each evidence blob version stays immutable. Kept short and unlocked so the lab can be torn down')
 @minValue(1)
@@ -48,11 +48,12 @@ resource ciId 'Microsoft.ManagedIdentity/userAssignedIdentities@2023-01-31' = {
 }
 
 // GitHub Actions jobs in the acr-push environment sign in as id-lf-ci. Azure allows one write at a time here.
+// The name drops the @ids, so it stays the same whichever subject format a repo uses.
 @batchSize(1)
 resource ciFederation 'Microsoft.ManagedIdentity/userAssignedIdentities/federatedIdentityCredentials@2023-01-31' = [
   for repo in githubRepos: {
     parent: ciId
-    name: 'gh-${replace(replace(repo, '/', '-'), '.', '-')}'
+    name: 'gh-${replace(join(map(split(repo, '/'), part => first(split(part, '@'))), '-'), '.', '-')}'
     properties: {
       issuer: 'https://token.actions.githubusercontent.com'
       subject: 'repo:${repo}:environment:acr-push'

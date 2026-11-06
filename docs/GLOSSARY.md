@@ -85,6 +85,7 @@ One-sentence definitions of terms used in this project, added the first time eac
 | Symlink (symbolic link) | A file that just points to another file or folder, like a shortcut; Homebrew's `opt/openssl` is one. |
 | TestClient | FastAPI's in-process test browser: it calls the app's endpoints without starting a server. |
 | Token | A long secret string proving to a service that it is you; never pasted into chat or files. |
+| Token subject (OIDC `sub`) | The line in GitHub's sign-in token that says which repo and environment the job runs in. Azure accepts the token only if it exactly matches a federated credential's subject. With GitHub's *immutable subject* format it also carries the org's and repo's permanent numeric IDs (`repo:livefire-team@349630330/livefire-fusion-poc@1437908536:environment:acr-push`). |
 | Trivy | A scanner for known vulnerabilities and misconfigurations in files, Dockerfiles and container images. |
 | TTL / refresh window | How long a cached value is trusted before it is fetched again; for the DB password it is `SECRET_REFRESH_SECONDS`. |
 | UAC prompt | The Windows "Allow this app to make changes?" dialog; only you click it. |

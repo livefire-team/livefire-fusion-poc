@@ -42,7 +42,7 @@
       "value": "${EVIDENCE_RETENTION_DAYS=1}"
     },
     "githubRepos": {
-      "value": "${GITHUB_REPOS=livefire-team/livefire-fusion-poc}"
+      "value": "${GITHUB_REPOS=livefire-team@349630330/livefire-fusion-poc@1437908536}"
     }
   }
 }
