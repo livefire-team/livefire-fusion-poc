@@ -3,8 +3,8 @@
 > Purpose: if a session ends (usage limit, closed laptop), the next Claude session reads THIS file and continues
 > exactly where we stopped. Keep it accurate. Update after every step and PR, and before ending any session.
 
-**Last updated:** 2026-11-06 (WS2 G2: lab sections 5-13 done; timed rebuild of a second environment 10.4 minutes and
-a completed teardown (`docs/rebuild-timing.md`); PR #28 fixes `evidence_unlock.py`; next are sections 14-15)
+**Last updated:** 2026-11-06 (WS2 G2: lab sections 5-13 done; section 14 hand-offs drafted for the owner to post;
+the deny policy is OFF since `policy-off` on 2026-11-06; next is the section 15 gate check)
 **Current gate target:** G2 (Mon Nov 9; moved from Nov 2)
 
 ## FIRST THING THE NEXT SESSION SHOULD DO
@@ -146,9 +146,11 @@ Status values: not started | in progress | PR open | merged | blocked
     - `deploy.sh smoke policy`: SMOKE PASSED. `id-lf-ops`, through the Ops Service with a signed grant: denied
       `RequestDisallowedByPolicy`, `refused_by: Azure Policy`; the same grant again and a forged grant: 422.
       Recorded in ADR-019's "Implemented in".
-    - **The deny policy is ON for the whole lab subscription.** Nobody can create Owner, Contributor or User
-      Access Administrator assignments until `scripts/deploy.sh policy-off` runs. Run it before the lab ends or
-      before any teardown.
+    - The deny policy was ON from 2026-11-05 02:11 UTC until `scripts/deploy.sh policy-off` on 2026-11-06 (after
+      section 13): the assignment and `id-lf-ops`'s broad-attempt role are gone, and `DENY_BROAD_POLICY` and
+      `BROAD_ATTEMPT_ROLE` are `off`. **Now OFF.** `scripts/deploy.sh policy` turns it back on (allow up to 30
+      minutes). Until then `job-ops-smoke` still expects `RequestDisallowedByPolicy`: run `scripts/deploy.sh apps`
+      first if a smoke test must run with the policy off.
   - Lab notes:
     - Activate `.venv` before every `deploy.sh` or `azd` command: the postprovision hook runs `referee.sh`,
       which needs `python` and `pytest` (without them the baseline is INCONCLUSIVE and the hook fails).
@@ -212,9 +214,14 @@ Status values: not started | in progress | PR open | merged | blocked
     - Cleaned by hand afterwards: `lf-rb`'s control vault (soft-deleted, not purged) and its `id-lf-ops`'s
       subscription-scope role assignment (orphaned). The deny policy stayed, as designed.
     - Back on `lf-eh` (the default azd environment), which was not touched: `ca-order` and `ca-ops` running.
-  - Next, in order: merge PR #28 (`evidence_unlock.py`) and this status PR; the lead decides on section 10; tell
-    WS5 the `trace_url` format and send the evidence-check table. Then sections 14 (hand-offs) and 15 (gate check).
-    Run `scripts/deploy.sh policy-off` before the lab ends.
+  - Section 14, 2026-11-06: one final hand-off message each for WS1, WS3, WS4, WS5 and the lead, drafted from
+    `lf-eh`'s current values; the owner posts them in the team channel. They repeat the section 5 and 7 posts and
+    add: the policy is off now, the `trace_url` format and the evidence-check table (WS5), `deploy_revision` timings
+    (WS4), and the section 10 decision and admin items (lead). All four GHCR packages are public (checked by an
+    anonymous pull), and the `acr-push` environment is set up, so the lead's two admin-only items are done.
+  - Next, in order: merge this status PR; the owner posts the section 14 messages; the lead decides on section 10;
+    then the section 15 gate check. Turn the deny policy back on (`scripts/deploy.sh policy`) before the next
+    drill rehearsal.
   - Follow-up from the teardown rehearsal: a second environment's teardown has to remove its `id-lf-ops`'s
     subscription-scope role by hand (`policy-off` would also remove the shared deny policy), and an `azd down` that
     fails partway leaves the vaults it deleted unpurged. Both are written up in `docs/rebuild-timing.md`; a script
@@ -309,6 +316,8 @@ Status values: not started | in progress | PR open | merged | blocked
 See `docs/ADR.md` (latest: ADR-019).
 
 ## Session log (newest first)
+- 2026-11-06: WS2 G2 section 14: hand-off messages drafted for WS1, WS3, WS4, WS5 and the lead; `policy-off` run by
+  the owner after section 13 (deny policy now off); PR #28 merged.
 - 2026-11-06: WS2 G2 lab section 13: timed rebuild in `lf-rb` (10.4 minutes, `smoke all` passed), teardown completed
   after a failed first `azd down`; `evidence_unlock.py` fixed in PR #28; `docs/rebuild-timing.md` added.
 - 2026-11-06: WS2 G2 lab section 12: PR #26 merged; 10 baselines in a row passed through the Referee job (median
