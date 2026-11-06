@@ -3,8 +3,8 @@
 > Purpose: if a session ends (usage limit, closed laptop), the next Claude session reads THIS file and continues
 > exactly where we stopped. Keep it accurate. Update after every step and PR, and before ending any session.
 
-**Last updated:** 2026-11-06 (WS2 G2: lab sections 5-12 done on `lf-eh`; PR #26 merged; 10 baselines in a row passed
-both through the Referee job and from the laptop; next is 13)
+**Last updated:** 2026-11-06 (WS2 G2: lab sections 5-13 done; timed rebuild of a second environment 10.4 minutes and
+a completed teardown (`docs/rebuild-timing.md`); PR #28 fixes `evidence_unlock.py`; next are sections 14-15)
 **Current gate target:** G2 (Mon Nov 9; moved from Nov 2)
 
 ## FIRST THING THE NEXT SESSION SHOULD DO
@@ -202,9 +202,23 @@ Status values: not started | in progress | PR open | merged | blocked
       all PASS (min 29.2 s, median 30.1 s, max 33.6 s). No slow first run this time.
     - Step 2 (optional G1 laptop form): 10 `referee.sh baseline` runs in a row from the Mac, all PASS, 5-10 s
       each. The job form takes longer because each run also starts a job execution and its container.
-  - Next, in order: the lead decides on section 10; tell WS5 the `trace_url` format and send the evidence-check
-    table. Then section 13 (timed rebuild in a throwaway environment, at least 90 minutes of lab). PR #26 is
-    merged, so a provision from `main` keeps the CI's federated credential.
+  - Lab section 13 done 2026-11-06 11:14-12:16 UTC in the throwaway environment `lf-rb` (details in
+    `docs/rebuild-timing.md`):
+    - `time scripts/deploy.sh all`: 10 min 23 s on the first try (target under 30); `smoke all` then passed on the
+      first try.
+    - Teardown completed, but the first `azd down` failed on the evidence storage account. `evidence_unlock.py`
+      could not delete current blob versions, and an empty container with version-level immutability still blocks
+      deleting the account. PR #28 fixes both; the fixed script emptied the container in the lab.
+    - Cleaned by hand afterwards: `lf-rb`'s control vault (soft-deleted, not purged) and its `id-lf-ops`'s
+      subscription-scope role assignment (orphaned). The deny policy stayed, as designed.
+    - Back on `lf-eh` (the default azd environment), which was not touched: `ca-order` and `ca-ops` running.
+  - Next, in order: merge PR #28 (`evidence_unlock.py`) and this status PR; the lead decides on section 10; tell
+    WS5 the `trace_url` format and send the evidence-check table. Then sections 14 (hand-offs) and 15 (gate check).
+    Run `scripts/deploy.sh policy-off` before the lab ends.
+  - Follow-up from the teardown rehearsal: a second environment's teardown has to remove its `id-lf-ops`'s
+    subscription-scope role by hand (`policy-off` would also remove the shared deny policy), and an `azd down` that
+    fails partway leaves the vaults it deleted unpurged. Both are written up in `docs/rebuild-timing.md`; a script
+    could do them.
   - Follow-up from the lab: `scripts/evidence_check.py` never deletes the event log itself, and its version
     delete of the event log is refused for being the current version (`OperationNotAllowedOnRootBlob`), not by
     the policy. Add a "delete the event log" step that must be refused by the policy, with a test.
@@ -214,8 +228,11 @@ Status values: not started | in progress | PR open | merged | blocked
     `ORDER_IMAGE` is a registry `sha-<40>` tag; the control vault name is fixed, so reprovisioning after `azd down`
     needs `--purge`. Not done on purpose: a `predown` hook that runs `policy-off`, because the policy is
     subscription-wide and a teardown of a second environment would remove it for `lf-eh` too.
-- Last commands run (WS2 Mac, with `.venv` active): `for i in $(seq 10); do export DRILL_ID="$(./scripts/new-drill.sh)";
-  ./scripts/referee.sh baseline || break; done`; before that `scripts/deploy.sh smoke baselines`; before that
+- Last commands run (WS2 Mac, with `.venv` active): `azd env select lf-eh && rm -rf .azure/lf-rb`; before that
+  `azd down -e lf-rb --force --purge` (twice), `python scripts/evidence_unlock.py --yes`, `scripts/deploy.sh smoke
+  all` and `time scripts/deploy.sh all` in `lf-rb` (section 13); before that
+  `for i in $(seq 10); do export DRILL_ID="$(./scripts/new-drill.sh)"; ./scripts/referee.sh baseline || break; done`;
+  before that `scripts/deploy.sh smoke baselines`; before that
   `scripts/deploy.sh smoke drill --candidate "$(azd env get-value ORDER_IMAGE)"`; before that
   `gh run rerun 41860883124 --failed`; before that `for i in 1 2 3; do
   scripts/deploy.sh smoke all || break; done`; before that `scripts/deploy.sh smoke policy`; before that
@@ -292,6 +309,8 @@ Status values: not started | in progress | PR open | merged | blocked
 See `docs/ADR.md` (latest: ADR-019).
 
 ## Session log (newest first)
+- 2026-11-06: WS2 G2 lab section 13: timed rebuild in `lf-rb` (10.4 minutes, `smoke all` passed), teardown completed
+  after a failed first `azd down`; `evidence_unlock.py` fixed in PR #28; `docs/rebuild-timing.md` added.
 - 2026-11-06: WS2 G2 lab section 12: PR #26 merged; 10 baselines in a row passed through the Referee job (median
   30.1 s) and 10 from the laptop.
 - 2026-11-05: WS2 G2 lab section 11 run again: branch restriction saved; OIDC push from `main` (no rebuild); twin put

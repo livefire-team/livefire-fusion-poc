@@ -59,6 +59,7 @@ One-sentence definitions of terms used in this project, added the first time eac
 | OpenTelemetry | An open standard and library for traces, metrics and logs; `azure-monitor-opentelemetry` sends ours to Application Insights. |
 | Ops Service | WS2's FastAPI service (`ca-ops`, `src/ops-service/`) that performs every drill action on the twin for the other workstreams, so they hold no Azure rights themselves. |
 | Organisation (GitHub org) | A shared GitHub account that several people can own; ours is `livefire-team`. |
+| Orphaned role assignment | A role assignment whose identity has been deleted; it grants nothing but stays listed ("Identity not found") until removed, and `azd down` never removes subscription-level ones. |
 | PATH | The list of folders Windows searches when you type a command like `git`; programs started before an install keep the old list. |
 | pip-audit | A tool that checks our pinned Python packages against databases of known vulnerabilities. |
 | Playwright | A tool that drives a real browser from code; `journeys/test_order_journey.py` uses it to place an order like a customer. |
@@ -77,12 +78,14 @@ One-sentence definitions of terms used in this project, added the first time eac
 | ShellCheck | A checker that finds mistakes in shell scripts; run as `(cd scripts && shellcheck -x ./*.sh)`. |
 | Signed grant | A short-lived, single-use permission slip (`lfg1....`) signed with HMAC that the agent key must present for a recovery action. |
 | Smoke test | A quick check that something basically works, like starting the container and calling `/health`, before deeper testing or publishing. |
+| Soft delete / purge (Key Vault) | A deleted vault is kept for a few days (soft delete) and its name stays taken; purging removes it for good, which `azd down --purge` does for the vaults it deletes. |
 | Span | One timed step inside a trace (like `place_order`), which can carry attributes such as `drill_id`. |
 | sqlcmd | Microsoft's command-line tool for running SQL against SQL Server; we run it inside the SQL container. |
 | Squash merge | Merging a PR as one combined commit; forbidden here because it rewrites commit history (ADR-003). |
 | Stacked PR | A PR whose branch starts from another open PR's branch; it shows both PRs' commits until the first one merges. |
 | Stand-in | A simple local replacement for a real service, used so the app can run without it; our local stand-in for Key Vault is the file `.local/secret.txt` (ADR-012). |
 | Symlink (symbolic link) | A file that just points to another file or folder, like a shortcut; Homebrew's `opt/openssl` is one. |
+| Teardown | Deleting a whole environment's Azure resources (`azd down`), rehearsed in a throwaway environment so the shared one is untouched. |
 | TestClient | FastAPI's in-process test browser: it calls the app's endpoints without starting a server. |
 | Token | A long secret string proving to a service that it is you; never pasted into chat or files. |
 | Token subject (OIDC `sub`) | The line in GitHub's sign-in token that says which repo and environment the job runs in. Azure accepts the token only if it exactly matches a federated credential's subject. With GitHub's *immutable subject* format it also carries the org's and repo's permanent numeric IDs (`repo:livefire-team@349630330/livefire-fusion-poc@1437908536:environment:acr-push`). |
