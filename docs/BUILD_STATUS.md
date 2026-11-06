@@ -3,8 +3,8 @@
 > Purpose: if a session ends (usage limit, closed laptop), the next Claude session reads THIS file and continues
 > exactly where we stopped. Keep it accurate. Update after every step and PR, and before ending any session.
 
-**Last updated:** 2026-11-06 (WS2 G2: lab sections 5-12 done on `lf-eh`; PR #26 merged; 10 baselines in a row passed
-both through the Referee job and from the laptop; next is 13)
+**Last updated:** 2026-11-06 (WS2 G2: lab sections 5-13 done; section 14 hand-offs drafted for the owner to post;
+the deny policy is OFF since `policy-off` on 2026-11-06; next is the section 15 gate check)
 **Current gate target:** G2 (Mon Nov 9; moved from Nov 2)
 
 ## FIRST THING THE NEXT SESSION SHOULD DO
@@ -146,9 +146,11 @@ Status values: not started | in progress | PR open | merged | blocked
     - `deploy.sh smoke policy`: SMOKE PASSED. `id-lf-ops`, through the Ops Service with a signed grant: denied
       `RequestDisallowedByPolicy`, `refused_by: Azure Policy`; the same grant again and a forged grant: 422.
       Recorded in ADR-019's "Implemented in".
-    - **The deny policy is ON for the whole lab subscription.** Nobody can create Owner, Contributor or User
-      Access Administrator assignments until `scripts/deploy.sh policy-off` runs. Run it before the lab ends or
-      before any teardown.
+    - The deny policy was ON from 2026-11-05 02:11 UTC until `scripts/deploy.sh policy-off` on 2026-11-06 (after
+      section 13): the assignment and `id-lf-ops`'s broad-attempt role are gone, and `DENY_BROAD_POLICY` and
+      `BROAD_ATTEMPT_ROLE` are `off`. **Now OFF.** `scripts/deploy.sh policy` turns it back on (allow up to 30
+      minutes). Until then `job-ops-smoke` still expects `RequestDisallowedByPolicy`: run `scripts/deploy.sh apps`
+      first if a smoke test must run with the policy off.
   - Lab notes:
     - Activate `.venv` before every `deploy.sh` or `azd` command: the postprovision hook runs `referee.sh`,
       which needs `python` and `pytest` (without them the baseline is INCONCLUSIVE and the hook fails).
@@ -202,9 +204,28 @@ Status values: not started | in progress | PR open | merged | blocked
       all PASS (min 29.2 s, median 30.1 s, max 33.6 s). No slow first run this time.
     - Step 2 (optional G1 laptop form): 10 `referee.sh baseline` runs in a row from the Mac, all PASS, 5-10 s
       each. The job form takes longer because each run also starts a job execution and its container.
-  - Next, in order: the lead decides on section 10; tell WS5 the `trace_url` format and send the evidence-check
-    table. Then section 13 (timed rebuild in a throwaway environment, at least 90 minutes of lab). PR #26 is
-    merged, so a provision from `main` keeps the CI's federated credential.
+  - Lab section 13 done 2026-11-06 11:14-12:16 UTC in the throwaway environment `lf-rb` (details in
+    `docs/rebuild-timing.md`):
+    - `time scripts/deploy.sh all`: 10 min 23 s on the first try (target under 30); `smoke all` then passed on the
+      first try.
+    - Teardown completed, but the first `azd down` failed on the evidence storage account. `evidence_unlock.py`
+      could not delete current blob versions, and an empty container with version-level immutability still blocks
+      deleting the account. PR #28 fixes both; the fixed script emptied the container in the lab.
+    - Cleaned by hand afterwards: `lf-rb`'s control vault (soft-deleted, not purged) and its `id-lf-ops`'s
+      subscription-scope role assignment (orphaned). The deny policy stayed, as designed.
+    - Back on `lf-eh` (the default azd environment), which was not touched: `ca-order` and `ca-ops` running.
+  - Section 14, 2026-11-06: one final hand-off message each for WS1, WS3, WS4, WS5 and the lead, drafted from
+    `lf-eh`'s current values; the owner posts them in the team channel. They repeat the section 5 and 7 posts and
+    add: the policy is off now, the `trace_url` format and the evidence-check table (WS5), `deploy_revision` timings
+    (WS4), and the section 10 decision and admin items (lead). All four GHCR packages are public (checked by an
+    anonymous pull), and the `acr-push` environment is set up, so the lead's two admin-only items are done.
+  - Next, in order: merge this status PR; the owner posts the section 14 messages; the lead decides on section 10;
+    then the section 15 gate check. Turn the deny policy back on (`scripts/deploy.sh policy`) before the next
+    drill rehearsal.
+  - Follow-up from the teardown rehearsal: a second environment's teardown has to remove its `id-lf-ops`'s
+    subscription-scope role by hand (`policy-off` would also remove the shared deny policy), and an `azd down` that
+    fails partway leaves the vaults it deleted unpurged. Both are written up in `docs/rebuild-timing.md`; a script
+    could do them.
   - Follow-up from the lab: `scripts/evidence_check.py` never deletes the event log itself, and its version
     delete of the event log is refused for being the current version (`OperationNotAllowedOnRootBlob`), not by
     the policy. Add a "delete the event log" step that must be refused by the policy, with a test.
@@ -214,8 +235,11 @@ Status values: not started | in progress | PR open | merged | blocked
     `ORDER_IMAGE` is a registry `sha-<40>` tag; the control vault name is fixed, so reprovisioning after `azd down`
     needs `--purge`. Not done on purpose: a `predown` hook that runs `policy-off`, because the policy is
     subscription-wide and a teardown of a second environment would remove it for `lf-eh` too.
-- Last commands run (WS2 Mac, with `.venv` active): `for i in $(seq 10); do export DRILL_ID="$(./scripts/new-drill.sh)";
-  ./scripts/referee.sh baseline || break; done`; before that `scripts/deploy.sh smoke baselines`; before that
+- Last commands run (WS2 Mac, with `.venv` active): `azd env select lf-eh && rm -rf .azure/lf-rb`; before that
+  `azd down -e lf-rb --force --purge` (twice), `python scripts/evidence_unlock.py --yes`, `scripts/deploy.sh smoke
+  all` and `time scripts/deploy.sh all` in `lf-rb` (section 13); before that
+  `for i in $(seq 10); do export DRILL_ID="$(./scripts/new-drill.sh)"; ./scripts/referee.sh baseline || break; done`;
+  before that `scripts/deploy.sh smoke baselines`; before that
   `scripts/deploy.sh smoke drill --candidate "$(azd env get-value ORDER_IMAGE)"`; before that
   `gh run rerun 41860883124 --failed`; before that `for i in 1 2 3; do
   scripts/deploy.sh smoke all || break; done`; before that `scripts/deploy.sh smoke policy`; before that
@@ -292,6 +316,10 @@ Status values: not started | in progress | PR open | merged | blocked
 See `docs/ADR.md` (latest: ADR-019).
 
 ## Session log (newest first)
+- 2026-11-06: WS2 G2 section 14: hand-off messages drafted for WS1, WS3, WS4, WS5 and the lead; `policy-off` run by
+  the owner after section 13 (deny policy now off); PR #28 merged.
+- 2026-11-06: WS2 G2 lab section 13: timed rebuild in `lf-rb` (10.4 minutes, `smoke all` passed), teardown completed
+  after a failed first `azd down`; `evidence_unlock.py` fixed in PR #28; `docs/rebuild-timing.md` added.
 - 2026-11-06: WS2 G2 lab section 12: PR #26 merged; 10 baselines in a row passed through the Referee job (median
   30.1 s) and 10 from the laptop.
 - 2026-11-05: WS2 G2 lab section 11 run again: branch restriction saved; OIDC push from `main` (no rebuild); twin put
