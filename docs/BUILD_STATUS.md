@@ -3,8 +3,8 @@
 > Purpose: if a session ends (usage limit, closed laptop), the next Claude session reads THIS file and continues
 > exactly where we stopped. Keep it accurate. Update after every step and PR, and before ending any session.
 
-**Last updated:** 2026-11-05 (WS2 G2: lab sections 5-11 done on `lf-eh`, section 11 run twice; CI pushes to the lab
-registry over OIDC after the immutable-subject fix (PR #26); `acr-push` branch restriction saved; next is 12)
+**Last updated:** 2026-11-06 (WS2 G2: lab sections 5-12 done on `lf-eh`; PR #26 merged; 10 baselines in a row passed
+both through the Referee job and from the laptop; next is 13)
 **Current gate target:** G2 (Mon Nov 9; moved from Nov 2)
 
 ## FIRST THING THE NEXT SESSION SHOULD DO
@@ -197,9 +197,14 @@ Status values: not started | in progress | PR open | merged | blocked
     walkthrough is unchanged. Decision with the lead pending.
   - Follow-up from the lab: `deploy.sh smoke` stops on the first failed `az containerapp job execution show`
     (`set -e`), even when the job is still running fine. It could retry a failed status call a few times.
-  - Next, in order: merge PR #26 before the next `lf-eh` provision; the lead decides on section 10; tell WS5 the
-    `trace_url` format and send the evidence-check table. Then section 12 (`smoke baselines`) and section 13
-    (timed rebuild in a throwaway environment, at least 90 minutes of lab).
+  - Lab section 12 done 2026-11-06 01:08-01:19 UTC:
+    - Step 1: `scripts/deploy.sh smoke baselines` passed: one reset (59 s), then 10 Referee job runs in a row,
+      all PASS (min 29.2 s, median 30.1 s, max 33.6 s). No slow first run this time.
+    - Step 2 (optional G1 laptop form): 10 `referee.sh baseline` runs in a row from the Mac, all PASS, 5-10 s
+      each. The job form takes longer because each run also starts a job execution and its container.
+  - Next, in order: the lead decides on section 10; tell WS5 the `trace_url` format and send the evidence-check
+    table. Then section 13 (timed rebuild in a throwaway environment, at least 90 minutes of lab). PR #26 is
+    merged, so a provision from `main` keeps the CI's federated credential.
   - Follow-up from the lab: `scripts/evidence_check.py` never deletes the event log itself, and its version
     delete of the event log is refused for being the current version (`OperationNotAllowedOnRootBlob`), not by
     the policy. Add a "delete the event log" step that must be refused by the policy, with a test.
@@ -209,8 +214,10 @@ Status values: not started | in progress | PR open | merged | blocked
     `ORDER_IMAGE` is a registry `sha-<40>` tag; the control vault name is fixed, so reprovisioning after `azd down`
     needs `--purge`. Not done on purpose: a `predown` hook that runs `policy-off`, because the policy is
     subscription-wide and a teardown of a second environment would remove it for `lf-eh` too.
-- Last commands run (WS2 Mac, with `.venv` active): `scripts/deploy.sh smoke drill --candidate "$(azd env
-  get-value ORDER_IMAGE)"`; before that `gh run rerun 41860883124 --failed`; before that `for i in 1 2 3; do
+- Last commands run (WS2 Mac, with `.venv` active): `for i in $(seq 10); do export DRILL_ID="$(./scripts/new-drill.sh)";
+  ./scripts/referee.sh baseline || break; done`; before that `scripts/deploy.sh smoke baselines`; before that
+  `scripts/deploy.sh smoke drill --candidate "$(azd env get-value ORDER_IMAGE)"`; before that
+  `gh run rerun 41860883124 --failed`; before that `for i in 1 2 3; do
   scripts/deploy.sh smoke all || break; done`; before that `scripts/deploy.sh smoke policy`; before that
   `scripts/deploy.sh policy`; before that `scripts/deploy.sh smoke auth` (lab sections 5-8 above);
   before that the read-only checks (`az account show`,
@@ -285,6 +292,8 @@ Status values: not started | in progress | PR open | merged | blocked
 See `docs/ADR.md` (latest: ADR-019).
 
 ## Session log (newest first)
+- 2026-11-06: WS2 G2 lab section 12: PR #26 merged; 10 baselines in a row passed through the Referee job (median
+  30.1 s) and 10 from the laptop.
 - 2026-11-05: WS2 G2 lab section 11 run again: branch restriction saved; OIDC push from `main` (no rebuild); twin put
   back on its tag, then the candidate drill passed with a real new revision (`deploy_revision` 115 s).
 - 2026-11-05: WS2 G2 lab section 11: CI's `acr` job refused by Azure (immutable OIDC subject); fixed in PR #26 and
