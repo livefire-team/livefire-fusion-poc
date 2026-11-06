@@ -216,9 +216,9 @@ Status values: not started | in progress | PR open | merged | blocked
       subscription-scope role assignment (orphaned). The deny policy stayed, as designed.
     - Back on `lf-eh` (the default azd environment), which was not touched: `ca-order` and `ca-ops` running.
   - Section 14, 2026-11-06: one final hand-off message each for WS1, WS3, WS4, WS5 and the lead, drafted from
-    `lf-eh`'s current values; the owner posted them in the team channel the same day. They repeat the section 5 and 7 posts and
-    add: the policy is off now, the `trace_url` format and the evidence-check table (WS5), `deploy_revision` timings
-    (WS4), and the section 10 decision and admin items (lead). All four GHCR packages are public (checked by an
+    `lf-eh`'s current values; the owner posted them in the team channel the same day. They repeat the section 5
+    and 7 posts and add: the policy is off now, the `trace_url` format and the evidence-check table (WS5),
+    `deploy_revision` timings (WS4), and the section 10 decision and admin items (lead). All four GHCR packages are public (checked by an
     anonymous pull), and the `acr-push` environment is set up, so the lead's two admin-only items are done.
   - Section 15 gate check, 2026-11-06: compiled at the top of the WS2 Mac's git-ignored
     `docs/reference/g2-evidence.md`, one drill ID or output line per item (ADR-004). The live items were re-checked
