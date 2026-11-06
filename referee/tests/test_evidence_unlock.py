@@ -23,14 +23,14 @@ class FakeHttpError(Exception):
 class FakeNotFound(FakeHttpError):
     """Stands in for azure.core.exceptions.ResourceNotFoundError, a kind of HttpResponseError as in azure-core."""
 
-    def __init__(self, what):
-        super().__init__(404, "BlobNotFound")
+    def __init__(self, error_code="BlobNotFound"):
+        super().__init__(404, error_code)
 
 
 class Version:
-    def __init__(self, version_id, current, policy=True, locked=False, hold=False, busy=False):
+    def __init__(self, version_id, current, policy=True, locked=False, hold=False, busy=False, flaky=False):
         self.version_id, self.current, self.policy, self.locked = version_id, current, policy, locked
-        self.hold, self.busy = hold, busy  # busy: every delete by id answers 503
+        self.hold, self.busy, self.flaky = hold, busy, flaky  # busy: every delete by id 503s; flaky: only the first
 
 
 class FakeContainer:
@@ -67,7 +67,7 @@ class FakeBlob:
         for v in self.container.blobs.get(self.name, []):
             if v.version_id == version_id:
                 return v
-        raise FakeNotFound(version_id)
+        raise FakeNotFound()
 
     def delete_immutability_policy(self, version_id):
         v = self._version(version_id)
@@ -83,7 +83,7 @@ class FakeBlob:
         if version_id is None:
             current = next((v for v in versions if v.current), None)
             if current is None:
-                raise FakeNotFound(self.name)
+                raise FakeNotFound()
             if current.policy or current.hold:
                 raise FakeHttpError(409, "BlobImmutableDueToPolicy")
             current.current = False
@@ -93,7 +93,8 @@ class FakeBlob:
             raise FakeHttpError(403, "OperationNotAllowedOnRootBlob")
         if v.policy or v.hold:
             raise FakeHttpError(409, "BlobImmutableDueToPolicy")
-        if v.busy:
+        if v.busy or v.flaky:
+            v.flaky = False
             raise FakeHttpError(503, "ServerBusy")
         versions.remove(v)
 
@@ -114,7 +115,7 @@ def run_unlock(monkeypatch, capsys):
 
         calls = []
 
-        def fake_run(cmd, **_kwargs):  # azd env get-values, then az: the container's default policy is already gone
+        def fake_run(cmd, **_kwargs):  # azd env get-values; az: no container default policy, container-rm ok
             calls.append(cmd)
             out = json.dumps(VALUES) if cmd[0] == "azd" else ""
             return subprocess.CompletedProcess(cmd, 0, stdout=out, stderr="")
@@ -173,6 +174,14 @@ def test_versions_still_there_at_the_end_exit_one(run_unlock):
     result = run_unlock(container, "--yes")
     assert result.code == 1
     assert "versions left: 1" in result.out
+    assert not [c for c in result.calls if "container-rm" in c]
+
+
+def test_a_failure_cleared_by_the_second_pass_still_exits_one_and_keeps_the_container(run_unlock):
+    container = FakeContainer({"d/r1-baseline/step.txt": [Version("v1", current=False, flaky=True)]})
+    result = run_unlock(container, "--yes")
+    assert result.code == 1
+    assert "versions left: 0, failures: 1" in result.out
     assert not [c for c in result.calls if "container-rm" in c]
 
 
