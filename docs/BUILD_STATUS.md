@@ -3,8 +3,8 @@
 > Purpose: if a session ends (usage limit, closed laptop), the next Claude session reads THIS file and continues
 > exactly where we stopped. Keep it accurate. Update after every step and PR, and before ending any session.
 
-**Last updated:** 2026-11-06 (WS2 G2: all 13 gate items met; the lead agreed the section 10 decision and the
-section 14 hand-offs are posted; the deny policy is OFF since `policy-off` on 2026-11-06)
+**Last updated:** 2026-11-07 (WS2 G2: all 13 gate items met. The deny policy is ON again since 2026-11-06
+15:07 UTC. `caj-loadgen` deployed for WS5. WS5's joint drill is on Sun Nov 8, and their `main.bicep` PR is due Mon)
 **Current gate target:** G2 (Mon Nov 9; moved from Nov 2)
 
 ## FIRST THING THE NEXT SESSION SHOULD DO
@@ -147,10 +147,12 @@ Status values: not started | in progress | PR open | merged | blocked
       `RequestDisallowedByPolicy`, `refused_by: Azure Policy`; the same grant again and a forged grant: 422.
       Recorded in ADR-019's "Implemented in".
     - The deny policy was ON from 2026-11-05 02:11 UTC until `scripts/deploy.sh policy-off` on 2026-11-06 (after
-      section 13): the assignment and `id-lf-ops`'s broad-attempt role are gone, and `DENY_BROAD_POLICY` and
-      `BROAD_ATTEMPT_ROLE` are `off`. **Now OFF.** `scripts/deploy.sh policy` turns it back on (allow up to 30
-      minutes). Until then `job-ops-smoke` still expects `RequestDisallowedByPolicy`: run `scripts/deploy.sh apps`
-      first if a smoke test must run with the policy off.
+      section 13). **It is ON again** (checked 2026-11-07): `scripts/deploy.sh policy` ran twice on 2026-11-06.
+      The first run's 40 checks (14:08-14:53 UTC) were all `UNEXPECTED_ALLOW`, and `recover.sh` removed each
+      grant. The second run created the assignment at 15:07 UTC, was refused by Azure Policy at 15:11 UTC, and gave
+      `id-lf-ops` its broad-attempt role at 15:14 UTC. `DENY_BROAD_POLICY` and `BROAD_ATTEMPT_ROLE` are `on`. No
+      Contributor, Owner or User Access Administrator assignment was left at subscription scope. If the policy is
+      turned off and on again, allow up to an hour, not 30 minutes.
   - Lab notes:
     - Activate `.venv` before every `deploy.sh` or `azd` command: the postprovision hook runs `referee.sh`,
       which needs `python` and `pytest` (without them the baseline is INCONCLUSIVE and the hook fails).
@@ -228,9 +230,29 @@ Status values: not started | in progress | PR open | merged | blocked
     messages. **All 13 met; WS2 is ready for the G2 gate review.**
   - Still awaited, not a gate item: WS4's approval of `contracts/ops-actions.md` and its `CONTRACT_VERSION` bump
     (asked for in the section 14 message). If WS4 asks for changes, the contract file and `ca-ops` change together.
-  - Before the gate review (Mon Nov 9), only if the refusal must be shown live: `scripts/deploy.sh policy` (allow
-    up to 30 minutes), then `scripts/deploy.sh smoke policy`. Run `scripts/deploy.sh policy-off` again before that
-    lab ends.
+  - WS5's asks (their G2 guide, `docs/WS5-G2-Build-Steps.md` in the WS5 repo, 2026-11-07):
+    - Load generator (WS5's G2 Must; WS1's `infra/modules/loadgen.bicep`, handed to WS2): `caj-loadgen` was
+      deployed into the twin on 2026-11-07 with `az deployment group create` (`load-generator:g2`, manual
+      trigger), and a test run started at 22:39 UTC. It isn't in `main.bicep`, so a rebuild drops it. Wiring it
+      in, with an ADR, is a follow-up for the freeze-week rebuild. Start a run about 5 minutes before a drill:
+      `az containerapp job start -g <twin rg> -n caj-loadgen` (each run places 30 orders a minute for 50
+      minutes). The Referee's SQL check counts only its own run's orders, so load-generator orders don't change
+      verdicts.
+    - Sun Nov 8, joint drill on the WS2 Mac (WS5's step 8, about 60 minutes): WS2 drives the terminals and WS5
+      clicks. The policy is already on, so `deploy.sh policy` isn't needed. WS5's repo is cloned at `~/WS5-`.
+      Don't run its `pip install` line: `.venv` already has the Azure libraries at our pinned versions. Drill A
+      is the decision (broad refused, then narrow restores). Drill B is the kill switch (`fault.sh status` ends in
+      1). Drill IDs go in the local evidence note.
+    - Mon Nov 9, WS5's PR (branch `ws5-control-center-in-main`, not opened yet) adds the Control Center to
+      `main.bicep`, skipped while `CONTROL_CENTER_IMAGE` is unset. Review it with `azd provision --preview`. After
+      both gate reviews, and after a heads-up in the channel: `policy-off` (if chosen), then
+      `azd env set CONTROL_CENTER_IMAGE <the image ca-control-center runs>`, then `scripts/deploy.sh apps`.
+      Then ping WS5.
+    - Keep `duration_s` on Referee results (WS5's Browser minutes tile). Give WS5 a heads-up before any rebuild,
+      `policy-off`, `evidence_unlock.py` or provision of `lf-eh`.
+  - With the policy on, `job-ops-smoke` expects `RequestDisallowedByPolicy`. After `scripts/deploy.sh
+    policy-off`, run `scripts/deploy.sh apps` so it expects `AuthorizationFailed` again. Run `policy-off` before
+    the lab ends.
   - Follow-up from the teardown rehearsal: a second environment's teardown has to remove its `id-lf-ops`'s
     subscription-scope role by hand (`policy-off` would also remove the shared deny policy), and an `azd down` that
     fails partway leaves the vaults it deleted unpurged. Both are written up in `docs/rebuild-timing.md`; a script
@@ -244,7 +266,10 @@ Status values: not started | in progress | PR open | merged | blocked
     `ORDER_IMAGE` is a registry `sha-<40>` tag; the control vault name is fixed, so reprovisioning after `azd down`
     needs `--purge`. Not done on purpose: a `predown` hook that runs `policy-off`, because the policy is
     subscription-wide and a teardown of a second environment would remove it for `lf-eh` too.
-- Last commands run (WS2 Mac, with `.venv` active): `azd env select lf-eh && rm -rf .azure/lf-rb`; before that
+- Last commands run (WS2 Mac, with `.venv` active): `az containerapp job start -g <twin rg> -n caj-loadgen`;
+  before that `az deployment group create -g <twin rg> -n loadgen -f infra/modules/loadgen.bicep` (2026-11-07);
+  before that `scripts/deploy.sh policy` (twice, 2026-11-06); before that
+  `azd env select lf-eh && rm -rf .azure/lf-rb`; before that
   `azd down -e lf-rb --force --purge` (twice), `python scripts/evidence_unlock.py --yes`, `scripts/deploy.sh smoke
   all` and `time scripts/deploy.sh all` in `lf-rb` (section 13); before that
   `for i in $(seq 10); do export DRILL_ID="$(./scripts/new-drill.sh)"; ./scripts/referee.sh baseline || break; done`;
@@ -325,6 +350,9 @@ Status values: not started | in progress | PR open | merged | blocked
 See `docs/ADR.md` (latest: ADR-019).
 
 ## Session log (newest first)
+- 2026-11-07: WS5's G2 guide read and its asks checked. The deny policy was found ON (since 2026-11-06 15:07 UTC),
+  not off as recorded. `caj-loadgen` deployed and a test run started. Sunday's drill prepared (`~/WS5-` cloned,
+  the policy, the WS5 tool and evidence access checked). WS5's `main.bicep` PR isn't open yet.
 - 2026-11-06: WS2 G2 gate: all 13 items met. The lead agreed the section 10 decision and the section 14 hand-offs
   were posted; WS4's contract approval is still awaited (not a gate item). PR #30 merged.
 - 2026-11-06: WS2 G2 section 15: gate check compiled in the local evidence note, 11 of 13 met; open are the lead's
