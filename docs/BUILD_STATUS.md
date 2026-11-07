@@ -108,10 +108,10 @@ Status values: not started | in progress | PR open | merged | blocked
   `PATH_A_CONTROLS` off), so the measurement above applies and no `rbac` measurement is needed.
 - 2026-11-01: G1 drill evidence summary for the three 12:00-12:06 drills (verdicts, delays, screenshots, trace
   paths) written on the WS2 Mac in `evidence/` only (git-ignored, ADR-004).
-- Pending (replaces the 2026-11-01 `PATH_A_CONTROLS` plan, ADR-019): the subscription-wide deny of new Owner,
+- Done (replaces the 2026-11-01 `PATH_A_CONTROLS` plan, ADR-019): the subscription-wide deny of new Owner,
   Contributor and User Access Administrator assignments now comes from `scripts/deploy.sh policy`
-  (`DENY_BROAD_POLICY=on`, then `BROAD_ATTEMPT_ROLE=on` for `id-lf-ops`). Still waiting for every workstream to
-  confirm none of their identities needs those roles; `ops-access.bicep` is replaced by `ops-twin-access.bicep`.
+  (`DENY_BROAD_POLICY=on`, then `BROAD_ATTEMPT_ROLE=on` for `id-lf-ops`). Every workstream confirmed none of their
+  identities needs those roles (lab section 8, 2026-11-05); `ops-access.bicep` is replaced by `ops-twin-access.bicep`.
 - WS2 G2 (G2 Mon Nov 9). All three PRs are merged into `main` with merge commits (2026-11-04):
   - [PR #20](https://github.com/livefire-team/livefire-fusion-poc/pull/20), `ws2/g1-carryover` (25541d4): the 7
     `ws2-starter` commits made after PR #16 (the `reset.sh` replica wait, the `drill.sh` refresh-window wait,
@@ -219,7 +219,8 @@ Status values: not started | in progress | PR open | merged | blocked
     - Back on `lf-eh` (the default azd environment), which was not touched: `ca-order` and `ca-ops` running.
   - Section 14, 2026-11-06: one final hand-off message each for WS1, WS3, WS4, WS5 and the lead, drafted from
     `lf-eh`'s current values; the owner posted them in the team channel the same day. They repeat the section 5
-    and 7 posts and add: the policy is off now, the `trace_url` format and the evidence-check table (WS5),
+    and 7 posts and add: the policy is off (as posted; found ON on 2026-11-07, see above), the `trace_url` format
+    and the evidence-check table (WS5),
     `deploy_revision` timings (WS4), and the section 10 decision and admin items (lead). All four GHCR packages are public (checked by an
     anonymous pull), and the `acr-push` environment is set up, so the lead's two admin-only items are done.
   - Section 15 gate check, 2026-11-06: compiled at the top of the WS2 Mac's git-ignored
