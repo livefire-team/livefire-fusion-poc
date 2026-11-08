@@ -4,7 +4,8 @@
 > exactly where we stopped. Keep it accurate. Update after every step and PR, and before ending any session.
 
 **Last updated:** 2026-11-08 (WS2 G2: all 13 gate items met. Joint drill with WS5 done: Drill A and Drill B
-passed. The deny policy is OFF since 2026-11-08. WS5's `main.bicep` PR is due Mon)
+passed. The deny policy is OFF since 2026-11-08. WS1's twin revision test passed; PRs #32 and #38 merged. Mon: WS5's
+`main.bicep` PR and WS1's load generator wiring)
 **Current gate target:** G2 (Mon Nov 9; moved from Nov 2)
 
 ## FIRST THING THE NEXT SESSION SHOULD DO
@@ -169,9 +170,10 @@ Status values: not started | in progress | PR open | merged | blocked
       Analytics and Container Apps log streams fail with `CERTIFICATE_VERIFY_FAILED`, because `az` doesn't trust
       the employer's inspection root certificate (the Mac's System keychain does). Fix: `.local/az-ca-bundle.pem`
       (git-ignored) = the `.venv` certifi bundle + that root; run `export REQUESTS_CA_BUNDLE="$PWD/.local/az-ca-bundle.pem"`
-      before any `azd provision`, `deploy.sh` or Key Vault command. Without it, `postprovision.sh` changes
-      `order_app`'s SQL password and then fails to write it to Key Vault, so the order app loses SQL until the hook is
-      re-run with the bundle (happened 2026-11-08 after the drill: order app down about 14 minutes, no drill running).
+      before any `azd provision`, `deploy.sh` or Key Vault command. Without it, `postprovision.sh` stops at its
+      first step with `cannot reach Key Vault ...; SQL passwords unchanged` (PR #38): set the variable and run
+      `./scripts/postprovision.sh` again. Before PR #38 the hook changed `order_app`'s SQL password first, and the
+      order app lost SQL for about 14 minutes on 2026-11-08 (no drill running).
     - The SQL firewall's `bootstrap-client` rule holds the Mac's public IP from the last provision. When the Mac's
       network changes, `reset.sh` and `referee.sh` fail with `Client with IP address ... is not allowed`: add a
       rule for the current IP (`curl -s https://api.ipify.org`), or re-run `postprovision.sh` (it updates
@@ -264,6 +266,20 @@ Status values: not started | in progress | PR open | merged | blocked
       both gate reviews, and after a heads-up in the channel (`policy-off` is already done):
       `azd env set CONTROL_CENTER_IMAGE <the image ca-control-center runs>`, then `scripts/deploy.sh apps` with
       `REQUESTS_CA_BUNDLE` set (lab notes above). Then ping WS5.
+  - WS1's asks (2026-11-08):
+    1. Done: twin revision test. `scripts/deploy.sh smoke drill --candidate <registry>/order-service:sha-416e4ab...`
+       (with `REQUESTS_CA_BUNDLE`): SMOKE PASSED, 20 of 20 rows (`deploy_revision` 95.5 s, `after-fix` PASS; the broad
+       option `denied AuthorizationFailed` with the policy off). After: the twin on the base image's digest, one
+       active revision, min 1 / max 1, one replica. Step list and drill ID sent to WS1 (drill ID in the local note).
+    2. Done: PR #37 (already merged) reviewed against the control plane; it fits (evidence account output, container,
+       public access, no shared keys, `allowProtectedAppendWrites`, role actions match `events.py`'s calls). Asked
+       WS1: `DRILL_ID` is fixed at deploy time, so how does a run get a live drill's ID (WS5 starts the runs)?
+    3. Mon: wire `loadgen-identity` (control resource group) plus `loadgen` (`eventSource`, the identity outputs, a
+       `drill-` ID, `load-generator:sha-8339b92`) into `main.bicep`; this also ends the hand-deployed `caj-loadgen`
+       above. Deploy with `REQUESTS_CA_BUNDLE` set and a heads-up to WS5.
+    4. Mon, after 3: one role row on the evidence container; `metrics.orders` lines in `<drill-id>/events.jsonl`; a
+       write outside `drill-*/events.jsonl` refused (403).
+    5. Done: PR #32 merged.
     - Keep `duration_s` on Referee results (WS5's Browser minutes tile). Give WS5 a heads-up before any rebuild,
       `policy-off`, `evidence_unlock.py` or provision of `lf-eh`.
   - With the policy on, `job-ops-smoke` expects `RequestDisallowedByPolicy`. After `scripts/deploy.sh
@@ -282,8 +298,10 @@ Status values: not started | in progress | PR open | merged | blocked
     `ORDER_IMAGE` is a registry `sha-<40>` tag; the control vault name is fixed, so reprovisioning after `azd down`
     needs `--purge`. Not done on purpose: a `predown` hook that runs `policy-off`, because the policy is
     subscription-wide and a teardown of a second environment would remove it for `lf-eh` too.
-- Last commands run (WS2 Mac, with `.venv` active): `REQUESTS_CA_BUNDLE=... ./scripts/postprovision.sh` (baseline
-  PASS); before that `scripts/deploy.sh apps` (hook failed on Key Vault, see lab notes) and
+- Last commands run (WS2 Mac, with `.venv` active): `gh pr merge 38 --merge`; before that
+  `REQUESTS_CA_BUNDLE=... ./scripts/postprovision.sh` on PR #38's branch (baseline PASS); before that
+  `REQUESTS_CA_BUNDLE=... scripts/deploy.sh smoke drill --candidate ...` (WS1 item 1, SMOKE PASSED); before that
+  `REQUESTS_CA_BUNDLE=... ./scripts/postprovision.sh` (baseline PASS); before that `scripts/deploy.sh apps` (hook failed on Key Vault, see lab notes) and
   `scripts/deploy.sh policy-off`; before that WS5's joint drill (2026-11-08); before that
   `az containerapp job start -g <twin rg> -n caj-loadgen`; before that `az deployment group create -g <twin rg> -n loadgen -f infra/modules/loadgen.bicep` (2026-11-07);
   before that `scripts/deploy.sh policy` (twice, 2026-11-06); before that
@@ -368,11 +386,17 @@ Status values: not started | in progress | PR open | merged | blocked
 See `docs/ADR.md` (latest: ADR-021).
 
 ## Session log (newest first)
+- 2026-11-08 (evening): WS1's items 1, 2 and 5 done (twin revision test SMOKE PASSED, PR #37 reviewed, PR #32
+  merged); items 3 and 4 are Monday's. PR #38 merged (8604eca): `postprovision.sh` checks the twin vault before any
+  change and stops with "SQL passwords unchanged" if it can't use it; `kv_try` stops at once on a certificate error
+  and also wraps the `db-password` write. Three tests in `referee/tests/test_deploy_scripts.py` (two new) fail
+  against the old hook and pass now; referee suite 86 passed, CI green. Lab: the failure case left the app on
+  `"sql":"ok"`; the success case gave baseline PASS.
 - 2026-11-08: Joint drill with WS5 done; both drills gave the expected results (details and drill IDs in the
   local evidence note). The SQL firewall needed the Mac's new public IP first. Deny policy turned off, then
   `deploy.sh apps`; its hook failed on Key Vault (corporate SSL inspection) and left the order app without SQL until
-  `postprovision.sh` was re-run with a CA bundle. Twin healthy after. Follow-up: make `postprovision.sh` stop before
-  any change when the twin vault can't be reached.
+  `postprovision.sh` was re-run with a CA bundle. Twin healthy after. The follow-up (stop before any change when
+  the twin vault can't be reached) is PR #38.
 - 2026-11-08: WS1 G2: PR #34 merged (88214c7), main green. Dry-run candidates: `candidate/drill-ci-check-1` passed
   both workflows (order-service 1m31s, security 3m09s), published `sha-416e4ab` and `candidate-drill-ci-check-1` and
   the registry copy, `g1` unmoved; `candidate/drill-ci-check-2` (also `README.md`) failed at `candidate-scope` in
