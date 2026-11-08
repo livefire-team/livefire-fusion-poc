@@ -4,8 +4,8 @@
 > exactly where we stopped. Keep it accurate. Update after every step and PR, and before ending any session.
 
 **Last updated:** 2026-11-08 (WS2 G2: all 13 gate items met. Joint drill with WS5 done: Drill A and Drill B
-passed. The deny policy is OFF since 2026-11-08. WS1's twin revision test passed; PRs #32 and #38 merged. Mon: WS5's
-`main.bicep` PR and WS1's load generator wiring)
+passed. The deny policy is OFF since 2026-11-08. WS1's twin revision test passed; PRs #32 and #38 merged. Load
+generator wiring is PR #41, last in the `main.bicep` merge order: WS3 #40, then WS5's Control Center, then #41)
 **Current gate target:** G2 (Mon Nov 9; moved from Nov 2)
 
 ## FIRST THING THE NEXT SESSION SHOULD DO
@@ -274,9 +274,16 @@ Status values: not started | in progress | PR open | merged | blocked
     2. Done: PR #37 (already merged) reviewed against the control plane; it fits (evidence account output, container,
        public access, no shared keys, `allowProtectedAppendWrites`, role actions match `events.py`'s calls). Asked
        WS1: `DRILL_ID` is fixed at deploy time, so how does a run get a live drill's ID (WS5 starts the runs)?
-    3. Mon: wire `loadgen-identity` (control resource group) plus `loadgen` (`eventSource`, the identity outputs, a
-       `drill-` ID, `load-generator:sha-8339b92`) into `main.bicep`; this also ends the hand-deployed `caj-loadgen`
-       above. Deploy with `REQUESTS_CA_BUNDLE` set and a heads-up to WS5.
+    3. PR open: [PR #41](https://github.com/livefire-team/livefire-fusion-poc/pull/41), `ws2/loadgen-in-main`.
+       `main.bicep` deploys `loadgen-identity` and `loadgen` when `LOADGEN_IMAGE` is set (`deploy.sh images` imports
+       `load-generator` and sets it); `LOADGEN_DRILL_ID` names the event log; `loadgen.bicep` gains optional
+       `registryServer`/`pullIdentityId` (WS1 to review). `azd provision --preview` from the branch (values given for
+       that command only, not saved in `lf-eh`): `caj-loadgen` Modify (identity, registry, image), no deletes; azd's
+       summary hides identities and role assignments. `--preview` runs no azd hooks (tested in a throwaway project).
+       Merge order proposed by WS1 (to confirm in the channel): #40, WS5's Control Center PR, then #41; merge `main`
+       into #41 after the first two, re-run tests, build and preview, then a review pass. Deploy after merge:
+       `REQUESTS_CA_BUNDLE` set, heads-up to WS5, `scripts/deploy.sh images`, `azd env set LOADGEN_DRILL_ID <drill->`,
+       `scripts/deploy.sh apps`. This ends the hand-deployed `caj-loadgen` above.
     4. Mon, after 3: one role row on the evidence container; `metrics.orders` lines in `<drill-id>/events.jsonl`; a
        write outside `drill-*/events.jsonl` refused (403).
     5. Done: PR #32 merged.
@@ -298,7 +305,9 @@ Status values: not started | in progress | PR open | merged | blocked
     `ORDER_IMAGE` is a registry `sha-<40>` tag; the control vault name is fixed, so reprovisioning after `azd down`
     needs `--purge`. Not done on purpose: a `predown` hook that runs `policy-off`, because the policy is
     subscription-wide and a teardown of a second environment would remove it for `lf-eh` too.
-- Last commands run (WS2 Mac, with `.venv` active): `gh pr merge 38 --merge`; before that
+- Last commands run (WS2 Mac, with `.venv` active): `azd provision --preview` on `ws2/loadgen-in-main` (with
+  `REQUESTS_CA_BUNDLE`, `LOADGEN_IMAGE` and `LOADGEN_DRILL_ID` as shell variables only); `pytest -q referee/tests`
+  (86 passed); PR #40's `test_deploy_scripts.py` (17 passed) in a scratch worktree; before that `gh pr merge 38 --merge`; before that
   `REQUESTS_CA_BUNDLE=... ./scripts/postprovision.sh` on PR #38's branch (baseline PASS); before that
   `REQUESTS_CA_BUNDLE=... scripts/deploy.sh smoke drill --candidate ...` (WS1 item 1, SMOKE PASSED); before that
   `REQUESTS_CA_BUNDLE=... ./scripts/postprovision.sh` (baseline PASS); before that `scripts/deploy.sh apps` (hook failed on Key Vault, see lab notes) and
@@ -386,6 +395,11 @@ Status values: not started | in progress | PR open | merged | blocked
 See `docs/ADR.md` (latest: ADR-021).
 
 ## Session log (newest first)
+- 2026-11-08 (night): WS1's item 3 is PR #41 (`main.bicep` deploys the load generator from the private registry;
+  RED then GREEN on the `deploy.sh images` test, 86 referee tests pass, Bicep build and lint clean, lab preview shows
+  `caj-loadgen` modified in place and no deletes). PR #40 (WS3) reviewed for WS2's files: one change asked
+  (`deploy.sh` shouldn't clear `MCP_IMAGE` and provision when the control vault can't be listed), four follow-ups;
+  the review is drafted for the owner to post. Item 4 (lab check) waits for #41's deployment.
 - 2026-11-08 (evening): WS1's items 1, 2 and 5 done (twin revision test SMOKE PASSED, PR #37 reviewed, PR #32
   merged); items 3 and 4 are Monday's. PR #38 merged (8604eca): `postprovision.sh` checks the twin vault before any
   change and stops with "SQL passwords unchanged" if it can't use it; `kv_try` stops at once on a certificate error
