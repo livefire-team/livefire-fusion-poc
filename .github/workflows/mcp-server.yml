@@ -1,0 +1,157 @@
+name: mcp-server
+
+# WS3's MCP server. Pull requests run `test` and `image`. Pushes to main also `publish` the exact smoke-tested image to
+# GHCR as :sha-<short sha>, and `acr` pushes it to the lab's private registry as :sha-<full sha> when the acr-push
+# environment has been set up for the current lab (scripts/deploy.sh github). Actions are pinned to full commit SHAs
+# (ADR-011). Secrets, dependency and image scans for this service run in security.yml (ADR-013).
+on:
+  push:
+    branches: [main]
+    paths: ['src/mcp-server/**', 'contracts/mcp-tools.*', 'scripts/export-tool-schemas.py', 'scripts/mcp-smoke.py',
+            '.github/workflows/mcp-server.yml']
+  pull_request:
+    paths: ['src/mcp-server/**', 'contracts/mcp-tools.*', 'scripts/export-tool-schemas.py', 'scripts/mcp-smoke.py',
+            '.github/workflows/mcp-server.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: mcp-server-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: '3.12'
+      - name: Install dependencies
+        run: pip install -r src/mcp-server/requirements-dev.txt
+      # Includes the contract test: contracts/mcp-tools.schema.json must match the code
+      - name: Unit, contract and allowlist tests with coverage
+        working-directory: src/mcp-server
+        run: pytest -q --cov=app --cov-fail-under=78
+      - name: Bandit and Semgrep (own virtual environment, so they can't change the app's dependencies)
+        run: |
+          python -m venv "$RUNNER_TEMP/scan"
+          "$RUNNER_TEMP/scan/bin/pip" install -q bandit==1.9.4 semgrep==1.184.0
+          "$RUNNER_TEMP/scan/bin/bandit" -q -r src/mcp-server/app
+          "$RUNNER_TEMP/scan/bin/semgrep" scan --config p/python --config p/security-audit --metrics off --error \
+            --quiet src/mcp-server/app
+
+  image:
+    needs: test
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    outputs:
+      image-id: ${{ steps.save.outputs.image-id }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Build image
+        run: docker build -t mcp-server:ci src/mcp-server
+      # Fixtures backend, no Azure or GitHub: every endpoint lists its tools, every Planner tool answers, and a key for
+      # one endpoint is refused (403) on the others.
+      - name: Smoke test
+        run: |
+          key() { head -c 32 /dev/urandom | od -An -tx1 | tr -d ' \n'; }
+          PLANNER_KEY="$(key)"; ENGINEER_KEY="$(key)"; RECOVERY_KEY="$(key)"
+          export PLANNER_KEY ENGINEER_KEY RECOVERY_KEY
+          docker run -d --name smoke -p 127.0.0.1:8000:8000 -e BACKEND=fixtures -e AUTH_MODE=key \
+            -e EVENT_SOURCE=dir:/tmp/evidence -e PLANNER_KEY -e ENGINEER_KEY -e RECOVERY_KEY mcp-server:ci
+          for _ in $(seq 1 30); do curl -fsS http://127.0.0.1:8000/health && break; sleep 1; done
+          docker run --rm --network host -v "$PWD/scripts:/scripts:ro" -e MCP_URL=http://127.0.0.1:8000 \
+            -e PLANNER_KEY -e ENGINEER_KEY -e RECOVERY_KEY mcp-server:ci python /scripts/mcp-smoke.py drill-ci-0001
+      - name: Container logs (on failure)
+        if: failure()
+        run: docker logs smoke || true
+      - name: Remove smoke container
+        if: always()
+        run: docker rm -f smoke || true
+      - name: Save the tested image
+        id: save
+        run: |
+          echo "image-id=$(docker image inspect --format '{{.Id}}' mcp-server:ci)" >> "$GITHUB_OUTPUT"
+          docker save mcp-server:ci | gzip > mcp-server-image.tar.gz
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: mcp-server-image
+          path: mcp-server-image.tar.gz
+          retention-days: 1
+          compression-level: 0
+          if-no-files-found: error
+
+  publish:
+    needs: image
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: mcp-server-image
+      - name: Load the tested image and check it is the same one
+        env:
+          EXPECTED_ID: ${{ needs.image.outputs.image-id }}
+        run: |
+          gunzip -c mcp-server-image.tar.gz | docker load
+          [ "$(docker image inspect --format '{{.Id}}' mcp-server:ci)" = "$EXPECTED_ID" ] || { echo "image ID mismatch"; exit 1; }
+      - name: Log in to GHCR
+        uses: docker/login-action@81c6f93d4bc991e510b342a00b419b3bb4efc5c6 # v4.7.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Push :sha-<short sha>
+        run: |
+          IMAGE="ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/mcp-server:sha-${GITHUB_SHA::7}"
+          docker tag mcp-server:ci "$IMAGE" && docker push "$IMAGE"
+
+  acr:
+    needs: image
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment: acr-push
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: mcp-server-image
+      - name: Push :sha-<full sha> to the lab registry (OIDC, no stored secret)
+        env:
+          EXPECTED_ID: ${{ needs.image.outputs.image-id }}
+          AZURE_CLIENT_ID: ${{ vars.AZURE_CLIENT_ID }}
+          AZURE_TENANT_ID: ${{ vars.AZURE_TENANT_ID }}
+          AZURE_SUBSCRIPTION_ID: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+          ACR_NAME: ${{ vars.ACR_NAME }}
+          ACR_SERVER: ${{ vars.ACR_SERVER }}
+        run: |
+          if [ -z "$ACR_NAME" ]; then echo "no lab registry configured; run scripts/deploy.sh github"; exit 0; fi
+          gunzip -c mcp-server-image.tar.gz | docker load
+          [ "$(docker image inspect --format '{{.Id}}' mcp-server:ci)" = "$EXPECTED_ID" ] || { echo "image ID mismatch"; exit 1; }
+          token=$(curl -sSf -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
+            "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=api://AzureADTokenExchange" | jq -r .value)
+          az login --service-principal -u "$AZURE_CLIENT_ID" -t "$AZURE_TENANT_ID" --federated-token "$token" \
+            --allow-no-subscriptions -o none
+          az account set --subscription "$AZURE_SUBSCRIPTION_ID"
+          az acr login -n "$ACR_NAME"
+          docker tag mcp-server:ci "$ACR_SERVER/mcp-server:sha-$GITHUB_SHA"
+          docker push "$ACR_SERVER/mcp-server:sha-$GITHUB_SHA"

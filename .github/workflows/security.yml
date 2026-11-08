@@ -79,6 +79,11 @@ jobs:
           pip-audit --desc on \
             -r src/ops-service/requirements.txt \
             -r src/ops-service/requirements-dev.txt
+      - name: Audit the MCP server's pinned dependencies
+        run: |
+          pip-audit --desc on \
+            -r src/mcp-server/requirements.txt \
+            -r src/mcp-server/requirements-dev.txt
 
   codeql:
     runs-on: ubuntu-latest
@@ -143,3 +148,9 @@ jobs:
         run: |
           "$RUNNER_TEMP/trivy" image --scanners vuln \
             --severity HIGH,CRITICAL --ignore-unfixed --exit-code 1 referee:scan
+      - name: Build the mcp-server image
+        run: docker build -t mcp-server:scan src/mcp-server
+      - name: Scan the mcp-server image
+        run: |
+          "$RUNNER_TEMP/trivy" image --scanners vuln \
+            --severity HIGH,CRITICAL --ignore-unfixed --exit-code 1 mcp-server:scan
