@@ -1,0 +1,10 @@
+{
+  "id": "INC-1042",
+  "kind": "incident",
+  "service": "order-service",
+  "occurred_at": "2026-09-18T02:30:00Z",
+  "title": "Orders failed after scheduled secret rotation",
+  "summary": "After the monthly database password rotation, order placement failed with SecretUnavailable for 42 minutes. Key Vault and SQL health checks were green for most of that time.",
+  "resolution": "Restarted the order-service revision; orders recovered at once. Root cause not investigated.",
+  "source": "incident record"
+}

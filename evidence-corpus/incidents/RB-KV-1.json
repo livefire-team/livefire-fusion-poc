@@ -1,0 +1,10 @@
+{
+  "id": "RB-KV-1",
+  "kind": "runbook",
+  "service": "order-service",
+  "occurred_at": "2026-08-01T09:00:00Z",
+  "title": "Order service: Key Vault access recovery (version 1)",
+  "summary": "Confirm /health/dependencies shows keyvault forbidden, check the app identity's role on the vault, restore Key Vault Secrets User on the vault only, wait for keyvault ok. Recovery is complete when /health/dependencies returns 200.",
+  "resolution": "",
+  "source": "runbooks/order-service-keyvault-recovery.md"
+}

@@ -1,0 +1,10 @@
+{
+  "id": "INC-1031",
+  "kind": "incident",
+  "service": "order-service",
+  "occurred_at": "2026-09-03T16:20:00Z",
+  "title": "Bad deploy rolled back by revision",
+  "summary": "A deploy with a missing environment variable failed readiness checks; traffic stayed on the old revision.",
+  "resolution": "Fixed the variable and redeployed.",
+  "source": "incident record"
+}

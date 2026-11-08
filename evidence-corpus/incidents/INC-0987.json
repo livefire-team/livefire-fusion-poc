@@ -1,0 +1,10 @@
+{
+  "id": "INC-0987",
+  "kind": "incident",
+  "service": "order-service",
+  "occurred_at": "2026-07-02T14:10:00Z",
+  "title": "Checkout latency during SQL DTU saturation",
+  "summary": "Checkout took 8 to 12 seconds for 25 minutes while the orders database ran at its DTU limit.",
+  "resolution": "Scaled the database tier up; latency returned to normal.",
+  "source": "incident record"
+}

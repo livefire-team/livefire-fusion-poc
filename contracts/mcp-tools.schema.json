@@ -1,0 +1,626 @@
+{
+  "contract": "mcp-tools",
+  "version": "2.3",
+  "transport": "MCP streamable HTTP, stateless, JSON responses",
+  "endpoints": {
+    "planner": {
+      "path": "/planner/mcp",
+      "tools": [
+        {
+          "name": "get_app_configuration",
+          "description": "The order app's current and recent revisions: image, non-secret settings, and how the current settings differ from the desired state in infrastructure as code.",
+          "annotations": {
+            "read_only_hint": true,
+            "destructive_hint": false,
+            "open_world_hint": false
+          },
+          "input_schema": {
+            "properties": {
+              "drill_id": {
+                "description": "The drill correlation ID",
+                "pattern": "^drill-[A-Za-z0-9-]{1,64}$",
+                "title": "Drill Id",
+                "type": "string"
+              }
+            },
+            "required": [
+              "drill_id"
+            ],
+            "title": "get_app_configurationArguments",
+            "type": "object"
+          }
+        },
+        {
+          "name": "get_commit_history",
+          "description": "Recent commits that touched one path, newest first.",
+          "annotations": {
+            "read_only_hint": true,
+            "destructive_hint": false,
+            "open_world_hint": false
+          },
+          "input_schema": {
+            "properties": {
+              "drill_id": {
+                "description": "The drill correlation ID",
+                "pattern": "^drill-[A-Za-z0-9-]{1,64}$",
+                "title": "Drill Id",
+                "type": "string"
+              },
+              "path": {
+                "maxLength": 200,
+                "title": "Path",
+                "type": "string"
+              },
+              "limit": {
+                "default": 10,
+                "maximum": 10,
+                "minimum": 1,
+                "title": "Limit",
+                "type": "integer"
+              }
+            },
+            "required": [
+              "drill_id",
+              "path"
+            ],
+            "title": "get_commit_historyArguments",
+            "type": "object"
+          }
+        },
+        {
+          "name": "get_identity_snapshot",
+          "description": "The order service identity's current access to the twin Key Vault. Never returns tokens or secret values.",
+          "annotations": {
+            "read_only_hint": true,
+            "destructive_hint": false,
+            "open_world_hint": false
+          },
+          "input_schema": {
+            "properties": {
+              "drill_id": {
+                "description": "The drill correlation ID",
+                "pattern": "^drill-[A-Za-z0-9-]{1,64}$",
+                "title": "Drill Id",
+                "type": "string"
+              }
+            },
+            "required": [
+              "drill_id"
+            ],
+            "title": "get_identity_snapshotArguments",
+            "type": "object"
+          }
+        },
+        {
+          "name": "get_network_rules",
+          "description": "The twin SQL server's public network access and firewall rules.",
+          "annotations": {
+            "read_only_hint": true,
+            "destructive_hint": false,
+            "open_world_hint": false
+          },
+          "input_schema": {
+            "properties": {
+              "drill_id": {
+                "description": "The drill correlation ID",
+                "pattern": "^drill-[A-Za-z0-9-]{1,64}$",
+                "title": "Drill Id",
+                "type": "string"
+              }
+            },
+            "required": [
+              "drill_id"
+            ],
+            "title": "get_network_rulesArguments",
+            "type": "object"
+          }
+        },
+        {
+          "name": "get_secret_metadata",
+          "description": "Versions of the twin's database password secret: created and updated times, enabled, and which version is current. Metadata only: never a secret value.",
+          "annotations": {
+            "read_only_hint": true,
+            "destructive_hint": false,
+            "open_world_hint": false
+          },
+          "input_schema": {
+            "properties": {
+              "drill_id": {
+                "description": "The drill correlation ID",
+                "pattern": "^drill-[A-Za-z0-9-]{1,64}$",
+                "title": "Drill Id",
+                "type": "string"
+              }
+            },
+            "required": [
+              "drill_id"
+            ],
+            "title": "get_secret_metadataArguments",
+            "type": "object"
+          }
+        },
+        {
+          "name": "query_incident_telemetry",
+          "description": "Telemetry for the drill from fixed queries: requests, exceptions, dependencies, the order metrics, or sql_errors (failed orders grouped by SQL Server error number and SQLSTATE), over the last N minutes. No free-form queries.",
+          "annotations": {
+            "read_only_hint": true,
+            "destructive_hint": false,
+            "open_world_hint": false
+          },
+          "input_schema": {
+            "properties": {
+              "drill_id": {
+                "description": "The drill correlation ID",
+                "pattern": "^drill-[A-Za-z0-9-]{1,64}$",
+                "title": "Drill Id",
+                "type": "string"
+              },
+              "signal": {
+                "enum": [
+                  "requests",
+                  "exceptions",
+                  "dependencies",
+                  "metrics",
+                  "sql_errors"
+                ],
+                "title": "Signal",
+                "type": "string"
+              },
+              "minutes": {
+                "default": 30,
+                "maximum": 120,
+                "minimum": 1,
+                "title": "Minutes",
+                "type": "integer"
+              }
+            },
+            "required": [
+              "drill_id",
+              "signal"
+            ],
+            "title": "query_incident_telemetryArguments",
+            "type": "object"
+          }
+        },
+        {
+          "name": "read_repository_context",
+          "description": "Read one order-service source or runbook file at the drill's pinned commit.",
+          "annotations": {
+            "read_only_hint": true,
+            "destructive_hint": false,
+            "open_world_hint": false
+          },
+          "input_schema": {
+            "properties": {
+              "drill_id": {
+                "description": "The drill correlation ID",
+                "pattern": "^drill-[A-Za-z0-9-]{1,64}$",
+                "title": "Drill Id",
+                "type": "string"
+              },
+              "path": {
+                "maxLength": 200,
+                "title": "Path",
+                "type": "string"
+              }
+            },
+            "required": [
+              "drill_id",
+              "path"
+            ],
+            "title": "read_repository_contextArguments",
+            "type": "object"
+          }
+        },
+        {
+          "name": "read_runbook",
+          "description": "Read a recovery runbook by name, at the drill's pinned commit.",
+          "annotations": {
+            "read_only_hint": true,
+            "destructive_hint": false,
+            "open_world_hint": false
+          },
+          "input_schema": {
+            "properties": {
+              "drill_id": {
+                "description": "The drill correlation ID",
+                "pattern": "^drill-[A-Za-z0-9-]{1,64}$",
+                "title": "Drill Id",
+                "type": "string"
+              },
+              "name": {
+                "description": "The runbook's name, e.g. order-service-keyvault-recovery",
+                "maxLength": 100,
+                "title": "Name",
+                "type": "string"
+              }
+            },
+            "required": [
+              "drill_id",
+              "name"
+            ],
+            "title": "read_runbookArguments",
+            "type": "object"
+          }
+        },
+        {
+          "name": "search_incident_history",
+          "description": "Search curated incident history and recovery findings for the order service. Returns at most 5 records.",
+          "annotations": {
+            "read_only_hint": true,
+            "destructive_hint": false,
+            "open_world_hint": false
+          },
+          "input_schema": {
+            "properties": {
+              "drill_id": {
+                "description": "The drill correlation ID",
+                "pattern": "^drill-[A-Za-z0-9-]{1,64}$",
+                "title": "Drill Id",
+                "type": "string"
+              },
+              "query": {
+                "maxLength": 200,
+                "minLength": 2,
+                "title": "Query",
+                "type": "string"
+              },
+              "top": {
+                "default": 5,
+                "maximum": 5,
+                "minimum": 1,
+                "title": "Top",
+                "type": "integer"
+              },
+              "from_date": {
+                "default": "",
+                "description": "Earliest occurred_at, YYYY-MM-DD; empty: none",
+                "pattern": "^(\\d{4}-\\d{2}-\\d{2})?$",
+                "title": "From Date",
+                "type": "string"
+              },
+              "to_date": {
+                "default": "",
+                "description": "Latest occurred_at, YYYY-MM-DD; empty: none",
+                "pattern": "^(\\d{4}-\\d{2}-\\d{2})?$",
+                "title": "To Date",
+                "type": "string"
+              }
+            },
+            "required": [
+              "drill_id",
+              "query"
+            ],
+            "title": "search_incident_historyArguments",
+            "type": "object"
+          }
+        }
+      ]
+    },
+    "engineer": {
+      "path": "/engineer/mcp",
+      "tools": [
+        {
+          "name": "apply_patch",
+          "description": "Commit the full new contents of the allowed source file on the candidate branch. At most 200 changed lines.",
+          "annotations": {
+            "read_only_hint": false,
+            "destructive_hint": false,
+            "open_world_hint": false
+          },
+          "input_schema": {
+            "properties": {
+              "drill_id": {
+                "description": "The drill correlation ID",
+                "pattern": "^drill-[A-Za-z0-9-]{1,64}$",
+                "title": "Drill Id",
+                "type": "string"
+              },
+              "attempt": {
+                "description": "Candidate attempt, 1 or 2",
+                "maximum": 2,
+                "minimum": 1,
+                "title": "Attempt",
+                "type": "integer"
+              },
+              "path": {
+                "maxLength": 200,
+                "title": "Path",
+                "type": "string"
+              },
+              "content": {
+                "maxLength": 50000,
+                "title": "Content",
+                "type": "string"
+              },
+              "message": {
+                "maxLength": 120,
+                "minLength": 5,
+                "pattern": "^[^\\r\\n]+$",
+                "title": "Message",
+                "type": "string"
+              }
+            },
+            "required": [
+              "drill_id",
+              "attempt",
+              "path",
+              "content",
+              "message"
+            ],
+            "title": "apply_patchArguments",
+            "type": "object"
+          }
+        },
+        {
+          "name": "create_candidate_branch",
+          "description": "Create candidate/<drill-id>-<attempt> from the drill's base commit. Safe to repeat.",
+          "annotations": {
+            "read_only_hint": false,
+            "destructive_hint": false,
+            "open_world_hint": false
+          },
+          "input_schema": {
+            "properties": {
+              "drill_id": {
+                "description": "The drill correlation ID",
+                "pattern": "^drill-[A-Za-z0-9-]{1,64}$",
+                "title": "Drill Id",
+                "type": "string"
+              },
+              "attempt": {
+                "description": "Candidate attempt, 1 or 2",
+                "maximum": 2,
+                "minimum": 1,
+                "title": "Attempt",
+                "type": "integer"
+              }
+            },
+            "required": [
+              "drill_id",
+              "attempt"
+            ],
+            "title": "create_candidate_branchArguments",
+            "type": "object"
+          }
+        },
+        {
+          "name": "get_ci_results",
+          "description": "CI status for the candidate branch: overall result and any failed jobs and steps.",
+          "annotations": {
+            "read_only_hint": false,
+            "destructive_hint": false,
+            "open_world_hint": false
+          },
+          "input_schema": {
+            "properties": {
+              "drill_id": {
+                "description": "The drill correlation ID",
+                "pattern": "^drill-[A-Za-z0-9-]{1,64}$",
+                "title": "Drill Id",
+                "type": "string"
+              },
+              "attempt": {
+                "description": "Candidate attempt, 1 or 2",
+                "maximum": 2,
+                "minimum": 1,
+                "title": "Attempt",
+                "type": "integer"
+              }
+            },
+            "required": [
+              "drill_id",
+              "attempt"
+            ],
+            "title": "get_ci_resultsArguments",
+            "type": "object"
+          }
+        },
+        {
+          "name": "read_allowed_files",
+          "description": "Read up to 5 files the Engineer may work from, at the base commit or a candidate branch.",
+          "annotations": {
+            "read_only_hint": false,
+            "destructive_hint": false,
+            "open_world_hint": false
+          },
+          "input_schema": {
+            "properties": {
+              "drill_id": {
+                "description": "The drill correlation ID",
+                "pattern": "^drill-[A-Za-z0-9-]{1,64}$",
+                "title": "Drill Id",
+                "type": "string"
+              },
+              "paths": {
+                "items": {
+                  "type": "string"
+                },
+                "maxItems": 5,
+                "minItems": 1,
+                "title": "Paths",
+                "type": "array"
+              },
+              "attempt": {
+                "default": 0,
+                "description": "0 reads the base commit",
+                "maximum": 2,
+                "minimum": 0,
+                "title": "Attempt",
+                "type": "integer"
+              }
+            },
+            "required": [
+              "drill_id",
+              "paths"
+            ],
+            "title": "read_allowed_filesArguments",
+            "type": "object"
+          }
+        },
+        {
+          "name": "update_runbook",
+          "description": "Replace one runbook (runbooks/*.md) on the candidate branch.",
+          "annotations": {
+            "read_only_hint": false,
+            "destructive_hint": false,
+            "open_world_hint": false
+          },
+          "input_schema": {
+            "properties": {
+              "drill_id": {
+                "description": "The drill correlation ID",
+                "pattern": "^drill-[A-Za-z0-9-]{1,64}$",
+                "title": "Drill Id",
+                "type": "string"
+              },
+              "attempt": {
+                "description": "Candidate attempt, 1 or 2",
+                "maximum": 2,
+                "minimum": 1,
+                "title": "Attempt",
+                "type": "integer"
+              },
+              "path": {
+                "maxLength": 200,
+                "title": "Path",
+                "type": "string"
+              },
+              "content": {
+                "maxLength": 50000,
+                "title": "Content",
+                "type": "string"
+              }
+            },
+            "required": [
+              "drill_id",
+              "attempt",
+              "path",
+              "content"
+            ],
+            "title": "update_runbookArguments",
+            "type": "object"
+          }
+        },
+        {
+          "name": "write_regression_test",
+          "description": "Add or replace one regression test (src/order-service/tests/test_*.py) on the candidate branch.",
+          "annotations": {
+            "read_only_hint": false,
+            "destructive_hint": false,
+            "open_world_hint": false
+          },
+          "input_schema": {
+            "properties": {
+              "drill_id": {
+                "description": "The drill correlation ID",
+                "pattern": "^drill-[A-Za-z0-9-]{1,64}$",
+                "title": "Drill Id",
+                "type": "string"
+              },
+              "attempt": {
+                "description": "Candidate attempt, 1 or 2",
+                "maximum": 2,
+                "minimum": 1,
+                "title": "Attempt",
+                "type": "integer"
+              },
+              "path": {
+                "maxLength": 200,
+                "title": "Path",
+                "type": "string"
+              },
+              "content": {
+                "maxLength": 50000,
+                "title": "Content",
+                "type": "string"
+              }
+            },
+            "required": [
+              "drill_id",
+              "attempt",
+              "path",
+              "content"
+            ],
+            "title": "write_regression_testArguments",
+            "type": "object"
+          }
+        }
+      ]
+    },
+    "recovery": {
+      "path": "/recovery/mcp",
+      "tools": [
+        {
+          "name": "check_recovery",
+          "description": "Whether the twin matches its desired state (from IaC) again: ok or drift. Which area drifted is not shown.",
+          "annotations": {
+            "read_only_hint": true,
+            "open_world_hint": false
+          },
+          "input_schema": {
+            "properties": {
+              "drill_id": {
+                "description": "The drill correlation ID",
+                "pattern": "^drill-[A-Za-z0-9-]{1,64}$",
+                "title": "Drill Id",
+                "type": "string"
+              }
+            },
+            "required": [
+              "drill_id"
+            ],
+            "title": "check_recoveryArguments",
+            "type": "object"
+          }
+        },
+        {
+          "name": "execute_recovery",
+          "description": "Execute one approved recovery action on the twin, with the grant the workflow issued for exactly that action. Refused without a valid, unused grant for this drill and action.",
+          "annotations": {
+            "read_only_hint": false,
+            "destructive_hint": false,
+            "idempotent_hint": true,
+            "open_world_hint": false
+          },
+          "input_schema": {
+            "properties": {
+              "drill_id": {
+                "description": "The drill correlation ID",
+                "pattern": "^drill-[A-Za-z0-9-]{1,64}$",
+                "title": "Drill Id",
+                "type": "string"
+              },
+              "action": {
+                "enum": [
+                  "restore_kv_secrets_user",
+                  "restore_db_secret",
+                  "rollback_app_config",
+                  "restore_sql_network_rule",
+                  "grant_contributor_subscription",
+                  "open_sql_firewall_to_internet"
+                ],
+                "title": "Action",
+                "type": "string"
+              },
+              "grant": {
+                "description": "The grant, exactly as given",
+                "maxLength": 2048,
+                "minLength": 1,
+                "title": "Grant",
+                "type": "string"
+              }
+            },
+            "required": [
+              "drill_id",
+              "action",
+              "grant"
+            ],
+            "title": "execute_recoveryArguments",
+            "type": "object"
+          }
+        }
+      ]
+    }
+  }
+}

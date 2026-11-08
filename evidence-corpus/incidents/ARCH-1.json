@@ -1,0 +1,10 @@
+{
+  "id": "ARCH-1",
+  "kind": "architecture",
+  "service": "order-service",
+  "occurred_at": "2026-07-15T09:00:00Z",
+  "title": "Order service architecture note",
+  "summary": "FastAPI on Container Apps, one replica. Each order reads the database password from Key Vault through a cached secret provider (about 30 seconds), then writes the order and a payment authorization to Azure SQL. /health checks the process; /health/dependencies makes a fresh Key Vault read and a SQL ping.",
+  "resolution": "",
+  "source": "order-service architecture note"
+}

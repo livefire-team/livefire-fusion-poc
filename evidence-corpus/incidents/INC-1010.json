@@ -1,0 +1,10 @@
+{
+  "id": "INC-1010",
+  "kind": "incident",
+  "service": "order-service",
+  "occurred_at": "2026-08-21T07:45:00Z",
+  "title": "Expired ingress certificate caused TLS errors",
+  "summary": "Customers saw TLS errors for 18 minutes after the custom-domain certificate expired.",
+  "resolution": "Renewed the certificate and added an expiry alert.",
+  "source": "incident record"
+}

@@ -1,0 +1,10 @@
+{
+  "id": "FND-17",
+  "kind": "finding",
+  "service": "order-service",
+  "occurred_at": "2026-09-25T10:00:00Z",
+  "title": "Post-incident finding for INC-1042",
+  "summary": "Restart was the only remediation applied. The Key Vault recovery runbook ends when health is green and has no customer-journey check.",
+  "resolution": "Open. Owner: order-service team.",
+  "source": "post-incident review"
+}
