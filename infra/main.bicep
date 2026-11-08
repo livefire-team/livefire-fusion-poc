@@ -29,10 +29,16 @@ param githubRepos string = 'livefire-team@349630330/livefire-fusion-poc@14379085
 @description('Days each evidence version stays immutable (unlocked policy)')
 param evidenceRetentionDays string = '1'
 
+@description('WS1: <registry>/load-generator:sha-<40 hex>. Empty: no caj-loadgen')
+param loadgenImage string = ''
+@description('WS1: the drill-<id> whose event log gets the metrics.orders lines. Empty: the job writes none')
+param loadgenDrillId string = ''
+
 var tags = { 'azd-env-name': environmentName, app: 'livefire' }
 // Computed here, not in a module, so other modules can reference the vault with existing and getSecret
 var controlKeyVaultName = 'kv-lfc-${take(uniqueString(subscription().id, environmentName), 13)}'
 var deployOps = !empty(opsImage) && !empty(refereeImage)
+var deployLoadgen = !empty(loadgenImage)
 
 resource twinRg 'Microsoft.Resources/resourceGroups@2022-09-01' = {
   name: 'rg-lf-twin-${environmentName}'
@@ -143,6 +149,31 @@ module ops 'modules/ops.bicep' = if (deployOps) {
   dependsOn: [opsTwinAccess]
 }
 
+// ---- WS1: the load generator (ADR-015, ADR-021). Replaces the hand-deployed caj-loadgen of the same name ----
+module loadgenIdentity 'modules/loadgen-identity.bicep' = if (deployLoadgen) {
+  scope: controlRg
+  name: 'loadgen-identity'
+  params: { location: location, evidenceAccountName: control.outputs.evidenceAccountName }
+}
+
+module loadgen 'modules/loadgen.bicep' = if (deployLoadgen) {
+  scope: twinRg
+  name: 'loadgen'
+  params: {
+    location: location
+    loadgenImage: loadgenImage
+    registryServer: control.outputs.registryServer
+    pullIdentityId: control.outputs.pullIdentityId
+    orderAppUrl: twin.outputs.orderAppUrl
+    appInsightsConnectionString: twin.outputs.appInsightsConnectionString
+    identityId: loadgenIdentity!.outputs.identityId
+    identityClientId: loadgenIdentity!.outputs.identityClientId
+    // without a drill- ID the job would exit at start, so no event log either
+    eventSource: empty(loadgenDrillId) ? '' : loadgenIdentity!.outputs.eventSource
+    drillId: loadgenDrillId
+  }
+}
+
 output TWIN_RG string = twinRg.name
 output CONTROL_RG string = controlRg.name
 output AZURE_TENANT_ID string = tenant().tenantId
@@ -174,3 +205,5 @@ output CI_CLIENT_ID string = control.outputs.ciClientId
 output OPS_URL string = deployOps ? ops!.outputs.opsUrl : ''
 output REFEREE_JOB_NAME string = deployOps ? ops!.outputs.refereeJobName : ''
 output SMOKE_JOB_NAME string = deployOps ? ops!.outputs.smokeJobName : ''
+output LOADGEN_JOB_NAME string = deployLoadgen ? loadgen!.outputs.loadgenJobName : ''
+output LOADGEN_PRINCIPAL_ID string = deployLoadgen ? loadgenIdentity!.outputs.identityPrincipalId : ''

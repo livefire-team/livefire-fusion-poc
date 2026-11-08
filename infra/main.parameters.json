@@ -43,6 +43,12 @@
     },
     "githubRepos": {
       "value": "${GITHUB_REPOS=livefire-team@349630330/livefire-fusion-poc@1437908536}"
+    },
+    "loadgenImage": {
+      "value": "${LOADGEN_IMAGE}"
+    },
+    "loadgenDrillId": {
+      "value": "${LOADGEN_DRILL_ID}"
     }
   }
 }

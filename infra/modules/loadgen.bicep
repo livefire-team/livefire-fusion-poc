@@ -7,6 +7,9 @@
 //     params: {
 //       location: location
 //       loadgenImage: 'ghcr.io/livefire-team/load-generator:g2'
+//       // optional: pull the private registry's copy instead (ADR-017), as twin.bicep does
+//       registryServer: control.outputs.registryServer
+//       pullIdentityId: control.outputs.pullIdentityId
 //       orderAppUrl: twin.outputs.orderAppUrl
 //       appInsightsConnectionString: twin.outputs.appInsightsConnectionString
 //       // optional: metrics.orders lines in the evidence store (ADR-021), with loadgen-identity.bicep's outputs
@@ -29,8 +32,14 @@ param containerAppsEnvironmentName string = 'cae-lf-twin'
 @maxLength(32)
 param jobName string = 'caj-loadgen'
 
-@description('Load generator image, e.g. ghcr.io/livefire-team/load-generator:sha-<commit>. Public on GHCR, so no registry credentials.')
+@description('Load generator image, e.g. ghcr.io/livefire-team/load-generator:sha-<commit> (public, no registry settings) or <registry>/load-generator:sha-<40 hex> with registryServer set.')
 param loadgenImage string
+
+@description('Private registry login server (WS2 control.bicep); empty keeps the public-registry setup')
+param registryServer string = ''
+
+@description('Resource ID of the identity that pulls from the private registry (AcrPull only)')
+param pullIdentityId string = ''
 
 @description('Base URL of the order service (twin.bicep output orderAppUrl), e.g. https://ca-order.<env>.azurecontainerapps.io.')
 param orderAppUrl string
@@ -89,6 +98,10 @@ var baseEnv = [
 ]
 var drillEnv = empty(drillId) ? [] : [{ name: 'DRILL_ID', value: drillId }]
 var hasIdentity = !empty(identityId)
+// With registryServer set, the image is pulled by pullIdentityId, which can only pull; AZURE_CLIENT_ID still names
+// the job's own identity, so the event writer never signs in as the pull identity.
+var usePrivateRegistry = !empty(registryServer) && !empty(pullIdentityId)
+var identities = union(hasIdentity ? { '${identityId}': {} } : {}, usePrivateRegistry ? { '${pullIdentityId}': {} } : {})
 var identityEnv = hasIdentity && !empty(identityClientId) ? [{ name: 'AZURE_CLIENT_ID', value: identityClientId }] : []
 var eventEnv = empty(eventSource)
   ? []
@@ -107,13 +120,14 @@ resource cae 'Microsoft.App/managedEnvironments@2024-03-01' existing = {
 resource job 'Microsoft.App/jobs@2024-03-01' = {
   name: jobName
   location: location
-  identity: hasIdentity ? { type: 'UserAssigned', userAssignedIdentities: { '${identityId}': {} } } : null
+  identity: empty(identities) ? null : { type: 'UserAssigned', userAssignedIdentities: identities }
   properties: {
     environmentId: cae.id
     configuration: {
       triggerType: triggerType
       replicaTimeout: durationSeconds + shutdownGraceSeconds
       replicaRetryLimit: 0
+      registries: usePrivateRegistry ? [{ server: registryServer, identity: pullIdentityId }] : []
       manualTriggerConfig: triggerType == 'Manual' ? { parallelism: 1, replicaCompletionCount: 1 } : null
       scheduleTriggerConfig: triggerType == 'Schedule'
         ? { cronExpression: cronExpression, parallelism: 1, replicaCompletionCount: 1 }

@@ -2,10 +2,10 @@
 # One entry point for the G2 platform, in phases. Run from the repo root, signed in to the lab (az and azd).
 #   scripts/deploy.sh all                     infra, images, apps, verify (a fresh lab)
 #   scripts/deploy.sh infra                   azd provision: control plane and twin (the Ops Service waits for images)
-#   scripts/deploy.sh images [--build] [ref]  order-service, ops-service and referee into the private registry
+#   scripts/deploy.sh images [--build] [ref]  order-service, ops-service, referee, load-generator into the registry
 #                                             as :sha-<40 hex> of the last commit (at ref, default origin/main) that
 #                                             changed each one: imported from GHCR, or built here with --build
-#   scripts/deploy.sh apps                    azd provision with those images: ca-ops, job-referee, job-ops-smoke
+#   scripts/deploy.sh apps                    azd provision with those images: ca-ops, the jobs, caj-loadgen (WS1)
 #   scripts/deploy.sh policy                  the deny policy, proven as you, then the role that lets id-lf-ops try
 #   scripts/deploy.sh policy-off              removes both (a provision never deletes them), e.g. before a lab ends
 #   scripts/deploy.sh github [owner/repo]     a repo's acr-push environment and variables (repo admin only)
@@ -25,6 +25,7 @@ paths_for() {
     order-service) echo "src/order-service .github/workflows/order-service.yml" ;;
     ops-service)   echo "src/ops-service .github/workflows/ops-service.yml" ;;
     referee)       echo "referee journeys .github/workflows/referee.yml" ;;
+    load-generator) echo "src/load-generator .github/workflows/load-generator.yml" ;;
   esac
 }
 build_args() {  # build_args <component>: docker context and Dockerfile, relative to a checkout
@@ -32,10 +33,14 @@ build_args() {  # build_args <component>: docker context and Dockerfile, relativ
     order-service) echo "src/order-service -f src/order-service/Dockerfile" ;;
     ops-service)   echo "src/ops-service -f src/ops-service/Dockerfile" ;;
     referee)       echo ". -f referee/Dockerfile" ;;
+    load-generator) echo "src/load-generator -f src/load-generator/Dockerfile" ;;
   esac
 }
 env_name() {
-  case "$1" in order-service) echo ORDER_IMAGE ;; ops-service) echo OPS_IMAGE ;; referee) echo REFEREE_IMAGE ;; esac
+  case "$1" in
+    order-service) echo ORDER_IMAGE ;; ops-service) echo OPS_IMAGE ;; referee) echo REFEREE_IMAGE ;;
+    load-generator) echo LOADGEN_IMAGE ;;
+  esac
 }
 
 phase_infra() {
@@ -49,7 +54,7 @@ phase_images() {
   for a in "$@"; do case "$a" in --build) build=1 ;; *) ref="$a" ;; esac; done
   [ -n "${REGISTRY_NAME:-}" ] || { echo "no REGISTRY_NAME: run scripts/deploy.sh infra first"; exit 1; }
   git fetch -q origin
-  for c in order-service ops-service referee; do
+  for c in order-service ops-service referee load-generator; do
     local full
     # shellcheck disable=SC2046  # paths_for prints several paths on purpose
     full="$(git log -1 --first-parent --format=%H "$ref" -- $(paths_for "$c"))"

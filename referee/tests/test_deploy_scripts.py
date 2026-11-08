@@ -184,12 +184,12 @@ def repo(tmp_path):
     subprocess.run([GIT, "clone", "-q", origin.as_posix(), work.as_posix()], check=True, capture_output=True)
     (work / "scripts").mkdir()
     shutil.copy(SCRIPTS / "deploy.sh", work / "scripts")
-    for d in ("src/order-service", "src/ops-service", "referee", "journeys"):
+    for d in ("src/order-service", "src/ops-service", "src/load-generator", "referee", "journeys"):
         (work / d).mkdir(parents=True)
         (work / d / "x.txt").write_text("1")
     git(work, "add", "-A")
     git(work, "commit", "-qm", "base")
-    for component in ("src/ops-service", "referee"):
+    for component in ("src/load-generator", "src/ops-service", "referee"):
         git(work, "switch", "-qc", f"feat-{component.split('/')[-1]}")
         (work / component / "x.txt").write_text("2")
         git(work, "commit", "-qam", f"change {component}")
@@ -216,13 +216,17 @@ def test_images_picks_each_components_last_merge_on_main_and_imports_it(sandbox,
     calls = log_lines(sandbox)
     ops_merge = rev(repo, "HEAD~1^1")      # the merge that changed src/ops-service (first parent of referee's merge)
     referee_merge = rev(repo, "HEAD~1")
+    loadgen_merge = rev(repo, "HEAD~3")
     imports = [c for c in calls if c.startswith("az acr import")]
     assert any(f"--source ghcr.io/livefire-team/ops-service:sha-{ops_merge[:7]}" in c
                and f"--image ops-service:sha-{ops_merge}" in c for c in imports)
     assert any(f"--source ghcr.io/livefire-team/referee:sha-{referee_merge[:7]}" in c for c in imports)
+    assert any(f"--source ghcr.io/livefire-team/load-generator:sha-{loadgen_merge[:7]}" in c
+               and f"--image load-generator:sha-{loadgen_merge}" in c for c in imports)
     assert not any("order-service" in c for c in imports)       # already in the registry: not imported again
     assert f"azd env set OPS_IMAGE acrlftest.azurecr.io/ops-service:sha-{ops_merge}" in calls
     assert f"azd env set REFEREE_IMAGE acrlftest.azurecr.io/referee:sha-{referee_merge}" in calls
+    assert f"azd env set LOADGEN_IMAGE acrlftest.azurecr.io/load-generator:sha-{loadgen_merge}" in calls
     assert any(c.startswith("azd env set ORDER_IMAGE acrlftest.azurecr.io/order-service:sha-") for c in calls)
 
 

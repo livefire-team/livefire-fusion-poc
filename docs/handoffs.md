@@ -47,6 +47,8 @@ contract wins and WS1 fixes this page.
   `identityClientId` and `eventSource` from its outputs, a `drill-` `drillId`, and a `sha-` image from PR #35 or later.
   Check: `az role assignment list --assignee <identityPrincipalId> --all -o table` shows one row on the evidence
   container, and `<drill-id>/events.jsonl` gets `metrics.orders` lines.
+- Done in WS2's `main.bicep` (ADR-021): `scripts/deploy.sh images` puts the registry copy in `LOADGEN_IMAGE`,
+  `azd env set LOADGEN_DRILL_ID <drill-id>` names the event log, and `scripts/deploy.sh apps` deploys both modules.
 
 ### Local stack (no Azure needed)
 - `docker-compose.yml`: SQL Server (`sql`) and the order service (`orders`, on `http://127.0.0.1:8000`).

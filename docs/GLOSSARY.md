@@ -70,6 +70,7 @@ One-sentence definitions of terms used in this project, added the first time eac
 | Playwright | A tool that drives a real browser from code; `journeys/test_order_journey.py` uses it to place an order like a customer. |
 | Policy exemption | A record that switches an Azure Policy off for one scope (like a resource group) without deleting the policy; anyone who can manage policies, such as an Owner, can create one. |
 | PR (pull request) | A request on GitHub to merge a branch into `main`, where changes are reviewed and checks run before merging. |
+| Preview (`azd provision --preview`) | A dry run of a provision: Azure's what-if lists what would be created, changed or left alone, and nothing changes; it runs no azd hooks, and its summary leaves out identities and role assignments. |
 | Probe | A regular HTTP check the platform makes on a container (liveness: restart it if it fails; readiness: stop sending it traffic if it fails); ours both call `/health` (ADR-006). |
 | Propagation | The delay between changing a setting in Azure (like removing access) and every part of Azure acting on it; `scripts/measure-propagation.sh` measures it for Key Vault access. |
 | Public / private repo | Who can read the code: anyone (public) or only invited people (private). Ours is public (ADR-002). |
