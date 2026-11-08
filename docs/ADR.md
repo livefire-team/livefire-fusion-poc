@@ -395,6 +395,37 @@ Status values: Proposed | Accepted | Superseded | Rejected
 - **Implemented in:** `scripts/candidate-scope.sh`, `referee/tests/test_candidate_scope.py`,
   `.github/workflows/order-service.yml`, `.github/workflows/security.yml`
 
+## ADR-021: The load generator writes metrics.orders lines to the drill's event log
+- **Date:** 2026-11-08
+- **Status:** Accepted (WS1); the field list needs WS4's approval for the event catalog
+- **Context:** The Control Center's Orders per minute, Failed orders and Backlog tiles read `metrics.orders` lines from
+  the drill's event log (`<drill-id>/events.jsonl`, in a folder or the evidence container), and show a dash until they
+  arrive. The load generator reported only to Application Insights (ADR-015).
+- **Options considered:** (1) the Control Center queries Application Insights; (2) a separate job that turns
+  Application Insights metrics into events; (3) the load generator writes the lines itself.
+- **Decision:** Option 3. With `EVENT_SOURCE` set (`dir:<path>`, or `blob:https://<account host>/<container>` with the
+  job's managed identity), `loadgen/events.py` writes one line every `METRICS_INTERVAL_SECONDS` (1-300, default 30)
+  and a last one when the run ends or is stopped, in the shape every event writer uses:
+  `{"ts", "drill_id", "action": "metrics.orders", "result": "ok", "details": {"orders_per_min", "failed_total",
+  "backlog", "recovered_total", "dropped_total", "window_s"}}`. `orders_per_min` counts orders placed (HTTP 201, new
+  or retried) in the window, scaled to a minute; `failed_total` counts new orders whose first attempt failed;
+  `recovered_total` counts retries that later succeeded; `dropped_total` counts orders given up on. `EVENT_SOURCE`
+  needs a `drill-` `DRILL_ID`, or the job exits with code 2. Lines go through a bounded queue to a background writer,
+  so a slow or unreachable store never holds up the orders; a failed write, or a store that cannot be opened, logs a
+  warning and the load carries on. The Blob client has short timeouts and no SDK retries (a retried append could
+  write a line twice; a lost line costs little because every line carries running totals), and shutdown waits at
+  most 10 s for queued lines. Creating the append blob never replaces one another writer already started
+  (`if_none_match="*"`). The Application Insights metrics are unchanged.
+- **Consequences:** The tiles get numbers without a query layer. Writing to Blob needs an identity with Storage Blob
+  Data Contributor on the evidence container (a follow-up with WS2); until then the job runs without `EVENT_SOURCE`.
+  That role can append to any drill's log in the container, so the log is not tamper-proof against this identity:
+  the follow-up grants it as narrowly as Azure allows (the container only, with a path condition if supported) and
+  pins the expected storage account from the deployment, not from the host suffix check alone.
+  The image gains `azure-identity` and `azure-storage-blob`. If WS4's catalog names these fields differently, the
+  catalog wins and this module follows.
+- **Implemented in:** `src/load-generator/loadgen/events.py`, `config.py`, `runner.py`, `__main__.py`,
+  `src/load-generator/tests/test_events.py`
+
 ## ADR-00N: <short title>
 - **Date:**
 - **Status:** Proposed

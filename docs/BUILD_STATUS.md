@@ -325,9 +325,17 @@ Status values: not started | in progress | PR open | merged | blocked
 - [ ] WS5: metric names (orders_completed, orders_failed{reason}, loadgen_orders_sent, loadgen_orders_dropped, loadgen_backlog_size)
 
 ## Decisions log pointer
-See `docs/ADR.md` (latest: ADR-019).
+See `docs/ADR.md` (latest: ADR-021).
 
 ## Session log (newest first)
+- 2026-11-08: WS1 G2: PR #34 merged (88214c7), main green. Dry-run candidates: `candidate/drill-ci-check-1` passed
+  both workflows (order-service 1m31s, security 3m09s), published `sha-416e4ab` and `candidate-drill-ci-check-1` and
+  the registry copy, `g1` unmoved; `candidate/drill-ci-check-2` (also `README.md`) failed at `candidate-scope` in
+  both workflows and published nothing. Twin revision with WS2 pending.
+- 2026-11-08: WS1 G2: `metrics.orders` lines from the load generator (ADR-021): queued background writer, `dir:` and
+  `blob:` sinks, 114 load generator tests pass (99% coverage), bandit and pip-audit clean. Local rehearsal: a
+  5-minute run at 60/min next to `scripts/local-access-drill.ps1` wrote one line every 10 s with no write warnings.
+  Blob writes wait for the identity follow-up with WS2.
 - 2026-11-08: WS1 G2: candidate-gates PR (ADR-020): `candidate-scope` jobs in both workflows running `main`'s `scripts/candidate-scope.sh` (13 new
   tests, 84 referee tests pass), `security.yml` on `candidate/**` pushes with a `bandit` job (no findings),
   actionlint clean. All four GHCR packages confirmed public.

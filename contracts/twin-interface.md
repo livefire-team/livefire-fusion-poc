@@ -53,6 +53,8 @@ Version: 1 (2026-10-28) — copied from the WS2 guide's Phase 2 contract via the
    (`Manual` or `Schedule`), `cronExpression`, `jobName`, `containerAppsEnvironmentName`; outputs `loadgenJobName`,
    `loadgenJobId`). Image `ghcr.io/livefire-team/load-generator:g2` (and `sha-<commit>`). Metrics in Application
    Insights: `loadgen_orders_sent` {`kind`, `result`}, `loadgen_orders_dropped` {`reason`}, `loadgen_backlog_size`.
+   With `EVENT_SOURCE` and a `drill-` `DRILL_ID`, it also writes `metrics.orders` events (ADR-021): `details`
+   `orders_per_min`, `failed_total`, `backlog`, `recovered_total`, `dropped_total`, `window_s`.
    `twin.bicep` parameters and outputs are unchanged (ADR-015).
 
 ## Change log
@@ -64,3 +66,4 @@ Version: 1 (2026-10-28) — copied from the WS2 guide's Phase 2 contract via the
 | 2026-10-31 | WS2 addition: `twin.bicep` outputs `logAnalyticsWorkspaceName` and `logAnalyticsCustomerId` (used by WS2's `main.bicep`) | pending |
 | 2026-11-05 | WS2 addition (G2): `twin.bicep` parameters `registryServer` and `pullIdentityId`; the twin's image comes from the lab's private registry (ADR-017) | pending |
 | 2026-11-08 | WS1 addition (G2): candidate pushes run the security scans and bandit, and fail on files outside the allowed paths (ADR-020) | pending |
+| 2026-11-08 | WS1 addition (G2): the load generator writes `metrics.orders` events when `EVENT_SOURCE` is set (ADR-021) | pending |
