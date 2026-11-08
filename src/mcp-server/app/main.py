@@ -54,7 +54,8 @@ def holder_of(presented: str) -> str | None:
     if not presented:
         return None
     if AUTH_MODE == "key":
-        return next((r for r, k in KEYS.items() if hmac.compare_digest(presented, k)), None)
+        raw = presented.encode("utf-8", errors="replace")          # compare bytes: str needs ASCII, or it raises
+        return next((r for r, k in KEYS.items() if hmac.compare_digest(raw, k.encode())), None)
     return VERIFIER.caller_role(presented)
 
 BACKEND = os.environ.get("BACKEND", "fixtures")              # fixtures | azure
@@ -115,7 +116,7 @@ class KeyGuard:
         role = next((r for r in ("planner", "engineer", "recovery") if path.startswith(f"/{r}/")), None)
         if scope["type"] != "http" or role is None:
             return await self.app(scope, receive, send)
-        auth = dict(scope["headers"]).get(b"authorization", b"").decode()
+        auth = dict(scope["headers"]).get(b"authorization", b"").decode("utf-8", errors="replace")
         presented = auth[7:] if auth.lower().startswith("bearer ") else ""
         holder = self.holder(presented)
         if holder == role:

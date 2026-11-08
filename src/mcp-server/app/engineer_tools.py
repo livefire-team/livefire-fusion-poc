@@ -9,7 +9,7 @@ from mcp.server.mcpserver.exceptions import ToolError
 from mcp.types import ToolAnnotations
 from pydantic import Field
 
-from guard import DRILL_ID_PATTERN, PROTECTED, allowed, audited, clip, envelope, require_allowed, safe_path
+from guard import DRILL_ID_PATTERN, PROTECTED, allowed, audited, envelope, redact_clip, require_allowed, safe_path
 
 BRANCH_ONLY = ToolAnnotations(read_only_hint=False, destructive_hint=False, open_world_hint=False)
 DrillId = Annotated[str, Field(pattern=DRILL_ID_PATTERN, description="The drill correlation ID")]
@@ -91,11 +91,11 @@ def build(github, store, base_ref: str, writable: tuple[str, ...] = ()) -> MCPSe
         attempt: Annotated[int, Field(ge=0, le=2, description="0 reads the base commit")] = 0,
     ) -> dict:
         ref = base_ref if attempt == 0 else branch_for(drill_id, attempt)
-        files = {}
+        files, hits = {}, {}
         for p in paths:
             p = require_allowed(p, READ_PATHS, write=False)
-            files[p] = clip(await anyio.to_thread.run_sync(github.read_file, p, ref))
-        return envelope(f"github@{ref}", {"ref": ref, "files": files})
+            files[p] = redact_clip(await anyio.to_thread.run_sync(github.read_file, p, ref), hits)
+        return envelope(f"github@{ref}", {"ref": ref, "files": files}, hits)
 
     @mcp.tool(annotations=BRANCH_ONLY, description="Create candidate/<drill-id>-<attempt> from the drill's base commit. Safe to repeat.")
     @audited("engineer", "create_candidate_branch", store)

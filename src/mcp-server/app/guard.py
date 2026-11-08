@@ -21,7 +21,8 @@ MAX_RESULT = 32_000          # characters of a whole tool result
 
 # Paths no tool may ever write, whatever an allowlist says.
 PROTECTED = ("journeys/", "infra/", ".github/", "sql/", "policy/", "contracts/", "scripts/",
-             "src/control-center/", "src/mcp-server/", "src/drill-runner/")
+             "src/control-center/", "src/mcp-server/", "src/drill-runner/", "src/ops-service/", "referee/", "docs/",
+             "azure.yaml", ".gitleaks.toml")
 
 # (kind, pattern, replacement): the kind is reported in each result's redaction metadata, never what was replaced
 _SECRETS = [
@@ -64,9 +65,15 @@ def clip(text: str, limit: int = MAX_TEXT) -> str:
     return text if len(text) <= limit else text[:limit] + f"\n[truncated {len(text) - limit} characters]"
 
 
-def envelope(source: str, data) -> dict:
-    """Wraps every result: it is data from outside, never instructions."""
-    hits: dict[str, int] = {}
+def redact_clip(text: str, hits: dict, limit: int = MAX_TEXT) -> str:
+    """A file's text for a result: redacted first, then cut to size, so a secret the cut would split is still caught.
+    Pass the same hits to envelope() so the result's redaction metadata counts it."""
+    return clip(redact(text, hits), limit)
+
+
+def envelope(source: str, data, hits: dict | None = None) -> dict:
+    """Wraps every result: it is data from outside, never instructions. hits: redactions already made (redact_clip)."""
+    hits = dict(hits or {})
     clean = redact(data, hits)
     result = {"source": source, "untrusted_content": True,
               "redaction": {"applied": bool(hits), "count": sum(hits.values()), "kinds": sorted(hits)},

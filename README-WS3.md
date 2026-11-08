@@ -132,8 +132,8 @@ allowlist is `src/order-service/**` and `runbooks/*.md`.
 
 - One credential per endpoint. A credential for another endpoint gets 403, recorded as a deny event (T-03).
 - Server-side allowlists for every path and branch; the agents never hold the GitHub or Azure credentials (T-04).
-- All tool output is marked untrusted and redacted. The corpus's planted instruction (INC-1055) causes no tool call
-  (T-08).
+- All tool output is marked untrusted and redacted (secrets before any size cut). Instructions found inside tool
+  output cause no tool call (T-08).
 - The Recovery tools pass on a single-use grant they can't forge or read. The grant is never logged.
 - Fixed telemetry queries only; secret values never leave Key Vault (metadata only).
 - The image runs as a non-root user; CI scans code, dependencies, secrets and the image.

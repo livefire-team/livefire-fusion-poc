@@ -162,7 +162,8 @@ Every write goes to `candidate/<drill_id>-<attempt>`, never `main`. `attempt` is
 | `get_ci_results` | – | the candidate's GitHub Actions status, returned at once |
 
 Never writable: `journeys/`, `infra/`, `.github/`, `sql/`, `policy/`, `contracts/`, `scripts/`,
-`src/control-center/`, `src/mcp-server/`, `src/drill-runner/`. The Engineer can't merge, open pull requests, deploy or
+`src/control-center/`, `src/mcp-server/`, `src/drill-runner/`, `src/ops-service/`, `referee/`, `docs/`, `azure.yaml`,
+`.gitleaks.toml`. The Engineer can't merge, open pull requests, deploy or
 read telemetry. Which files a candidate may change is a setting, `ENGINEER_WRITE_PATHS` (comma-separated patterns),
 set through azd as `MCP_ENGINEER_WRITE_PATHS` and never written in this repo (ADR-004); unset, every write is refused.
 WS4's Drill Runner and the `candidate-scope` CI check must allow the same files.
@@ -234,7 +235,8 @@ caller's role. Calls without a valid `drill_id` aren't recorded. Every call also
 ## 9. Versioning and change control
 
 - **v2.4 (Nov 8, 2026):** the Engineer's write paths come from the `ENGINEER_WRITE_PATHS` setting instead of a list
-  in the code (ADR-004); `src/drill-runner/` is protected. No tool, argument or result field changed.
+  in the code (ADR-004); `src/drill-runner/`, `src/ops-service/`, `referee/`, `docs/`, `azure.yaml` and `.gitleaks.toml` are protected; file text is redacted before
+  it is cut to size. No tool, argument or result field changed.
 - **v2.3 (Nov 8, 2026), narrowing:** `docs/**` removed from the Planner's read allowlist (POC ADR-004, WS2's
   hand-off). No tool, argument or result field changed; a `docs/` path is now refused.
 - **v2.2 (Nov 2, 2026), additive:** tool version, authorization result and redaction metadata on every result; tool

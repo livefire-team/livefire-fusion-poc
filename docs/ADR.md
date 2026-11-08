@@ -449,11 +449,12 @@ Status values: Proposed | Accepted | Superseded | Rejected
   `INCIDENT_CORPUS`); the fixtures backend ships neutral placeholder evidence (`FIXTURES` points a rehearsal at the
   private file); and contract v2.4 takes the Engineer's write paths from `ENGINEER_WRITE_PATHS` (azd value
   `MCP_ENGINEER_WRITE_PATHS`), refusing every write when it is unset and refusing to start on a pattern that could
-  match a protected path. `src/drill-runner/` joins the protected paths.
+  match a protected path. `src/drill-runner/`, `src/ops-service/`, `referee/`, `docs/`, `azure.yaml` and `.gitleaks.toml` join the protected paths,
+  which are now the only in-code limit on writes. File text is redacted before it is cut to size.
 - **Consequences:** WS2's scripts now know about a fourth image. `deploy.sh` leaves `ca-mcp` out until
   `MCP_ENGINEER_WRITE_PATHS` is set. WS4's Drill Runner list and `CANDIDATE_ALLOWED_PATHS` (ADR-020) must allow the
-  same files; WS4's list should also move to a setting before it lands here. WS3's coverage gate starts at 78% (the Azure
-  backends are tested only in the lab); it should rise to 80%. The standalone repo is retired once this merges.
+  same files; WS4's list should also move to a setting before it lands here. WS3's coverage gate is 80% (the Azure
+  backends are tested only in the lab). WS4's `PROTECTED_PATHS` should match the longer protected list. The standalone repo is retired once this merges.
 - **Implemented in:** this PR (`src/mcp-server/`, `infra/modules/mcp*.bicep`, `.github/workflows/mcp-server.yml`)
 
 ## ADR-00N: <short title>

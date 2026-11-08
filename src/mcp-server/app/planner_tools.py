@@ -10,7 +10,7 @@ from mcp.server.mcpserver.exceptions import ToolError
 from mcp.types import ToolAnnotations
 from pydantic import Field
 
-from guard import DRILL_ID_PATTERN, audited, clip, envelope, require_allowed
+from guard import DRILL_ID_PATTERN, audited, envelope, redact_clip, require_allowed
 
 READ_ONLY = ToolAnnotations(read_only_hint=True, destructive_hint=False, open_world_hint=False)
 DrillId = Annotated[str, Field(pattern=DRILL_ID_PATTERN, description="The drill correlation ID")]
@@ -40,10 +40,10 @@ def date_window(from_date: str, to_date: str) -> tuple[str | None, str | None]:
     return from_date, to_date
 
 
-def file_result(path: str, ref: str, text: str) -> dict:
+def file_result(path: str, ref: str, text: str, hits: dict) -> dict:
     """A file with its provenance: the commit or branch it was read at and a checksum of the whole text."""
     return {"path": path, "ref": ref, "sha256": hashlib.sha256(text.encode()).hexdigest(), "chars": len(text),
-            "content": clip(text)}
+            "content": redact_clip(text, hits)}
 
 
 def build(backend, store, ref: str) -> MCPServer:
@@ -117,14 +117,16 @@ def build(backend, store, ref: str) -> MCPServer:
             raise ToolError(f"not a runbook name: {name} (use the bare name, e.g. order-service-keyvault-recovery)")
         path = require_allowed(f"runbooks/{bare}.md", READ_PATHS, write=False)
         text = await anyio.to_thread.run_sync(backend.read_file, path, ref)
-        return envelope(f"github:{path}@{ref}", file_result(path, ref, text))
+        hits: dict[str, int] = {}
+        return envelope(f"github:{path}@{ref}", file_result(path, ref, text, hits), hits)
 
     @mcp.tool(annotations=READ_ONLY, description="Read one order-service source or runbook file at the drill's pinned commit.")
     @audited("planner", "read_repository_context", store)
     async def read_repository_context(drill_id: DrillId, path: Annotated[str, Field(max_length=200)]) -> dict:
         path = require_allowed(path, READ_PATHS, write=False)
         text = await anyio.to_thread.run_sync(backend.read_file, path, ref)
-        return envelope(f"github:{path}@{ref}", file_result(path, ref, text))
+        hits: dict[str, int] = {}
+        return envelope(f"github:{path}@{ref}", file_result(path, ref, text, hits), hits)
 
     @mcp.tool(annotations=READ_ONLY, description="Recent commits that touched one path, newest first.")
     @audited("planner", "get_commit_history", store)

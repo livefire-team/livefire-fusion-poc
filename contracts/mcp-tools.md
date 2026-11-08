@@ -71,7 +71,7 @@ every write is refused; a pattern that could match a protected path stops the se
 paths: `src/example/app/module.py,src/order-service/tests/test_*.py,runbooks/*.md`.
 
 Never writable: journeys/, infra/, .github/, sql/, policy/, contracts/, scripts/, src/control-center/,
-src/mcp-server/, src/drill-runner/. The Engineer can't read telemetry, merge, open pull requests, deploy or commit to main.
+src/mcp-server/, src/drill-runner/, src/ops-service/, referee/, docs/, azure.yaml, .gitleaks.toml. The Engineer can't read telemetry, merge, open pull requests, deploy or commit to main.
 
 ## Configuration the Azure backend needs (v2.0)
 
@@ -124,7 +124,9 @@ Tool names, arguments and result shapes are unchanged, so WS4's `allowed_tools` 
   `ENGINEER_WRITE_PATHS`.
 - **Rules:** `apply_patch` takes a path that matches the setting and is neither a test nor a runbook;
   `write_regression_test` and `update_runbook` keep their own shapes and must also match the setting. Unset, every
-  write is refused. `src/drill-runner/` joins the protected paths.
+  write is refused. `src/drill-runner/`, `src/ops-service/`, `referee/`, `docs/`, `azure.yaml` and `.gitleaks.toml` join the protected paths
+  (they are the only in-code limit now that the write list is a setting). File text is redacted before the
+  20,000-character cut, so a secret the cut would split is still caught.
 - Every result's `tool_version` is `"2.4"`.
 
 ## v2.3: docs/ off the Planner's allowlist (2026-11-08)

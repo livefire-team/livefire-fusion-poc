@@ -39,7 +39,7 @@ jobs:
       # Includes the contract test: contracts/mcp-tools.schema.json must match the code
       - name: Unit, contract and allowlist tests with coverage
         working-directory: src/mcp-server
-        run: pytest -q --cov=app --cov-fail-under=78
+        run: pytest -q --cov=app --cov-fail-under=80
       - name: Bandit and Semgrep (own virtual environment, so they can't change the app's dependencies)
         run: |
           python -m venv "$RUNNER_TEMP/scan"
