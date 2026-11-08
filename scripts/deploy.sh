@@ -45,7 +45,7 @@ env_name() {
 
 phase_infra() {
   say "azd provision (control plane and twin)"
-  azd provision
+  provision
 }
 
 phase_images() {
@@ -59,7 +59,7 @@ phase_images() {
     # shellcheck disable=SC2046  # paths_for prints several paths on purpose
     full="$(git log -1 --first-parent --format=%H "$ref" -- $(paths_for "$c"))"
     if [ -z "$full" ] && [ "$c" = mcp-server ]; then   # WS3 is optional: a ref before it merged still deploys
-      echo "no commit at $ref touches mcp-server: skipped"; continue
+      echo "no commit at $ref touches mcp-server: skipped"; azd env set MCP_IMAGE ""; continue
     fi
     [ -n "$full" ] || { echo "no commit at $ref touches $c"; exit 1; }
     local tag="sha-$full" short="sha-${full:0:7}" image="$REGISTRY_SERVER/$c:sha-$full"
@@ -70,8 +70,12 @@ phase_images() {
       local creds=()
       [ -z "${GHCR_TOKEN:-}" ] || creds=(--username "${GHCR_USER:?set GHCR_USER with GHCR_TOKEN}" --password "$GHCR_TOKEN")
       # ${creds[@]+...}: macOS bash 3.2 treats an empty array as unset under set -u
-      az acr import -n "$REGISTRY_NAME" --source "ghcr.io/$GHCR_OWNER/$c:$short" --image "$c:$tag" \
-        ${creds[@]+"${creds[@]}"} -o none
+      if ! az acr import -n "$REGISTRY_NAME" --source "ghcr.io/$GHCR_OWNER/$c:$short" --image "$c:$tag" \
+        ${creds[@]+"${creds[@]}"} -o none; then
+        [ "$c" = mcp-server ] || exit 1                 # WS3's image never blocks the platform's
+        echo "WARNING: mcp-server image not imported (did mcp-server.yml publish $short?); MCP_IMAGE unchanged" >&2
+        continue
+      fi
       echo "imported ghcr.io/$GHCR_OWNER/$c:$short -> $image"
     else
       local dir; dir="$(mktemp -d)"
@@ -91,7 +95,13 @@ phase_images() {
 # fail the whole provision. Until they are all there, ca-mcp is left out (MCP_IMAGE cleared) and the gap is named.
 mcp_missing() {
   local need=(ops-agent-key) existing n
-  [ "${MCP_AUTH_MODE:-key}" = key ] && need+=(mcp-planner-key mcp-engineer-key mcp-recovery-key)
+  if [ "${MCP_AUTH_MODE:-key}" = key ]; then
+    need+=(mcp-planner-key mcp-engineer-key mcp-recovery-key)
+  else                                                  # entra: the server refuses to start without all four
+    for n in MCP_CLIENT_ID PLANNER_AGENT_OBJECT_ID ENGINEER_AGENT_OBJECT_ID RECOVERY_AGENT_OBJECT_ID; do
+      [ -n "${!n:-}" ] || echo "azd env value $n"
+    done
+  fi
   if [ "${MCP_GITHUB_AUTH:-app}" = app ]; then
     need+=(gh-planner-private-key gh-engineer-private-key)
     for n in GITHUB_PLANNER_APP_ID GITHUB_PLANNER_INSTALLATION_ID GITHUB_ENGINEER_APP_ID GITHUB_ENGINEER_INSTALLATION_ID; do
@@ -100,23 +110,30 @@ mcp_missing() {
   else
     need+=(gh-planner-token gh-engineer-token)
   fi
-  existing="$(az keyvault secret list --vault-name "$CONTROL_KEYVAULT_NAME" --query "[].name" -o tsv)"
+  if ! existing="$(az keyvault secret list --vault-name "${CONTROL_KEYVAULT_NAME:-}" --query "[].name" -o tsv)"; then
+    echo "can't list the secrets in ${CONTROL_KEYVAULT_NAME:-the control vault} (sign-in or role?)"; return
+  fi
   for n in "${need[@]}"; do grep -qx "$n" <<<"$existing" || echo "secret $n in $CONTROL_KEYVAULT_NAME"; done
 }
 
-phase_apps() {
+# Every provision in this script goes through here, so ca-mcp can never fail one (ADR-020)
+provision() {
   load
-  [ -n "${OPS_IMAGE:-}" ] && [ -n "${REFEREE_IMAGE:-}" ] || { echo "run scripts/deploy.sh images first"; exit 1; }
   if [ -n "${MCP_IMAGE:-}" ]; then
     local missing; missing="$(mcp_missing)"
     if [ -n "$missing" ]; then
       printf 'ca-mcp left out of this provision; missing:\n%s\n(see README-WS3.md, Deploy to Azure)\n' "$missing" >&2
       azd env set MCP_IMAGE ""
-      load
     fi
   fi
-  say "azd provision (ca-ops, job-referee, job-ops-smoke${MCP_IMAGE:+, ca-mcp}; twin on $ORDER_IMAGE)"
   azd provision
+}
+
+phase_apps() {
+  load
+  [ -n "${OPS_IMAGE:-}" ] && [ -n "${REFEREE_IMAGE:-}" ] || { echo "run scripts/deploy.sh images first"; exit 1; }
+  say "azd provision (ca-ops, job-referee, job-ops-smoke${MCP_IMAGE:+, ca-mcp if ready}; twin on $ORDER_IMAGE)"
+  provision
   load
   echo "OPS_URL=$OPS_URL"
   case "$OPS_URL" in *.internal.*) ;; *) echo "ca-ops is not internal-only"; exit 1 ;; esac
@@ -127,7 +144,7 @@ phase_policy() {
   load
   say "deny policy on"
   azd env set DENY_BROAD_POLICY on
-  azd provision
+  provision
   say "waiting until the broad option is refused by Azure Policy (a new assignment can take up to 30 minutes)"
   local out rc
   for i in $(seq 40); do
@@ -140,7 +157,7 @@ phase_policy() {
   done
   say "let id-lf-ops attempt Contributor (so only Azure Policy can stop it)"
   azd env set BROAD_ATTEMPT_ROLE on
-  azd provision
+  provision
 }
 
 phase_policy_off() {

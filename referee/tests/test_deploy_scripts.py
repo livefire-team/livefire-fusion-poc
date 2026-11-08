@@ -184,7 +184,31 @@ def test_images_picks_each_components_last_merge_on_main_and_imports_it(sandbox,
     assert f"azd env set REFEREE_IMAGE acrlftest.azurecr.io/referee:sha-{referee_merge}" in calls
     assert any(c.startswith("azd env set ORDER_IMAGE acrlftest.azurecr.io/order-service:sha-") for c in calls)
     assert "no commit at origin/main touches mcp-server: skipped" in result.stdout   # WS3 optional (ADR-020)
-    assert not any(c.startswith("azd env set MCP_IMAGE") for c in calls)
+    assert "azd env set MCP_IMAGE " in calls             # a stale image from another ref is not left behind
+
+
+AZ_IMPORT_NO_MCP_IN_GHCR = """echo "az $*" >> LOG
+case "$*" in
+  "acr repository show"*"order-service"*) exit 0 ;;
+  "acr repository show"*) exit 1 ;;
+  "acr import"*"mcp-server"*) echo "manifest unknown" >&2; exit 1 ;;
+esac
+"""
+
+
+def test_images_carries_on_when_the_mcp_server_image_is_missing(sandbox, repo):
+    (repo / "src" / "mcp-server").mkdir(parents=True)
+    (repo / "src" / "mcp-server" / "x.txt").write_text("1")
+    git(repo, "add", "-A")
+    git(repo, "commit", "-qm", "add mcp-server")
+    git(repo, "push", "-q", "origin", "main")
+    result = run(sandbox, (repo / "scripts" / "deploy.sh").as_posix(), "images", az_body=AZ_IMPORT_NO_MCP_IN_GHCR,
+                 cwd=repo)
+    assert result.returncode == 0, result.stderr
+    assert "mcp-server image not imported" in result.stderr
+    calls = log_lines(sandbox)
+    assert any(c.startswith("azd env set OPS_IMAGE") for c in calls)
+    assert not any(c.startswith("azd env set MCP_IMAGE acrlftest") for c in calls)
 
 
 def test_images_imports_mcp_server_once_it_is_on_main(sandbox, repo):
@@ -220,12 +244,39 @@ ALL_MCP_SECRETS = ("ops-agent-key mcp-planner-key mcp-engineer-key mcp-recovery-
                    "gh-planner-private-key gh-engineer-private-key")
 
 
-def run_apps(sandbox, vault_secrets):
+def run_apps(sandbox, vault_secrets, phase="apps", extra=""):
+    log = (sandbox / "calls.log").as_posix()
+    fake(sandbox / "bin" / "azd", f'if [ "$1 $2" = "env get-values" ]; then cat <<\'EOF\'\n{APPS_VALUES}{extra}EOF\n'
+                                  f'else echo "azd $*" >> {log}; fi\n')
+    az = f'echo "az $*" >> LOG\ncase "$*" in "keyvault secret list"*) printf "%s\\n" {vault_secrets} ;; esac\n'
+    return run(sandbox, copy_deploy(sandbox).as_posix(), phase, az_body=az)
+
+
+def test_infra_also_leaves_ca_mcp_out_when_its_secrets_are_missing(sandbox):
+    result = run_apps(sandbox, "ops-agent-key", phase="infra")
+    assert result.returncode == 0, result.stderr
+    assert "ca-mcp left out of this provision" in result.stderr
+    calls = log_lines(sandbox)
+    assert calls.index("azd env set MCP_IMAGE ") < calls.index("azd provision")
+
+
+def test_entra_mode_needs_the_client_id_and_the_three_agent_identities(sandbox):
+    result = run_apps(sandbox, ALL_MCP_SECRETS, extra="MCP_AUTH_MODE=entra\nMCP_CLIENT_ID=abc\n")
+    assert result.returncode == 0, result.stderr
+    for name in ("PLANNER_AGENT_OBJECT_ID", "ENGINEER_AGENT_OBJECT_ID", "RECOVERY_AGENT_OBJECT_ID"):
+        assert f"azd env value {name}" in result.stderr
+    assert "azd env value MCP_CLIENT_ID" not in result.stderr
+    assert "azd env set MCP_IMAGE " in log_lines(sandbox)
+
+
+def test_an_unreadable_vault_is_named_as_such(sandbox):
     log = (sandbox / "calls.log").as_posix()
     fake(sandbox / "bin" / "azd", f'if [ "$1 $2" = "env get-values" ]; then cat <<\'EOF\'\n{APPS_VALUES}EOF\n'
                                   f'else echo "azd $*" >> {log}; fi\n')
-    az = f'echo "az $*" >> LOG\ncase "$*" in "keyvault secret list"*) printf "%s\\n" {vault_secrets} ;; esac\n'
-    return run(sandbox, copy_deploy(sandbox).as_posix(), "apps", az_body=az)
+    az = 'echo "az $*" >> LOG\ncase "$*" in "keyvault secret list"*) echo Forbidden >&2; exit 1 ;; esac\n'
+    result = run(sandbox, copy_deploy(sandbox).as_posix(), "apps", az_body=az)
+    assert result.returncode == 0, result.stderr
+    assert "can't list the secrets in kv-lfc-test" in result.stderr
 
 
 def test_apps_leaves_ca_mcp_out_and_names_what_is_missing(sandbox):
