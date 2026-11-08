@@ -9,6 +9,11 @@
 //       loadgenImage: 'ghcr.io/livefire-team/load-generator:g2'
 //       orderAppUrl: twin.outputs.orderAppUrl
 //       appInsightsConnectionString: twin.outputs.appInsightsConnectionString
+//       // optional: metrics.orders lines in the evidence store (ADR-021), with loadgen-identity.bicep's outputs
+//       identityId: loadgenIdentity.outputs.identityId
+//       identityClientId: loadgenIdentity.outputs.identityClientId
+//       eventSource: loadgenIdentity.outputs.eventSource
+//       drillId: 'drill-loadgen-lab-1'
 //     }
 //   }
 //
@@ -42,7 +47,7 @@ param ratePerMinute int = 30
 @description('Comma-separated SKUs to order, in turn (SKUS).')
 param skus string = 'SKU-001,SKU-002'
 
-@description('Optional x-drill-id header value (DRILL_ID): 1-64 letters, digits or . _ : -. Empty sends no header.')
+@description('Optional x-drill-id header value (DRILL_ID): 1-64 letters, digits or . _ : -. Empty sends no header. With eventSource set it must be drill-<letters, digits, hyphens>, or the job exits with code 2.')
 param drillId string = ''
 
 @description('How long one job execution places orders, in seconds (DURATION_SECONDS). Keep durationSeconds plus the 300 s shutdown grace below the cron period (hourly by default) so scheduled runs cannot overlap.')
@@ -57,6 +62,20 @@ param triggerType string = 'Manual'
 @description('Cron expression (UTC) used when triggerType is Schedule.')
 param cronExpression string = '0 * * * *'
 
+@description('Optional resource ID of a user-assigned identity for the job (loadgen-identity.bicep output identityId). Needed for blob: eventSource.')
+param identityId string = ''
+
+@description('Client ID of that identity (output identityClientId), passed as AZURE_CLIENT_ID.')
+param identityClientId string = ''
+
+@description('Optional EVENT_SOURCE for metrics.orders lines (ADR-021): blob:https://<account>.blob.core.windows.net/<container>, e.g. loadgen-identity.bicep output eventSource. Empty writes no lines.')
+param eventSource string = ''
+
+@description('Seconds between metrics.orders lines (METRICS_INTERVAL_SECONDS).')
+@minValue(1)
+@maxValue(300)
+param metricsIntervalSeconds int = 30
+
 // Time for the job to stop cleanly after DURATION_SECONDS before the platform ends the replica.
 var shutdownGraceSeconds = 300
 var connectionStringSecretName = 'appinsights-connection-string'
@@ -69,6 +88,14 @@ var baseEnv = [
   { name: 'DURATION_SECONDS', value: string(durationSeconds) }
 ]
 var drillEnv = empty(drillId) ? [] : [{ name: 'DRILL_ID', value: drillId }]
+var hasIdentity = !empty(identityId)
+var identityEnv = hasIdentity && !empty(identityClientId) ? [{ name: 'AZURE_CLIENT_ID', value: identityClientId }] : []
+var eventEnv = empty(eventSource)
+  ? []
+  : [
+      { name: 'EVENT_SOURCE', value: eventSource }
+      { name: 'METRICS_INTERVAL_SECONDS', value: string(metricsIntervalSeconds) }
+    ]
 var telemetryEnv = hasTelemetry
   ? [{ name: 'APPLICATIONINSIGHTS_CONNECTION_STRING', secretRef: connectionStringSecretName }]
   : []
@@ -80,6 +107,7 @@ resource cae 'Microsoft.App/managedEnvironments@2024-03-01' existing = {
 resource job 'Microsoft.App/jobs@2024-03-01' = {
   name: jobName
   location: location
+  identity: hasIdentity ? { type: 'UserAssigned', userAssignedIdentities: { '${identityId}': {} } } : null
   properties: {
     environmentId: cae.id
     configuration: {
@@ -98,7 +126,7 @@ resource job 'Microsoft.App/jobs@2024-03-01' = {
           name: 'load-generator'
           image: loadgenImage
           resources: { cpu: json('0.25'), memory: '0.5Gi' }
-          env: concat(baseEnv, drillEnv, telemetryEnv)
+          env: concat(baseEnv, drillEnv, identityEnv, eventEnv, telemetryEnv)
         }
       ]
     }

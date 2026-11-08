@@ -418,13 +418,16 @@ Status values: Proposed | Accepted | Superseded | Rejected
   (`if_none_match="*"`). The Application Insights metrics are unchanged.
 - **Consequences:** The tiles get numbers without a query layer. Writing to Blob needs an identity with Storage Blob
   Data Contributor on the evidence container (a follow-up with WS2); until then the job runs without `EVENT_SOURCE`.
-  That role can append to any drill's log in the container, so the log is not tamper-proof against this identity:
-  the follow-up grants it as narrowly as Azure allows (the container only, with a path condition if supported) and
-  pins the expected storage account from the deployment, not from the host suffix check alone.
+  `infra/modules/loadgen-identity.bicep` gives the job `id-lf-loadgen` with a custom role on the evidence container
+  alone (create and append blobs; no read, no delete) and a condition that limits those writes to
+  `drill-<id>/events.jsonl`. It can still append to any drill's event log (or write a new version of one; the
+  container's version-level immutability keeps the earlier versions), so those logs are not tamper-proof against this
+  identity; other evidence files are out of its reach. The storage account comes from the deployment
+  (`control.outputs.evidenceAccountName`), not from a hand-typed URL. Wiring it into `main.bicep` is WS2's change.
   The image gains `azure-identity` and `azure-storage-blob`. If WS4's catalog names these fields differently, the
   catalog wins and this module follows.
 - **Implemented in:** `src/load-generator/loadgen/events.py`, `config.py`, `runner.py`, `__main__.py`,
-  `src/load-generator/tests/test_events.py`
+  `src/load-generator/tests/test_events.py` (PR #35); `infra/modules/loadgen-identity.bicep`, `loadgen.bicep`
 
 ## ADR-00N: <short title>
 - **Date:**

@@ -332,6 +332,9 @@ See `docs/ADR.md` (latest: ADR-021).
   both workflows (order-service 1m31s, security 3m09s), published `sha-416e4ab` and `candidate-drill-ci-check-1` and
   the registry copy, `g1` unmoved; `candidate/drill-ci-check-2` (also `README.md`) failed at `candidate-scope` in
   both workflows and published nothing. Twin revision with WS2 pending.
+- 2026-11-08: WS1 G2: load generator identity (ADR-021): `loadgen-identity.bicep` (`id-lf-loadgen`, custom
+  create/append role on the evidence container, limited to `drill-*/events.jsonl`) and optional identity/event params
+  on `loadgen.bicep`; `az bicep build` clean for both and `main.bicep`. Lab check with WS2 after their `main.bicep` PR.
 - 2026-11-08: WS1 G2: PR #35 merged (8339b92), main green (load-generator, security). Left for G2: twin revision
   with WS2 and the load generator's Blob identity (PR C, with WS2); hand-off messages to WS2-WS5 and the lead.
 - 2026-11-08: WS1 G2: `metrics.orders` lines from the load generator (ADR-021): queued background writer, `dir:` and
