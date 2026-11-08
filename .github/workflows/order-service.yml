@@ -5,13 +5,14 @@ name: order-service
 # :sha-<short sha> and :g1. Pushes to candidate/<drill-id>-<attempt> branches publish :sha-<short sha> and
 # :candidate-<drill-id>-<attempt>, never :g1 (ADR-014). For both, `acr` also pushes that image to the lab's private
 # registry as :sha-<full sha>, the only form the Ops Service deploys, once the acr-push environment is set up for the
-# current lab (scripts/deploy.sh github). Actions are pinned to full commit SHAs (ADR-011).
+# current lab (scripts/deploy.sh github). A candidate push first runs `candidate-scope`, which fails the run if the
+# candidate changed a file outside its allowed paths (ADR-020). Actions are pinned to full commit SHAs (ADR-011).
 on:
   push:
     branches: [main, 'candidate/**']
-    paths: ['src/order-service/**', '.github/workflows/order-service.yml']
+    paths: ['src/order-service/**', '.github/workflows/order-service.yml', 'scripts/candidate-scope.sh']
   pull_request:
-    paths: ['src/order-service/**', '.github/workflows/order-service.yml']
+    paths: ['src/order-service/**', '.github/workflows/order-service.yml', 'scripts/candidate-scope.sh']
   workflow_dispatch:
 
 permissions:
@@ -51,8 +52,38 @@ jobs:
           echo "candidate tag: $tag"
           echo "tag=$tag" >> "$GITHUB_OUTPUT"
 
-  test:
+  # A candidate may change only the files its allowed-path patterns name (ADR-020). The patterns live in the
+  # repository variable CANDIDATE_ALLOWED_PATHS, not in this file, and the log shows counts and refused files only.
+  # Anything outside them fails the run before the tests, so no image is published. The check script comes from main,
+  # so a candidate can't change it. security.yml runs the same check on every candidate push, including ones this
+  # workflow's paths filter skips. Main and pull-request runs pass straight through.
+  candidate-scope:
     needs: candidate-tag
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        if: needs.candidate-tag.outputs.tag != ''
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Check the changed paths (the check script from main)
+        shell: bash
+        env:
+          TAG: ${{ needs.candidate-tag.outputs.tag }}
+          CANDIDATE_ALLOWED_PATHS: ${{ vars.CANDIDATE_ALLOWED_PATHS }}
+        run: |
+          if [ -z "$TAG" ]; then echo "not a candidate push, nothing to check"; exit 0; fi
+          git show origin/main:scripts/candidate-scope.sh > "$RUNNER_TEMP/candidate-scope.sh"
+          base="$(git merge-base origin/main HEAD)"
+          echo "changes since $base"
+          git diff --name-only --no-renames -z "$base" HEAD > "$RUNNER_TEMP/changed"
+          bash "$RUNNER_TEMP/candidate-scope.sh" < "$RUNNER_TEMP/changed"
+
+  test:
+    needs: [candidate-tag, candidate-scope]
     runs-on: ubuntu-latest
     timeout-minutes: 15
     permissions:

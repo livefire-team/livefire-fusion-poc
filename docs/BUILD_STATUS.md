@@ -17,8 +17,11 @@ Note: plan row numbers and PR numbers differ. Plan #14 (architecture note) is PR
 ### Owner actions
 1. DONE 2026-10-30: rulesets `candidate-branches` (only admins create/push `candidate/**`) and `protect-main`.
    Still to do: add WS4's Engineer agent identity as a bypass actor on `candidate-branches` once WS4 names it.
-2. Make the GHCR packages `order-service` and `load-generator` public (org > Packages > package settings >
-   Change visibility). Both have been published from `main`.
+2. DONE 2026-11-08: all four GHCR packages (`order-service`, `load-generator`, `ops-service`, `referee`) are public;
+   checked by pulling without a login. CI pushes `sha-` tags (plus `g1`/`g2`), never `latest`.
+8. WS1 G2 (2026-11-08): set the repository variable `CANDIDATE_ALLOWED_PATHS` before the candidate-gates PR merges
+   (ADR-020; the value is in the owner's private notes, not in git). Then push the two dry-run candidates and run
+   one as a twin revision with WS2.
 3. Tell WS2: `azd env set ORDER_IMAGE ghcr.io/livefire-team/order-service:g1`, the `APPINSIGHTS_CONNECTION_STRING`
    output line, and `infra/modules/loadgen.bicep`.
 4. Send WS3 and WS4 their private hand-offs (see `CLAUDE.local.md`).
@@ -325,6 +328,9 @@ Status values: not started | in progress | PR open | merged | blocked
 See `docs/ADR.md` (latest: ADR-019).
 
 ## Session log (newest first)
+- 2026-11-08: WS1 G2: candidate-gates PR (ADR-020): `candidate-scope` jobs in both workflows running `main`'s `scripts/candidate-scope.sh` (13 new
+  tests, 84 referee tests pass), `security.yml` on `candidate/**` pushes with a `bandit` job (no findings),
+  actionlint clean. All four GHCR packages confirmed public.
 - 2026-11-06: WS2 G2 gate: all 13 items met. The lead agreed the section 10 decision and the section 14 hand-offs
   were posted; WS4's contract approval is still awaited (not a gate item). PR #30 merged.
 - 2026-11-06: WS2 G2 section 15: gate check compiled in the local evidence note, 11 of 13 met; open are the lead's

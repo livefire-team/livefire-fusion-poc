@@ -10,6 +10,7 @@ One-sentence definitions of terms used in this project, added the first time eac
 | Architecture note | `docs/architecture.md`: a one-page description of the order service's parts, request flow, settings and telemetry. |
 | Azure Policy | Rules Azure checks on every create or change request, after the role check; a `deny` rule refuses the request even for an Owner (error `RequestDisallowedByPolicy`). |
 | Backlog (load generator) | The load generator's in-memory list of orders that failed and will be tried again later, with growing waits between tries. |
+| Bandit | A Python security linter that flags risky code (shell injection, weak crypto, hard-coded passwords); `security.yml` fails on its medium or high findings (ADR-020). |
 | Bicep | Microsoft's language for describing Azure resources as code; `az bicep build` checks it compiles. |
 | Bicep module | A reusable Bicep file that another Bicep file calls with parameters and reads outputs from; ours is `infra/modules/twin.bicep`, called by WS2's `main.bicep`. |
 | Branch | A separate line of work in git, so `main` stays untouched until a change is reviewed and merged. |
@@ -52,6 +53,7 @@ One-sentence definitions of terms used in this project, added the first time eac
 | KQL | Kusto Query Language: the language for searching App Insights and Log Analytics data (like `exceptions \| where timestamp > ago(1h)`); passed with `--analytics-query`. |
 | Load generator | `src/load-generator/`: a small program that places orders at a steady rate so the order service has real traffic and throughput numbers. |
 | Managed identity | An Azure-managed login for an app (no password to store) that can be granted access to other resources, like our app reading Key Vault. |
+| Merge base | The newest commit two branches share; `git diff <merge base> HEAD` shows only what a branch changed since it left `main`. |
 | Merge commit | A commit that joins a branch into `main` while keeping every original commit; we never squash (ADR-003). |
 | Monkeypatch | A pytest helper that temporarily replaces a function or object during one test (like the database calls) and puts it back afterwards. |
 | Noreply email | A private address GitHub gives you for commits, so your real email is not public. |
@@ -71,6 +73,7 @@ One-sentence definitions of terms used in this project, added the first time eac
 | pytest | Python's test runner: it finds functions named `test_...` and reports which pass or fail. |
 | RBAC | Role-Based Access Control: Azure grants access by assigning a role (like "Key Vault Secrets User") to an identity on a resource. |
 | Replica | One running copy of a container app; the twin runs exactly one (ADR-006), except for a few seconds during a rolling restart. |
+| Repository variable (Actions) | A named, non-secret setting kept in GitHub (Settings > Secrets and variables > Actions > Variables) that workflows read as `vars.NAME`; changing it needs an admin, not a pull request. |
 | Revision | An immutable version of a Container App's settings and image; a new one is created when the app's template changes. |
 | Rolling restart | A restart that starts the new replica first and stops the old one only once the new one is ready, so the app never goes down. `az containerapp revision restart` works this way and returns before the swap is done. |
 | SARIF | A standard JSON format for scanner results; CodeQL uploads SARIF so findings show in GitHub's Security tab. |
