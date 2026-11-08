@@ -14,6 +14,7 @@ One-sentence definitions of terms used in this project, added the first time eac
 | Bicep | Microsoft's language for describing Azure resources as code; `az bicep build` checks it compiles. |
 | Bicep module | A reusable Bicep file that another Bicep file calls with parameters and reads outputs from; ours is `infra/modules/twin.bicep`, called by WS2's `main.bicep`. |
 | Branch | A separate line of work in git, so `main` stays untouched until a change is reviewed and merged. |
+| CA bundle (certificate bundle) | A file listing the certificate authorities a program trusts for secure (HTTPS) connections; `az` uses its own, so on a network with SSL inspection we point `REQUESTS_CA_BUNDLE` at `.local/az-ca-bundle.pem`, which adds the company's inspection certificate. |
 | Cache | A copy of a value kept in memory so the app doesn't fetch it again every time; our secret provider caches the DB password. |
 | Candidate branch | A branch named `candidate/<drill-id>-<attempt>` holding a proposed change; CI builds it and publishes a `candidate-<drill-id>-<attempt>` image for a trial deploy. |
 | CI (continuous integration) | Automatically testing and building every change on a server (for us, GitHub Actions) so problems show up before merging. |
@@ -87,6 +88,7 @@ One-sentence definitions of terms used in this project, added the first time eac
 | Span | One timed step inside a trace (like `place_order`), which can carry attributes such as `drill_id`. |
 | sqlcmd | Microsoft's command-line tool for running SQL against SQL Server; we run it inside the SQL container. |
 | Squash merge | Merging a PR as one combined commit; forbidden here because it rewrites commit history (ADR-003). |
+| SSL inspection | A company network feature that opens and re-signs secure traffic with the company's own certificate so it can be checked; programs that don't trust that certificate fail with `CERTIFICATE_VERIFY_FAILED`. |
 | Stacked PR | A PR whose branch starts from another open PR's branch; it shows both PRs' commits until the first one merges. |
 | Stand-in | A simple local replacement for a real service, used so the app can run without it; our local stand-in for Key Vault is the file `.local/secret.txt` (ADR-012). |
 | Symlink (symbolic link) | A file that just points to another file or folder, like a shortcut; Homebrew's `opt/openssl` is one. |
