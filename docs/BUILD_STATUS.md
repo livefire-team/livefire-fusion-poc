@@ -155,7 +155,7 @@ Status values: not started | in progress | PR open | merged | blocked
       section 13). It was ON again from 2026-11-06 to 2026-11-08: `scripts/deploy.sh policy` ran twice on 2026-11-06.
       The first run's 40 checks (14:08-14:53 UTC) were all `UNEXPECTED_ALLOW`, and `recover.sh` removed each
       grant. The second run created the assignment at 15:07 UTC, was refused by Azure Policy at 15:11 UTC, and gave
-      `id-lf-ops` its broad-attempt role at 15:14 UTC. `DENY_BROAD_POLICY` and `BROAD_ATTEMPT_ROLE` are `on`. No
+      `id-lf-ops` its broad-attempt role at 15:14 UTC. `DENY_BROAD_POLICY` and `BROAD_ATTEMPT_ROLE` were `on` until 2026-11-08. No
       Contributor, Owner or User Access Administrator assignment was left at subscription scope. If the policy is
       turned off and on again, allow up to an hour, not 30 minutes.
   - Lab notes:
@@ -175,7 +175,8 @@ Status values: not started | in progress | PR open | merged | blocked
     - The SQL firewall's `bootstrap-client` rule holds the Mac's public IP from the last provision. When the Mac's
       network changes, `reset.sh` and `referee.sh` fail with `Client with IP address ... is not allowed`: add a
       rule for the current IP (`curl -s https://api.ipify.org`), or re-run `postprovision.sh` (it updates
-      `bootstrap-client`). A second rule for the drill-day network was added 2026-11-08.
+      `bootstrap-client`). A second rule for the drill-day network was added 2026-11-08; delete it once the Mac
+      no longer uses that network.
     - `deploy.sh smoke` waits 90 s for the job's console log, but it took about 3 minutes to reach Log
       Analytics. Rerun the query it prints (`ContainerAppConsoleLogs_CL`, `ContainerGroupName_s startswith
       '<execution>'`) a little later.
@@ -255,12 +256,8 @@ Status values: not started | in progress | PR open | merged | blocked
       `az containerapp job start -g <twin rg> -n caj-loadgen` (each run places 30 orders a minute for 50
       minutes). The Referee's SQL check counts only its own run's orders, so load-generator orders don't change
       verdicts.
-    - **Done 2026-11-08**, joint drill on the WS2 Mac (WS5's run sheet): WS2 ran the scripts, WS5 clicked.
-      Drill A: baseline PASS, fault, during-fault FAIL; WS5's broad click was refused (`RequestDisallowedByPolicy`,
-      no Contributor left at subscription scope), the narrow click restored access, `after-restore` FAIL (the
-      False Green), `after-restart` PASS. Drill B: WS5's Kill switch press reached the Mac within a second, the kill
-      watcher ran `reset.sh`, and `fault.sh status` printed `app access entries: 1`. Both drill IDs are in the
-      local evidence note. Agreed: the policy goes off now (done), and WS5 starts a `caj-loadgen` run before each
+    - **Done 2026-11-08**, joint drill on the WS2 Mac (WS5's run sheet): WS2 ran the scripts, WS5 clicked. Both
+      drills gave the expected results; details and both drill IDs are in the local evidence note. Agreed: the policy goes off now (done), and WS5 starts a `caj-loadgen` run before each
       drill or demo.
     - Mon Nov 9, WS5's PR (branch `ws5-control-center-in-main`, not opened yet) adds the Control Center to
       `main.bicep`, skipped while `CONTROL_CENTER_IMAGE` is unset. Review it with `azd provision --preview`. After
