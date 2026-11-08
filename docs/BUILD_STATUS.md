@@ -332,6 +332,8 @@ See `docs/ADR.md` (latest: ADR-021).
   both workflows (order-service 1m31s, security 3m09s), published `sha-416e4ab` and `candidate-drill-ci-check-1` and
   the registry copy, `g1` unmoved; `candidate/drill-ci-check-2` (also `README.md`) failed at `candidate-scope` in
   both workflows and published nothing. Twin revision with WS2 pending.
+- 2026-11-08: WS1 G2: PR #35 merged (8339b92), main green (load-generator, security). Left for G2: twin revision
+  with WS2 and the load generator's Blob identity (PR C, with WS2); hand-off messages to WS2-WS5 and the lead.
 - 2026-11-08: WS1 G2: `metrics.orders` lines from the load generator (ADR-021): queued background writer, `dir:` and
   `blob:` sinks, 114 load generator tests pass (99% coverage), bandit and pip-audit clean. Local rehearsal: a
   5-minute run at 60/min next to `scripts/local-access-drill.ps1` wrote one line every 10 s with no write warnings.
