@@ -6,18 +6,19 @@ from collections.abc import Callable
 
 from loadgen.backlog import Backlog, PendingOrder
 from loadgen.config import Config
-from loadgen.telemetry import Metrics, log_status
+from loadgen.telemetry import log_status
 
 STATUS_EVERY_TICKS = 30
 
 
 class LoadRunner:
-    def __init__(self, config: Config, client, backlog: Backlog, metrics: Metrics):
+    def __init__(self, config: Config, client, backlog: Backlog, metrics, reporter=None):
         self._config = config
         self._client = client
         self._backlog = backlog
         self._metrics = metrics
         self._skus = itertools.cycle(config.skus)
+        self._reporter = reporter   # optional metrics.orders writer: start(now), tick(now), close(now)
         self.sent = 0
 
     def _handle_failure(self, result, queue: Callable[[], bool]) -> None:
@@ -62,14 +63,22 @@ class LoadRunner:
         start = clock()
         duration = self._config.duration_seconds
         ticks = 0
-        while not stop.is_set():
-            if duration and clock() - start >= duration:
-                break
-            self.tick(clock())
-            ticks += 1
-            if ticks % STATUS_EVERY_TICKS == 0:
-                log_status(self.sent, len(self._backlog), self._backlog.dropped)
-            if stop.wait(self._seconds_until_next_slot(start, ticks, clock())):
-                break
-        log_status(self.sent, len(self._backlog), self._backlog.dropped)
+        if self._reporter:
+            self._reporter.start(start)
+        try:
+            while not stop.is_set():
+                if duration and clock() - start >= duration:
+                    break
+                self.tick(clock())
+                ticks += 1
+                if self._reporter:
+                    self._reporter.tick(clock())
+                if ticks % STATUS_EVERY_TICKS == 0:
+                    log_status(self.sent, len(self._backlog), self._backlog.dropped)
+                if stop.wait(self._seconds_until_next_slot(start, ticks, clock())):
+                    break
+        finally:
+            log_status(self.sent, len(self._backlog), self._backlog.dropped)
+            if self._reporter:
+                self._reporter.close(clock())    # the last line is written even if the loop fails
         return self.sent

@@ -38,6 +38,11 @@ contract wins and WS1 fixes this page.
   and `appInsightsConnectionString: twin.outputs.appInsightsConnectionString`; other parameters are listed in the
   module and the contract (ADR-015).
 - Start a run: `az containerapp job start -g <rg> -n caj-loadgen` (or set `triggerType: 'Schedule'`).
+- `metrics.orders` lines for the Control Center (ADR-021): set `DRILL_ID` (a `drill-` ID) and `EVENT_SOURCE`
+  (`dir:<path>` locally, `blob:https://<evidence account>.blob.core.windows.net/evidence` in Azure, which needs the
+  job's identity to have Storage Blob Data Contributor on that container). One line every `METRICS_INTERVAL_SECONDS`
+  (default 30) and one when the run ends; `details` holds `orders_per_min`, `failed_total`, `backlog`,
+  `recovered_total`, `dropped_total` and `window_s`.
 
 ### Local stack (no Azure needed)
 - `docker-compose.yml`: SQL Server (`sql`) and the order service (`orders`, on `http://127.0.0.1:8000`).
