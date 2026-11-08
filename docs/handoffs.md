@@ -39,10 +39,14 @@ contract wins and WS1 fixes this page.
   module and the contract (ADR-015).
 - Start a run: `az containerapp job start -g <rg> -n caj-loadgen` (or set `triggerType: 'Schedule'`).
 - `metrics.orders` lines for the Control Center (ADR-021): set `DRILL_ID` (a `drill-` ID) and `EVENT_SOURCE`
-  (`dir:<path>` locally, `blob:https://<evidence account>.blob.core.windows.net/evidence` in Azure, which needs the
-  job's identity to have Storage Blob Data Contributor on that container). One line every `METRICS_INTERVAL_SECONDS`
+  (`dir:<path>` locally, `blob:https://<evidence account>.blob.core.windows.net/evidence` in Azure). One line every `METRICS_INTERVAL_SECONDS`
   (default 30) and one when the run ends; `details` holds `orders_per_min`, `failed_total`, `backlog`,
   `recovered_total`, `dropped_total` and `window_s`.
+- In Azure (WS2's `main.bicep`): deploy `modules/loadgen-identity.bicep` with `scope: controlRg` and
+  `evidenceAccountName: control.outputs.evidenceAccountName`, then give `loadgen.bicep` `identityId`,
+  `identityClientId` and `eventSource` from its outputs, a `drill-` `drillId`, and a `sha-` image from PR #35 or later.
+  Check: `az role assignment list --assignee <identityPrincipalId> --all -o table` shows one row on the evidence
+  container, and `<drill-id>/events.jsonl` gets `metrics.orders` lines.
 
 ### Local stack (no Azure needed)
 - `docker-compose.yml`: SQL Server (`sql`) and the order service (`orders`, on `http://127.0.0.1:8000`).

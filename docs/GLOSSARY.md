@@ -25,6 +25,8 @@ One-sentence definitions of terms used in this project, added the first time eac
 | Conventional commit | A commit message that starts with its type, e.g. `feat:`, `fix:`, `docs:`, `chore:`, `test:`, `ci:`. |
 | Coverage (test coverage) | The share of code lines that the tests actually run, measured with `pytest --cov`; we require at least 80% on `src/order-service/app`. |
 | Custom role (Azure) | A role we define ourselves with only the actions it lists, e.g. "restart this one order app"; used so `id-lf-ops` gets no broader right than it needs. |
+| Data action (Azure) | A permission on the data inside a resource (e.g. append to a blob) rather than on the resource itself (e.g. change the storage account). The load generator's role has only two data actions: create a blob and append to one. |
+| Role assignment condition (Azure ABAC) | An extra rule on a role assignment, checked on each request; e.g. "writes are allowed only to blobs named `drill-*/events.jsonl`". |
 | CVE | Common Vulnerabilities and Exposures: the public ID (like `CVE-2026-12345`) given to a known security flaw in a piece of software. |
 | Dependency override | A FastAPI feature (`app.dependency_overrides`) that swaps a dependency for a test stand-in; our tests use pytest's monkeypatch instead because `main.py` uses module-level objects. |
 | Digest (image digest) | An image's `sha256:...` fingerprint; unlike a tag it can never point at different contents, so the Ops Service deploys by digest. |
