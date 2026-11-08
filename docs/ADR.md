@@ -359,6 +359,25 @@ Status values: Proposed | Accepted | Superseded | Rejected
   `drill-smoke-policy-20261105-0216-6e1e` at 02:16:12 UTC (`smoke policy`, through the Ops Service with a signed
   grant; the `recover.broad` event's `refused_by` is `Azure Policy`).
 
+## ADR-020: WS3's MCP server lives in this repo and deploys with the platform
+- **Date:** 2026-11-08
+- **Status:** Proposed (WS3); needs WS2's review of the `main.bicep`, `deploy.sh` and `postprovision.sh` changes
+- **Context:** WS3 was built as a standalone extract (`livefire-team/ws3-mcp-server`). The plan has one repo, one azd
+  environment and one `main.bicep`; CI only pushes images, and `azd provision` deploys. A second deploy path for
+  `ca-mcp` would fight the shared template. The Planner reads this repo, so ADR-004's allowlist applies.
+- **Options considered:** (1) keep the extract and deploy `ca-mcp` from its own workflow, with an identity that can
+  assign roles; (2) move WS3 here and add its two modules to `main.bicep`, like the Ops Service.
+- **Decision:** Option 2. `ca-mcp` deploys once `MCP_IMAGE` is set and the Ops Service is deployed (`/recovery`
+  calls it). `deploy.sh images` treats `mcp-server` like the other images; `deploy.sh apps` leaves `ca-mcp` out,
+  naming what is missing, until its GitHub credentials are in the control vault, so WS3 can't fail a platform
+  provision. `postprovision.sh` creates the three endpoint keys once (like the Ops keys) and reloads the incident
+  index. Contract v2.3: the Planner reads only `src/order-service/**` and `runbooks/*.md`, never `docs/`,
+  `CLAUDE.md`, `src/ops-service/`, `referee/` or `scripts/`. On an access-policy twin vault, `id-lf-mcp` gets a
+  secrets `list` policy (metadata, never values), re-added after the twin on every provision.
+- **Consequences:** WS2's scripts now know about a fourth image. WS3's coverage gate starts at 78% (the Azure
+  backends are tested only in the lab); it should rise to 80%. The standalone repo is retired once this merges.
+- **Implemented in:** PR #__ (`src/mcp-server/`, `infra/modules/mcp*.bicep`, `.github/workflows/mcp-server.yml`)
+
 ## ADR-00N: <short title>
 - **Date:**
 - **Status:** Proposed
