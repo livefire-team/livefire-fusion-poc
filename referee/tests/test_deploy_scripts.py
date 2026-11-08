@@ -116,8 +116,51 @@ def test_postprovision_waits_for_the_vault_role(sandbox):
     script.write_text(text)
     result = run(sandbox, script.as_posix(), az_body=AZ_VAULT_NOT_READY_YET)
     assert result.returncode == 0, result.stderr
-    assert "waiting for Key Vault Secrets Officer" in result.stderr
+    assert "waiting for Key Vault access to apply" in result.stderr
     assert not [c for c in log_lines(sandbox) if c.startswith("az keyvault secret set") and "-key" in c]
+
+
+AZ_TWIN_VAULT_SSL_INSPECTED = """echo "az $*" >> LOG
+case "$*" in
+  "keyvault secret list --vault-name kv-lf-twin"*)
+    echo "ERROR: [SSL: CERTIFICATE_VERIFY_FAILED] certificate verify failed" >&2; exit 1 ;;
+  "keyvault secret list"*) echo ops-runner-key ;;
+  "containerapp show"*) echo rev-1 ;;
+esac
+"""
+
+
+def test_postprovision_stops_before_any_change_when_the_twin_vault_is_unreachable(sandbox):
+    script = copy_repo_bits(sandbox)
+    script.write_text(script.read_text().replace("sleep 10", "sleep 0"))
+    result = run(sandbox, script.as_posix(), az_body=AZ_TWIN_VAULT_SSL_INSPECTED)
+    assert result.returncode == 1
+    assert "SQL passwords unchanged" in result.stderr
+    calls = log_lines(sandbox)
+    assert not [c for c in calls if c.startswith("sqlcmd")]
+    assert not [c for c in calls if c.startswith(("az keyvault secret set", "az sql", "azd env set"))]
+    assert len([c for c in calls if c.startswith("az keyvault secret list")]) == 2   # no retries on a TLS error
+
+
+AZ_DB_PASSWORD_WRITE_FAILS_ONCE = """echo "az $*" >> LOG
+case "$*" in
+  "keyvault secret set --vault-name kv-lf-twin -n db-password"*)
+    n=$(cat set-calls 2>/dev/null || echo 0); echo $((n+1)) > set-calls
+    if [ "$n" -lt 1 ]; then echo "Forbidden" >&2; exit 1; fi ;;
+  "keyvault secret list"*) echo ops-runner-key; echo ops-agent-key; echo recovery-grant-key ;;
+  "keyvault secret show"*) echo same ;;
+  "containerapp show"*) echo rev-1 ;;
+esac
+"""
+
+
+def test_postprovision_retries_the_db_password_write(sandbox):
+    script = copy_repo_bits(sandbox)
+    script.write_text(script.read_text().replace("sleep 10", "sleep 0"))
+    result = run(sandbox, script.as_posix(), az_body=AZ_DB_PASSWORD_WRITE_FAILS_ONCE)
+    assert result.returncode == 0, result.stderr
+    sets = [c for c in log_lines(sandbox) if c.startswith("az keyvault secret set --vault-name kv-lf-twin -n db-password")]
+    assert len(sets) == 2
 
 
 # ---- deploy.sh images ----
