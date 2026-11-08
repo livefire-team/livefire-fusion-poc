@@ -6,13 +6,15 @@ title = "livefire-fusion-poc gitleaks config"
 useDefault = true
 
 [[allowlists]]
-description = "Azure built-in role definition IDs (public, the same in every tenant) used in infra/modules/twin.bicep"
+description = "Azure built-in role definition IDs (public, the same in every tenant) used in infra/modules/*.bicep"
 regexTarget = "secret"
 regexes = [
   # Key Vault Secrets User
   '''^4633458b-17de-408a-b874-0445c86b69e6$''',
   # Key Vault Secrets Officer
   '''^b86a8fe4-44ce-4948-aee5-eccb2c155cd7$''',
+  # Key Vault Reader (WS3: the Planner's secret metadata, infra/modules/mcp-twin-access.bicep)
+  '''^21090545-7ca7-4776-b22c-e363652d74d2$''',
 ]
 
 [[allowlists]]
@@ -20,4 +22,10 @@ description = "Fingerprint of Microsoft's published package signing key, checked
 regexTarget = "secret"
 regexes = [
   '''^BC528686B50D79E339D3721CEB3E94ADBE1229CF$''',
+]
+
+[[allowlists]]
+description = "WS3's redaction tests: fake secrets on purpose, to prove the MCP server scrubs them from tool results"
+paths = [
+  '''(^|/)src/mcp-server/tests/test_backends\.py$''',
 ]

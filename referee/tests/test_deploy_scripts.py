@@ -91,11 +91,39 @@ def test_postprovision_creates_only_missing_keys_and_reuses_passwords(sandbox):
     calls = log_lines(sandbox)
     sets = [c for c in calls if c.startswith("az keyvault secret set") and "kv-lfc-test" in c]
     names = [c.split(" -n ")[1].split()[0] for c in sets]
-    assert names == ["ops-agent-key", "recovery-grant-key", "ops-cleanup-sql-password"]
+    assert names == ["ops-agent-key", "recovery-grant-key", "mcp-planner-key", "mcp-engineer-key", "mcp-recovery-key",
+                     "ops-cleanup-sql-password"]
     assert "azd env set REFEREE_SQL_PASSWORD existing-referee-pw" in calls
     sql = (sandbox / "calls.log").read_text()
     assert "CREATE USER ops_cleanup" in sql and "GRANT SELECT, DELETE ON dbo.orders TO ops_cleanup" in sql
     assert calls[-1] == "referee baseline"
+
+
+def run_postprovision_with_search(sandbox, extra):
+    script = copy_repo_bits(sandbox)
+    log = (sandbox / "calls.log").as_posix()
+    values = VALUES + "SEARCH_ENDPOINT=https://srch-test.search.windows.net\n" + extra
+    fake(sandbox / "bin" / "azd", f'if [ "$1 $2" = "env get-values" ]; then cat <<\'EOF\'\n{values}EOF\n'
+                                  f'else echo "azd $*" >> {log}; fi\n')
+    fake(sandbox / "bin" / "python3", f'echo "python3 $*" >> {log}\n')
+    return run(sandbox, script.as_posix(), az_body=AZ_VAULT_HAS_RUNNER_KEY)
+
+
+def test_postprovision_loads_no_incidents_without_a_private_corpus(sandbox):
+    result = run_postprovision_with_search(sandbox, "")
+    assert result.returncode == 0, result.stderr
+    assert "incident index not loaded: set INCIDENT_CORPUS" in result.stderr
+    assert not any("load-incidents.py" in c for c in log_lines(sandbox))
+
+
+def test_postprovision_loads_the_incidents_from_the_private_corpus(sandbox):
+    corpus = sandbox / "private" / "incidents"
+    corpus.mkdir(parents=True)
+    result = run_postprovision_with_search(sandbox, f"INCIDENT_CORPUS={corpus.as_posix()}\n")
+    assert result.returncode == 0, result.stderr
+    loads = [c for c in log_lines(sandbox) if "load-incidents.py" in c]
+    assert loads == [f"python3 scripts/load-incidents.py --endpoint https://srch-test.search.windows.net "
+                     f"--corpus {corpus.as_posix()}"]
 
 
 AZ_VAULT_NOT_READY_YET = """echo "az $*" >> LOG
@@ -103,7 +131,8 @@ case "$*" in
   "keyvault secret list"*)
     n=$(cat list-calls 2>/dev/null || echo 0); echo $((n+1)) > list-calls
     if [ "$n" -lt 2 ]; then echo "Forbidden" >&2; exit 1; fi
-    echo ops-runner-key; echo ops-agent-key; echo recovery-grant-key ;;
+    echo ops-runner-key; echo ops-agent-key; echo recovery-grant-key
+    echo mcp-planner-key; echo mcp-engineer-key; echo mcp-recovery-key ;;
   "keyvault secret show"*) echo same ;;
   "containerapp show"*) echo rev-1 ;;
 esac
@@ -224,6 +253,130 @@ def test_images_picks_each_components_last_merge_on_main_and_imports_it(sandbox,
     assert f"azd env set OPS_IMAGE acrlftest.azurecr.io/ops-service:sha-{ops_merge}" in calls
     assert f"azd env set REFEREE_IMAGE acrlftest.azurecr.io/referee:sha-{referee_merge}" in calls
     assert any(c.startswith("azd env set ORDER_IMAGE acrlftest.azurecr.io/order-service:sha-") for c in calls)
+    assert "no commit at origin/main touches mcp-server: skipped" in result.stdout   # WS3 optional (ADR-022)
+    assert "azd env set MCP_IMAGE " in calls             # a stale image from another ref is not left behind
+
+
+AZ_IMPORT_NO_MCP_IN_GHCR = """echo "az $*" >> LOG
+case "$*" in
+  "acr repository show"*"order-service"*) exit 0 ;;
+  "acr repository show"*) exit 1 ;;
+  "acr import"*"mcp-server"*) echo "manifest unknown" >&2; exit 1 ;;
+esac
+"""
+
+
+def test_images_carries_on_when_the_mcp_server_image_is_missing(sandbox, repo):
+    (repo / "src" / "mcp-server").mkdir(parents=True)
+    (repo / "src" / "mcp-server" / "x.txt").write_text("1")
+    git(repo, "add", "-A")
+    git(repo, "commit", "-qm", "add mcp-server")
+    git(repo, "push", "-q", "origin", "main")
+    result = run(sandbox, (repo / "scripts" / "deploy.sh").as_posix(), "images", az_body=AZ_IMPORT_NO_MCP_IN_GHCR,
+                 cwd=repo)
+    assert result.returncode == 0, result.stderr
+    assert "mcp-server image not imported" in result.stderr
+    calls = log_lines(sandbox)
+    assert any(c.startswith("azd env set OPS_IMAGE") for c in calls)
+    assert not any(c.startswith("azd env set MCP_IMAGE acrlftest") for c in calls)
+
+
+def test_images_imports_mcp_server_once_it_is_on_main(sandbox, repo):
+    git(repo, "switch", "-qc", "feat-mcp")
+    (repo / "src" / "mcp-server").mkdir(parents=True)
+    (repo / "src" / "mcp-server" / "x.txt").write_text("1")
+    git(repo, "add", "-A")
+    git(repo, "commit", "-qm", "add mcp-server")
+    git(repo, "switch", "-q", "main")
+    git(repo, "merge", "-q", "--no-ff", "feat-mcp", "-m", "merge mcp-server")
+    git(repo, "push", "-q", "origin", "main")
+    result = run(sandbox, (repo / "scripts" / "deploy.sh").as_posix(), "images", az_body=AZ_IMPORT, cwd=repo)
+    assert result.returncode == 0, result.stderr
+    merge = rev(repo)
+    calls = log_lines(sandbox)
+    assert any(c.startswith("az acr import") and f"--source ghcr.io/livefire-team/mcp-server:sha-{merge[:7]}" in c
+               for c in calls)
+    assert f"azd env set MCP_IMAGE acrlftest.azurecr.io/mcp-server:sha-{merge}" in calls
+
+
+# ---- deploy.sh apps: ca-mcp only when its secrets are in the control vault (ADR-022) ----
+APPS_VALUES = VALUES + """OPS_IMAGE=acrlftest.azurecr.io/ops-service:sha-1
+REFEREE_IMAGE=acrlftest.azurecr.io/referee:sha-1
+ORDER_IMAGE=acrlftest.azurecr.io/order-service:sha-1
+MCP_IMAGE=acrlftest.azurecr.io/mcp-server:sha-1
+OPS_URL=https://ca-ops.internal.example.azurecontainerapps.io
+GITHUB_PLANNER_APP_ID=1
+GITHUB_PLANNER_INSTALLATION_ID=2
+GITHUB_ENGINEER_APP_ID=3
+GITHUB_ENGINEER_INSTALLATION_ID=4
+MCP_ENGINEER_WRITE_PATHS=src/example/app/module.py
+"""
+ALL_MCP_SECRETS = ("ops-agent-key mcp-planner-key mcp-engineer-key mcp-recovery-key "
+                   "gh-planner-private-key gh-engineer-private-key")
+
+
+def run_apps(sandbox, vault_secrets, phase="apps", extra=""):
+    log = (sandbox / "calls.log").as_posix()
+    fake(sandbox / "bin" / "azd", f'if [ "$1 $2" = "env get-values" ]; then cat <<\'EOF\'\n{APPS_VALUES}{extra}EOF\n'
+                                  f'else echo "azd $*" >> {log}; fi\n')
+    az = f'echo "az $*" >> LOG\ncase "$*" in "keyvault secret list"*) printf "%s\\n" {vault_secrets} ;; esac\n'
+    return run(sandbox, copy_deploy(sandbox).as_posix(), phase, az_body=az)
+
+
+def test_infra_also_leaves_ca_mcp_out_when_its_secrets_are_missing(sandbox):
+    result = run_apps(sandbox, "ops-agent-key", phase="infra")
+    assert result.returncode == 0, result.stderr
+    assert "ca-mcp left out of this provision" in result.stderr
+    calls = log_lines(sandbox)
+    assert calls.index("azd env set MCP_IMAGE ") < calls.index("azd provision")
+
+
+def test_entra_mode_needs_the_client_id_and_the_three_agent_identities(sandbox):
+    result = run_apps(sandbox, ALL_MCP_SECRETS, extra="MCP_AUTH_MODE=entra\nMCP_CLIENT_ID=abc\n")
+    assert result.returncode == 0, result.stderr
+    for name in ("PLANNER_AGENT_OBJECT_ID", "ENGINEER_AGENT_OBJECT_ID", "RECOVERY_AGENT_OBJECT_ID"):
+        assert f"azd env value {name}" in result.stderr
+    assert "azd env value MCP_CLIENT_ID" not in result.stderr
+    assert "azd env set MCP_IMAGE " in log_lines(sandbox)
+
+
+def test_an_unreadable_vault_is_named_as_such(sandbox):
+    log = (sandbox / "calls.log").as_posix()
+    fake(sandbox / "bin" / "azd", f'if [ "$1 $2" = "env get-values" ]; then cat <<\'EOF\'\n{APPS_VALUES}EOF\n'
+                                  f'else echo "azd $*" >> {log}; fi\n')
+    az = 'echo "az $*" >> LOG\ncase "$*" in "keyvault secret list"*) echo Forbidden >&2; exit 1 ;; esac\n'
+    result = run(sandbox, copy_deploy(sandbox).as_posix(), "apps", az_body=az)
+    assert result.returncode == 0, result.stderr
+    assert "can't list the secrets in kv-lfc-test" in result.stderr
+
+
+def test_apps_leaves_ca_mcp_out_without_the_engineer_write_paths(sandbox):
+    log = (sandbox / "calls.log").as_posix()
+    values = APPS_VALUES.replace("MCP_ENGINEER_WRITE_PATHS=src/example/app/module.py\n", "")
+    fake(sandbox / "bin" / "azd", f'if [ "$1 $2" = "env get-values" ]; then cat <<\'EOF\'\n{values}EOF\n'
+                                  f'else echo "azd $*" >> {log}; fi\n')
+    az = f'echo "az $*" >> LOG\ncase "$*" in "keyvault secret list"*) printf "%s\\n" {ALL_MCP_SECRETS} ;; esac\n'
+    result = run(sandbox, copy_deploy(sandbox).as_posix(), "apps", az_body=az)
+    assert result.returncode == 0, result.stderr
+    assert "ca-mcp left out of this provision" in result.stderr
+    assert "azd env value MCP_ENGINEER_WRITE_PATHS" in result.stderr
+
+
+def test_apps_leaves_ca_mcp_out_and_names_what_is_missing(sandbox):
+    result = run_apps(sandbox, ALL_MCP_SECRETS.replace("gh-engineer-private-key", ""))
+    assert result.returncode == 0, result.stderr
+    assert "ca-mcp left out of this provision" in result.stderr
+    assert "secret gh-engineer-private-key in kv-lfc-test" in result.stderr
+    calls = log_lines(sandbox)
+    assert calls.index("azd env set MCP_IMAGE ") < calls.index("azd provision")
+
+
+def test_apps_deploys_ca_mcp_when_everything_is_there(sandbox):
+    result = run_apps(sandbox, ALL_MCP_SECRETS)
+    assert result.returncode == 0, result.stderr
+    assert "left out" not in result.stderr
+    calls = log_lines(sandbox)
+    assert "azd provision" in calls and not any(c.startswith("azd env set MCP_IMAGE") for c in calls)
 
 
 # ---- deploy.sh policy-off ----
