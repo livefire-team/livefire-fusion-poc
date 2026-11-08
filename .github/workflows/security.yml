@@ -1,14 +1,16 @@
 name: security
 
 # Security scans (ADR-013). Runs on every pull request (any base branch, so stacked PRs are checked too) and on
-# pushes to main. Each scan is its own job with a read-only token; only `codeql` may write code-scanning results.
-# Fail policy: secrets and CodeQL alerts fail the job; dependency and image scans fail on HIGH or CRITICAL
+# pushes to main and to candidate/** branches, which never get a pull request (ADR-020). Each scan is its own job with
+# a read-only token; only `codeql` may write code-scanning results.
+# Fail policy: secrets and bandit's medium or high findings fail the job; CodeQL reports its alerts to the Security
+# tab without failing; dependency and image scans fail on HIGH or CRITICAL
 # vulnerabilities that have a fixed version available. Actions are pinned to full commit SHAs, and the gitleaks and
 # Trivy release binaries are checked against fixed SHA-256 checksums before they run.
 on:
   pull_request:
   push:
-    branches: [main]
+    branches: [main, 'candidate/**']
   workflow_dispatch:
 
 permissions:
@@ -24,6 +26,7 @@ env:
   TRIVY_VERSION: 0.76.1
   TRIVY_SHA256: c7cbe3137fb8a48a17574bede3dd6beb16742d1e9772929940fc90082c39d9c0
   PIP_AUDIT_VERSION: 2.10.1
+  BANDIT_VERSION: 1.9.4
 
 jobs:
   gitleaks:
@@ -79,6 +82,49 @@ jobs:
           pip-audit --desc on \
             -r src/ops-service/requirements.txt \
             -r src/ops-service/requirements-dev.txt
+
+  # The same allowed-path check as order-service.yml's candidate-scope (ADR-020), here because this workflow runs on
+  # every candidate push, also those order-service's paths filter skips. The check script comes from main.
+  candidate-scope:
+    if: startsWith(github.ref, 'refs/heads/candidate/')
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Check the changed paths (the check script from main)
+        shell: bash
+        env:
+          CANDIDATE_ALLOWED_PATHS: ${{ vars.CANDIDATE_ALLOWED_PATHS }}
+        run: |
+          git show origin/main:scripts/candidate-scope.sh > "$RUNNER_TEMP/candidate-scope.sh"
+          base="$(git merge-base origin/main HEAD)"
+          echo "changes since $base"
+          git diff --name-only --no-renames -z "$base" HEAD > "$RUNNER_TEMP/changed"
+          bash "$RUNNER_TEMP/candidate-scope.sh" < "$RUNNER_TEMP/changed"
+
+  # CodeQL reports to the Security tab but doesn't fail the job, so on a candidate push (no pull request) it gates
+  # nothing. Bandit fails the job on any medium or high finding in the order service and the load generator (ADR-020).
+  bandit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: '3.12'
+      - name: Install bandit
+        run: pip install "bandit==${BANDIT_VERSION}"
+      - name: Scan the order service and the load generator
+        run: bandit -r src/order-service/app src/load-generator/loadgen --severity-level medium
 
   codeql:
     runs-on: ubuntu-latest
