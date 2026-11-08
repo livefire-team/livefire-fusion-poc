@@ -40,6 +40,7 @@ Version: 1 (2026-10-28) — copied from the WS2 guide's Phase 2 contract via the
 | Image | `ghcr.io/livefire-team/order-service:g1` (org name lowercase) | `.github/workflows/order-service.yml` |
 | Image (WS1 addition) | Immutable `sha-<commit>` tags for rehearsals; package public (ADR-002) | `.github/workflows/order-service.yml` |
 | Image (WS1 addition, G2) | `candidate-<drill-id>-<attempt>` tags, pushed from `candidate/<drill-id>-<attempt>` branches (lowercase drill ID, attempt 1-99; ADR-014) | `.github/workflows/order-service.yml` |
+| Candidate CI (WS1 addition, G2) | A candidate push passes CI only when `order-service` and `security` both end `success` for its head commit. `order-service` fails at `candidate-scope` if the candidate changed a file outside the allowed paths (repository variable `CANDIDATE_ALLOWED_PATHS`), and then publishes nothing (ADR-020) | `.github/workflows/order-service.yml`, `.github/workflows/security.yml` |
 | Image (WS2 addition, G2) | The twin runs `<lab registry>/order-service:sha-<full commit>` from the lab's private registry, pulled by `id-lf-acrpull` (ADR-017). CI pushes the same tested image there from `main` and candidate branches once the `acr-push` environment is set up | `order-service.yml` `acr` job, `scripts/deploy.sh images` |
 
 ## Additions WS2 needs to know about
@@ -52,6 +53,8 @@ Version: 1 (2026-10-28) — copied from the WS2 guide's Phase 2 contract via the
    (`Manual` or `Schedule`), `cronExpression`, `jobName`, `containerAppsEnvironmentName`; outputs `loadgenJobName`,
    `loadgenJobId`). Image `ghcr.io/livefire-team/load-generator:g2` (and `sha-<commit>`). Metrics in Application
    Insights: `loadgen_orders_sent` {`kind`, `result`}, `loadgen_orders_dropped` {`reason`}, `loadgen_backlog_size`.
+   With `EVENT_SOURCE` and a `drill-` `DRILL_ID`, it also writes `metrics.orders` events (ADR-021): `details`
+   `orders_per_min`, `failed_total`, `backlog`, `recovered_total`, `dropped_total`, `window_s`.
    `twin.bicep` parameters and outputs are unchanged (ADR-015).
 
 ## Change log
@@ -62,3 +65,5 @@ Version: 1 (2026-10-28) — copied from the WS2 guide's Phase 2 contract via the
 | 2026-10-29 | WS1 addition (G2): load generator module, image and `loadgen_*` metrics (ADR-015) | pending |
 | 2026-10-31 | WS2 addition: `twin.bicep` outputs `logAnalyticsWorkspaceName` and `logAnalyticsCustomerId` (used by WS2's `main.bicep`) | pending |
 | 2026-11-05 | WS2 addition (G2): `twin.bicep` parameters `registryServer` and `pullIdentityId`; the twin's image comes from the lab's private registry (ADR-017) | pending |
+| 2026-11-08 | WS1 addition (G2): candidate pushes run the security scans and bandit, and fail on files outside the allowed paths (ADR-020) | pending |
+| 2026-11-08 | WS1 addition (G2): the load generator writes `metrics.orders` events when `EVENT_SOURCE` is set (ADR-021) | pending |

@@ -5,6 +5,8 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from urllib.parse import urlsplit
 
+from loadgen.events import EVENT_DRILL_ID, parse_event_source
+
 DRILL_ID_PATTERN = re.compile(r"[A-Za-z0-9._:-]{1,64}")   # same rule the order service applies to x-drill-id
 SKU_PATTERN = re.compile(r"[A-Za-z0-9-]{1,32}")
 MAX_RATE_PER_MINUTE = 600.0
@@ -12,6 +14,7 @@ MAX_BACKLOG_LIMIT = 100_000
 MAX_RETRIES_PER_TICK = 100
 DIGITS = re.compile(r"[0-9]+")
 DEFAULT_SKUS = "SKU-001,SKU-002"
+MAX_METRICS_INTERVAL_SECONDS = 300
 
 
 class ConfigError(ValueError):
@@ -30,6 +33,8 @@ class Config:
     retry_max_seconds: float
     request_timeout_seconds: float
     duration_seconds: float
+    event_source: str | None = None
+    metrics_interval_seconds: int = 30
 
     @property
     def interval_seconds(self) -> float:
@@ -81,6 +86,20 @@ def _drill_id(env: Mapping[str, str]) -> str | None:
     return raw
 
 
+def _event_source(env: Mapping[str, str], drill_id: str | None) -> str | None:
+    """EVENT_SOURCE: dir:<path> or blob:https://<account>.blob.core.windows.net/<container>; needs a drill- DRILL_ID."""
+    raw = env.get("EVENT_SOURCE", "").strip()
+    if not raw:
+        return None
+    try:
+        parse_event_source(raw)
+    except ValueError as exc:
+        raise ConfigError(str(exc)) from None
+    if drill_id is None or not EVENT_DRILL_ID.fullmatch(drill_id):
+        raise ConfigError("EVENT_SOURCE needs DRILL_ID set to drill-<letters, digits, hyphens>")
+    return raw
+
+
 def load_config(env: Mapping[str, str]) -> Config:
     rate = _number(env, "RATE_PER_MINUTE", "30", 0.0, strict=True)
     if rate > MAX_RATE_PER_MINUTE:
@@ -89,15 +108,18 @@ def load_config(env: Mapping[str, str]) -> Config:
     cap = _number(env, "RETRY_MAX_SECONDS", "60", 0.0, strict=True)
     if cap < base:
         raise ConfigError("RETRY_MAX_SECONDS must be >= RETRY_BASE_SECONDS")
+    drill_id = _drill_id(env)
     return Config(
         order_app_url=_url(env),
         rate_per_minute=rate,
         skus=_skus(env),
-        drill_id=_drill_id(env),
+        drill_id=drill_id,
         max_backlog=_integer(env, "MAX_BACKLOG", "500", 1, MAX_BACKLOG_LIMIT),
         retries_per_tick=_integer(env, "RETRIES_PER_TICK", "5", 0, MAX_RETRIES_PER_TICK),
         retry_base_seconds=base,
         retry_max_seconds=cap,
         request_timeout_seconds=_number(env, "REQUEST_TIMEOUT_SECONDS", "10", 0.0, strict=True),
         duration_seconds=_number(env, "DURATION_SECONDS", "0", 0.0, strict=False),
+        event_source=_event_source(env, drill_id),
+        metrics_interval_seconds=_integer(env, "METRICS_INTERVAL_SECONDS", "30", 1, MAX_METRICS_INTERVAL_SECONDS),
     )

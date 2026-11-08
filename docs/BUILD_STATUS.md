@@ -17,8 +17,11 @@ Note: plan row numbers and PR numbers differ. Plan #14 (architecture note) is PR
 ### Owner actions
 1. DONE 2026-10-30: rulesets `candidate-branches` (only admins create/push `candidate/**`) and `protect-main`.
    Still to do: add WS4's Engineer agent identity as a bypass actor on `candidate-branches` once WS4 names it.
-2. Make the GHCR packages `order-service` and `load-generator` public (org > Packages > package settings >
-   Change visibility). Both have been published from `main`.
+2. DONE 2026-11-08: all four GHCR packages (`order-service`, `load-generator`, `ops-service`, `referee`) are public;
+   checked by pulling without a login. CI pushes `sha-` tags (plus `g1`/`g2`), never `latest`.
+8. WS1 G2 (2026-11-08): set the repository variable `CANDIDATE_ALLOWED_PATHS` before the candidate-gates PR merges
+   (ADR-020; the value is in the owner's private notes, not in git). Then push the two dry-run candidates and run
+   one as a twin revision with WS2.
 3. Tell WS2: `azd env set ORDER_IMAGE ghcr.io/livefire-team/order-service:g1`, the `APPINSIGHTS_CONNECTION_STRING`
    output line, and `infra/modules/loadgen.bicep`.
 4. Send WS3 and WS4 their private hand-offs (see `CLAUDE.local.md`).
@@ -365,14 +368,27 @@ Status values: not started | in progress | PR open | merged | blocked
 - [ ] WS5: metric names (orders_completed, orders_failed{reason}, loadgen_orders_sent, loadgen_orders_dropped, loadgen_backlog_size)
 
 ## Decisions log pointer
-See `docs/ADR.md` (latest: ADR-019).
+See `docs/ADR.md` (latest: ADR-021).
 
 ## Session log (newest first)
-- 2026-11-08: Joint drill with WS5 done (Drill A: decision, policy refusal, False Green; Drill B: kill switch),
-  both passed. The SQL firewall needed the Mac's new public IP first. Deny policy turned off, then
+- 2026-11-08: Joint drill with WS5 done; both drills gave the expected results (details and drill IDs in the
+  local evidence note). The SQL firewall needed the Mac's new public IP first. Deny policy turned off, then
   `deploy.sh apps`; its hook failed on Key Vault (corporate SSL inspection) and left the order app without SQL until
-  `postprovision.sh` was re-run with a CA bundle. Twin healthy after. Follow-up: make `postprovision.sh` check that the
-  twin vault is reachable before it changes `order_app`'s password, so a Key Vault failure stops it before any change.
+  `postprovision.sh` was re-run with a CA bundle. Twin healthy after. Follow-up: make `postprovision.sh` stop before
+  any change when the twin vault can't be reached.
+- 2026-11-08: WS1 G2: PR #34 merged (88214c7), main green. Dry-run candidates: `candidate/drill-ci-check-1` passed
+  both workflows (order-service 1m31s, security 3m09s), published `sha-416e4ab` and `candidate-drill-ci-check-1` and
+  the registry copy, `g1` unmoved; `candidate/drill-ci-check-2` (also `README.md`) failed at `candidate-scope` in
+  both workflows and published nothing. Twin revision with WS2 pending.
+- 2026-11-08: WS1 G2: PR #35 merged (8339b92), main green (load-generator, security). Left for G2: twin revision
+  with WS2 and the load generator's Blob identity (PR C, with WS2); hand-off messages to WS2-WS5 and the lead.
+- 2026-11-08: WS1 G2: `metrics.orders` lines from the load generator (ADR-021): queued background writer, `dir:` and
+  `blob:` sinks, 114 load generator tests pass (99% coverage), bandit and pip-audit clean. Local rehearsal: a
+  5-minute run at 60/min next to `scripts/local-access-drill.ps1` wrote one line every 10 s with no write warnings.
+  Blob writes wait for the identity follow-up with WS2.
+- 2026-11-08: WS1 G2: candidate-gates PR (ADR-020): `candidate-scope` jobs in both workflows running `main`'s `scripts/candidate-scope.sh` (13 new
+  tests, 84 referee tests pass), `security.yml` on `candidate/**` pushes with a `bandit` job (no findings),
+  actionlint clean. All four GHCR packages confirmed public.
 - 2026-11-07: WS5's G2 guide read and its asks checked. The deny policy was found ON (since 2026-11-06 15:07 UTC),
   not off as recorded. `caj-loadgen` deployed and a test run started. Sunday's drill prepared (`~/WS5-` cloned,
   the policy, the WS5 tool and evidence access checked). WS5's `main.bicep` PR isn't open yet.

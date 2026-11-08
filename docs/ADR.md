@@ -359,6 +359,73 @@ Status values: Proposed | Accepted | Superseded | Rejected
   `drill-smoke-policy-20261105-0216-6e1e` at 02:16:12 UTC (`smoke policy`, through the Ops Service with a signed
   grant; the `recover.broad` event's `refused_by` is `Azure Policy`).
 
+## ADR-020: Candidate pushes are gated by a path check and the security scans
+- **Date:** 2026-11-08
+- **Status:** Accepted (WS1)
+- **Context:** A candidate push built, tested and published its image, but ran no security scans (`security.yml`
+  ran only on pull requests and `main`, and a candidate never gets a pull request before the drills end) and nothing
+  checked which files it changed. WS4 deploys a candidate only when CI passed (`ci_gates_passed`), so CI is the last
+  automated check before a candidate runs in the twin. CodeQL reports alerts without failing its job, so on a push
+  with no pull request it gates nothing.
+- **Options considered:** (1) rely on the MCP server's write limits alone; (2) a CI path check with the allowed
+  patterns written in the workflow; (3) a CI path check with the patterns in a repository Actions variable, plus the
+  scans and bandit on candidate pushes.
+- **Decision:** Option 3. A `candidate-scope` job runs on candidate pushes in both `order-service.yml` (before
+  `test`, so nothing is published on failure) and `security.yml` (which has no paths filter, so it runs on every
+  candidate push). It runs `main`'s copy of `scripts/candidate-scope.sh`, not the candidate's, on the files changed
+  since the merge base with `main`, and fails if any is outside the patterns in `CANDIDATE_ALLOWED_PATHS` (one
+  extended regex per line, matched against the whole path). It fails closed when the variable is missing, empty or
+  invalid, logs counts and refused files only, and escapes file names so they can't inject workflow commands.
+  `security.yml` now also runs on `candidate/**` pushes and gains a `bandit` job that fails on medium or high
+  findings in `src/order-service/app` and `src/load-generator/loadgen`. `gitleaks` scans only the history of the
+  commit under test (`--log-opts="--full-history HEAD"`): the full-depth checkout also fetches every other branch,
+  whose commits are scanned by their own runs against their own `.gitleaks.toml`.
+- **Consequences:** A candidate that changes any other file publishes no image. Changing the allowed paths needs a
+  repository admin (Settings > Secrets and variables > Actions > Variables), not a pull request, so the change is
+  not in git history; the owner records it in the team channel. The patterns must match the MCP server's write
+  limits, or a valid candidate fails here. A candidate CI pass now means both workflows ended `success` for the
+  candidate's head commit; a missing run is not a pass.
+  This catches mistakes, not a candidate that rewrites CI: a push runs the workflow files from its own commit, so a
+  candidate that edits `.github/workflows/` could drop the job, print the variable, or publish an image (the
+  `acr-push` environment allows `candidate/*`). The controls for that sit outside CI: the Engineer's GitHub App has
+  no Workflows permission (GitHub then refuses any push that touches `.github/workflows/`), the MCP server writes
+  only allowed paths, and the drill runner re-checks a candidate's changed files before it deploys. The refused-file
+  names in the log also let repeated candidates probe the list; with the MCP write limits in place, that reveals
+  nothing a candidate can use.
+- **Implemented in:** `scripts/candidate-scope.sh`, `referee/tests/test_candidate_scope.py`,
+  `.github/workflows/order-service.yml`, `.github/workflows/security.yml`
+
+## ADR-021: The load generator writes metrics.orders lines to the drill's event log
+- **Date:** 2026-11-08
+- **Status:** Accepted (WS1); the field list needs WS4's approval for the event catalog
+- **Context:** The Control Center's Orders per minute, Failed orders and Backlog tiles read `metrics.orders` lines from
+  the drill's event log (`<drill-id>/events.jsonl`, in a folder or the evidence container), and show a dash until they
+  arrive. The load generator reported only to Application Insights (ADR-015).
+- **Options considered:** (1) the Control Center queries Application Insights; (2) a separate job that turns
+  Application Insights metrics into events; (3) the load generator writes the lines itself.
+- **Decision:** Option 3. With `EVENT_SOURCE` set (`dir:<path>`, or `blob:https://<account host>/<container>` with the
+  job's managed identity), `loadgen/events.py` writes one line every `METRICS_INTERVAL_SECONDS` (1-300, default 30)
+  and a last one when the run ends or is stopped, in the shape every event writer uses:
+  `{"ts", "drill_id", "action": "metrics.orders", "result": "ok", "details": {"orders_per_min", "failed_total",
+  "backlog", "recovered_total", "dropped_total", "window_s"}}`. `orders_per_min` counts orders placed (HTTP 201, new
+  or retried) in the window, scaled to a minute; `failed_total` counts new orders whose first attempt failed;
+  `recovered_total` counts retries that later succeeded; `dropped_total` counts orders given up on. `EVENT_SOURCE`
+  needs a `drill-` `DRILL_ID`, or the job exits with code 2. Lines go through a bounded queue to a background writer,
+  so a slow or unreachable store never holds up the orders; a failed write, or a store that cannot be opened, logs a
+  warning and the load carries on. The Blob client has short timeouts and no SDK retries (a retried append could
+  write a line twice; a lost line costs little because every line carries running totals), and shutdown waits at
+  most 10 s for queued lines. Creating the append blob never replaces one another writer already started
+  (`if_none_match="*"`). The Application Insights metrics are unchanged.
+- **Consequences:** The tiles get numbers without a query layer. Writing to Blob needs an identity with Storage Blob
+  Data Contributor on the evidence container (a follow-up with WS2); until then the job runs without `EVENT_SOURCE`.
+  That role can append to any drill's log in the container, so the log is not tamper-proof against this identity:
+  the follow-up grants it as narrowly as Azure allows (the container only, with a path condition if supported) and
+  pins the expected storage account from the deployment, not from the host suffix check alone.
+  The image gains `azure-identity` and `azure-storage-blob`. If WS4's catalog names these fields differently, the
+  catalog wins and this module follows.
+- **Implemented in:** `src/load-generator/loadgen/events.py`, `config.py`, `runner.py`, `__main__.py`,
+  `src/load-generator/tests/test_events.py`
+
 ## ADR-00N: <short title>
 - **Date:**
 - **Status:** Proposed
