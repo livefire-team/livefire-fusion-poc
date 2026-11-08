@@ -377,7 +377,9 @@ Status values: Proposed | Accepted | Superseded | Rejected
   extended regex per line, matched against the whole path). It fails closed when the variable is missing, empty or
   invalid, logs counts and refused files only, and escapes file names so they can't inject workflow commands.
   `security.yml` now also runs on `candidate/**` pushes and gains a `bandit` job that fails on medium or high
-  findings in `src/order-service/app` and `src/load-generator/loadgen`.
+  findings in `src/order-service/app` and `src/load-generator/loadgen`. `gitleaks` scans only the history of the
+  commit under test (`--log-opts="--full-history HEAD"`): the full-depth checkout also fetches every other branch,
+  whose commits are scanned by their own runs against their own `.gitleaks.toml`.
 - **Consequences:** A candidate that changes any other file publishes no image. Changing the allowed paths needs a
   repository admin (Settings > Secrets and variables > Actions > Variables), not a pull request, so the change is
   not in git history; the owner records it in the team channel. The patterns must match the MCP server's write

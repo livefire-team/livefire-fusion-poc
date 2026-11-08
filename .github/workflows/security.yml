@@ -46,10 +46,13 @@ jobs:
           echo "${GITLEAKS_SHA256}  gitleaks.tar.gz" | sha256sum -c -
           tar -xzf gitleaks.tar.gz -C "$RUNNER_TEMP" gitleaks
           rm gitleaks.tar.gz
-      - name: Scan the full git history for secrets
+      # Only the history of the commit under test: the full-depth checkout also fetches every other branch, and their
+      # commits are checked by their own runs, against their own .gitleaks.toml.
+      - name: Scan the git history for secrets
         run: |
           "$RUNNER_TEMP/gitleaks" version
-          "$RUNNER_TEMP/gitleaks" git --config .gitleaks.toml --redact --verbose --exit-code 1 .
+          "$RUNNER_TEMP/gitleaks" git --config .gitleaks.toml --redact --verbose --exit-code 1 \
+            --log-opts="--full-history HEAD" .
 
   pip-audit:
     runs-on: ubuntu-latest
