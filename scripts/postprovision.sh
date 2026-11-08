@@ -4,6 +4,24 @@ set -euo pipefail
 set -a; eval "$(azd env get-values)"; set +a                       # Bicep outputs + env values
 SQL_SERVER="${SQL_SERVER_FQDN%%.*}"
 
+kv_try() {  # kv_try <az keyvault args...>: retries for up to 5 minutes while a new data-plane role propagates
+  local i err
+  err="$(mktemp)"
+  for i in $(seq 30); do
+    if az keyvault "$@" 2>"$err"; then rm -f "$err"; return 0; fi
+    grep -q CERTIFICATE_VERIFY_FAILED "$err" && break      # SSL inspection: retrying won't help
+    [ "$i" -eq 1 ] && echo "waiting for Key Vault access to apply..." >&2
+    sleep 10
+  done
+  rm -f "$err"
+  az keyvault "$@"
+}
+
+# Stop before any change if this machine can't use the twin vault: the app password is changed in SQL below and
+# the app only learns it from the vault, so a failed write there would leave the app unable to sign in.
+kv_try secret list --vault-name "$KEYVAULT_NAME" --query "[].name" -o tsv > /dev/null \
+  || { echo "cannot reach Key Vault $KEYVAULT_NAME; SQL passwords unchanged (behind SSL inspection? set REQUESTS_CA_BUNDLE)" >&2; exit 1; }
+
 # Let this machine reach SQL (WS1's Bicep adds the Allow Azure services rule for the app)
 MYIP="$(curl -s https://api.ipify.org)"
 az sql server firewall-rule create -g "$TWIN_RG" -s "$SQL_SERVER" -n bootstrap-client \
@@ -29,21 +47,12 @@ q -Q "IF USER_ID('ops_cleanup') IS NULL CREATE USER ops_cleanup WITH PASSWORD = 
       GRANT SELECT, DELETE ON dbo.orders TO ops_cleanup;
       GRANT SELECT, DELETE ON dbo.payment_authorizations TO ops_cleanup;"
 
-az keyvault secret set --vault-name "$KEYVAULT_NAME" -n db-password --value "$APP_PW" -o none
+kv_try secret set --vault-name "$KEYVAULT_NAME" -n db-password --value "$APP_PW" -o none
 azd env set REFEREE_SQL_PASSWORD "$REF_PW"
 azd env set OPS_CLEANUP_SQL_PASSWORD "$CLEAN_PW"
 
 # ---- control-plane secrets (G2). A new role assignment on the vault can take a few minutes to apply. ----
 if [ -n "${CONTROL_KEYVAULT_NAME:-}" ]; then
-  kv_try() {  # kv_try <az keyvault args...>: retries for up to 5 minutes while the data-plane role propagates
-    local i
-    for i in $(seq 30); do
-      if az keyvault "$@" 2>/dev/null; then return 0; fi
-      [ "$i" -eq 1 ] && echo "waiting for Key Vault Secrets Officer on $CONTROL_KEYVAULT_NAME to apply..." >&2
-      sleep 10
-    done
-    az keyvault "$@"
-  }
   kv_try secret list --vault-name "$CONTROL_KEYVAULT_NAME" --query "[].name" -o tsv > /dev/null
   existing="$(az keyvault secret list --vault-name "$CONTROL_KEYVAULT_NAME" --query "[].name" -o tsv)"
   for name in ops-runner-key ops-agent-key recovery-grant-key; do       # random once; rotated only by hand
