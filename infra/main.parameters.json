@@ -43,6 +43,51 @@
     },
     "githubRepos": {
       "value": "${GITHUB_REPOS=livefire-team@349630330/livefire-fusion-poc@1437908536}"
+    },
+    "mcpImage": {
+      "value": "${MCP_IMAGE}"
+    },
+    "mcpGithubRepo": {
+      "value": "${MCP_GITHUB_REPO=livefire-team/livefire-fusion-poc}"
+    },
+    "mcpGithubAuth": {
+      "value": "${MCP_GITHUB_AUTH=app}"
+    },
+    "githubPlannerAppId": {
+      "value": "${GITHUB_PLANNER_APP_ID}"
+    },
+    "githubPlannerInstallationId": {
+      "value": "${GITHUB_PLANNER_INSTALLATION_ID}"
+    },
+    "githubEngineerAppId": {
+      "value": "${GITHUB_ENGINEER_APP_ID}"
+    },
+    "githubEngineerInstallationId": {
+      "value": "${GITHUB_ENGINEER_INSTALLATION_ID}"
+    },
+    "mcpRepoRef": {
+      "value": "${MCP_REPO_REF=main}"
+    },
+    "mcpAuthMode": {
+      "value": "${MCP_AUTH_MODE=key}"
+    },
+    "mcpClientId": {
+      "value": "${MCP_CLIENT_ID}"
+    },
+    "plannerAgentObjectId": {
+      "value": "${PLANNER_AGENT_OBJECT_ID}"
+    },
+    "engineerAgentObjectId": {
+      "value": "${ENGINEER_AGENT_OBJECT_ID}"
+    },
+    "recoveryAgentObjectId": {
+      "value": "${RECOVERY_AGENT_OBJECT_ID}"
+    },
+    "searchLocation": {
+      "value": "${SEARCH_LOCATION}"
+    },
+    "searchVectorField": {
+      "value": "${SEARCH_VECTOR_FIELD}"
     }
   }
 }
