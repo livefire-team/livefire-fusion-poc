@@ -83,6 +83,7 @@ follows the Ops Service: `main.bicep` deploys it once `OPS_IMAGE`, `REFEREE_IMAG
    it must match WS4's Drill Runner list and `CANDIDATE_ALLOWED_PATHS`.
 4. **Deploy.** `scripts/deploy.sh apps` (or `all` on a fresh lab). If a secret, App ID or the step 3 value is missing,
    it leaves `ca-mcp` out of that provision and names what's missing, so the rest of the platform still deploys.
+   If it can't read the control vault at all (sign-in or role), it stops before provisioning; fix access and rerun.
    The provision prints `MCP_URL`, which WS4 uses for the agents' connections.
 5. **Incident index.** The incidents are the agents' test material, so they stay in the private `ws3-mcp-server`
    repo (ADR-004). Point the azd environment at a checkout of it:

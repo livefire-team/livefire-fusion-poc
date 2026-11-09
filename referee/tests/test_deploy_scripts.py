@@ -340,14 +340,18 @@ def test_entra_mode_needs_the_client_id_and_the_three_agent_identities(sandbox):
     assert "azd env set MCP_IMAGE " in log_lines(sandbox)
 
 
-def test_an_unreadable_vault_is_named_as_such(sandbox):
+@pytest.mark.parametrize("phase", ["infra", "apps"])
+def test_an_unreadable_vault_stops_the_deploy_instead_of_dropping_ca_mcp(sandbox, phase):
     log = (sandbox / "calls.log").as_posix()
     fake(sandbox / "bin" / "azd", f'if [ "$1 $2" = "env get-values" ]; then cat <<\'EOF\'\n{APPS_VALUES}EOF\n'
                                   f'else echo "azd $*" >> {log}; fi\n')
     az = 'echo "az $*" >> LOG\ncase "$*" in "keyvault secret list"*) echo Forbidden >&2; exit 1 ;; esac\n'
-    result = run(sandbox, copy_deploy(sandbox).as_posix(), "apps", az_body=az)
-    assert result.returncode == 0, result.stderr
+    result = run(sandbox, copy_deploy(sandbox).as_posix(), phase, az_body=az)
+    assert result.returncode != 0
     assert "can't list the secrets in kv-lfc-test" in result.stderr
+    assert "left out" not in result.stderr
+    calls = log_lines(sandbox)
+    assert "azd provision" not in calls and not any(c.startswith("azd env set MCP_IMAGE") for c in calls)
 
 
 def test_apps_leaves_ca_mcp_out_without_the_engineer_write_paths(sandbox):

@@ -93,6 +93,7 @@ phase_images() {
 
 # WS3: ca-mcp reads its keys and GitHub credentials from the control vault at deploy time, so a missing secret would
 # fail the whole provision. Until they are all there, ca-mcp is left out (MCP_IMAGE cleared) and the gap is named.
+# If the vault can't be read at all, the deploy stops instead: that is an access problem, not a missing secret.
 mcp_missing() {
   local need=(ops-agent-key) existing n
   # Which files a candidate may change: kept in the azd environment, never in this public repo (ADR-004)
@@ -113,7 +114,7 @@ mcp_missing() {
     need+=(gh-planner-token gh-engineer-token)
   fi
   if ! existing="$(az keyvault secret list --vault-name "${CONTROL_KEYVAULT_NAME:-}" --query "[].name" -o tsv)"; then
-    echo "can't list the secrets in ${CONTROL_KEYVAULT_NAME:-the control vault} (sign-in or role?)"; return
+    echo "can't list the secrets in ${CONTROL_KEYVAULT_NAME:-the control vault} (sign-in or role?)"; return 2
   fi
   for n in "${need[@]}"; do grep -qx "$n" <<<"$existing" || echo "secret $n in $CONTROL_KEYVAULT_NAME"; done
 }
@@ -122,7 +123,11 @@ mcp_missing() {
 provision() {
   load
   if [ -n "${MCP_IMAGE:-}" ]; then
-    local missing; missing="$(mcp_missing)"
+    local missing status=0; missing="$(mcp_missing)" || status=$?
+    if [ "$status" -ne 0 ]; then              # can't tell what is missing: stop, rather than quietly drop ca-mcp
+      printf '%s\nstopped before azd provision; fix access to the vault and run this again\n' "$missing" >&2
+      exit 1
+    fi
     if [ -n "$missing" ]; then
       printf 'ca-mcp left out of this provision; missing:\n%s\n(see README-WS3.md, Deploy to Azure)\n' "$missing" >&2
       azd env set MCP_IMAGE ""

@@ -440,7 +440,8 @@ Status values: Proposed | Accepted | Superseded | Rejected
 - **Decision:** Option 2. `ca-mcp` deploys once `MCP_IMAGE` is set and the Ops Service is deployed (`/recovery`
   calls it). `deploy.sh images` treats `mcp-server` like the other images; `deploy.sh apps` leaves `ca-mcp` out,
   naming what is missing, until its GitHub credentials are in the control vault, so WS3 can't fail a platform
-  provision. `postprovision.sh` creates the three endpoint keys once (like the Ops keys) and reloads the incident
+  provision. If the control vault can't be read at all, the deploy stops before `azd provision` instead of
+  dropping `ca-mcp`: an access problem must not look like a deliberate skip. `postprovision.sh` creates the three endpoint keys once (like the Ops keys) and reloads the incident
   index from `INCIDENT_CORPUS` when it is set. Contract v2.3: the Planner reads only `src/order-service/**` and `runbooks/*.md`, never `docs/`,
   `CLAUDE.md`, `src/ops-service/`, `referee/` or `scripts/`. On an access-policy twin vault, `id-lf-mcp` gets a
   secrets `list` policy (metadata, never values), re-added after the twin on every provision.
