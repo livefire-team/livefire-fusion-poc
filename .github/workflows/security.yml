@@ -85,6 +85,11 @@ jobs:
           pip-audit --desc on \
             -r src/ops-service/requirements.txt \
             -r src/ops-service/requirements-dev.txt
+      - name: Audit the MCP server's pinned dependencies
+        run: |
+          pip-audit --desc on \
+            -r src/mcp-server/requirements.txt \
+            -r src/mcp-server/requirements-dev.txt
 
   # The same allowed-path check as order-service.yml's candidate-scope (ADR-020), here because this workflow runs on
   # every candidate push, also those order-service's paths filter skips. The check script comes from main.
@@ -192,3 +197,9 @@ jobs:
         run: |
           "$RUNNER_TEMP/trivy" image --scanners vuln \
             --severity HIGH,CRITICAL --ignore-unfixed --exit-code 1 referee:scan
+      - name: Build the mcp-server image
+        run: docker build -t mcp-server:scan src/mcp-server
+      - name: Scan the mcp-server image
+        run: |
+          "$RUNNER_TEMP/trivy" image --scanners vuln \
+            --severity HIGH,CRITICAL --ignore-unfixed --exit-code 1 mcp-server:scan

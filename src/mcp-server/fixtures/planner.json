@@ -1,0 +1,323 @@
+{
+  "_comment": "Neutral placeholder evidence for tests and local runs. The drill's own evidence is kept outside this public repo (ADR-004); point FIXTURES at it for a rehearsal.",
+  "telemetry": {
+    "exceptions": [
+      {
+        "ExceptionType": "example.ExampleError",
+        "OuterMessage": "example dependency call failed",
+        "events": "3",
+        "last_seen": "2026-10-20T10:05:00Z"
+      },
+      {
+        "ExceptionType": "example.ExampleError",
+        "OuterMessage": "example request timed out",
+        "events": "1",
+        "last_seen": "2026-10-20T10:04:00Z"
+      }
+    ],
+    "requests": [
+      {
+        "Name": "POST /api/orders",
+        "ResultCode": "503",
+        "events": "4",
+        "failures": "4"
+      },
+      {
+        "Name": "GET /health",
+        "ResultCode": "200",
+        "events": "10",
+        "failures": "0"
+      }
+    ],
+    "dependencies": [
+      {
+        "Target": "dep.example.net",
+        "DependencyType": "HTTP",
+        "ResultCode": "500",
+        "events": "3",
+        "failures": "3",
+        "last_seen": "2026-10-20T10:05:00Z"
+      },
+      {
+        "Target": "dep.example.net",
+        "DependencyType": "HTTP",
+        "ResultCode": "200",
+        "events": "12",
+        "failures": "0",
+        "last_seen": "2026-10-20T10:06:00Z"
+      }
+    ],
+    "metrics": [
+      {
+        "Name": "orders_completed",
+        "minute": "2026-10-20T10:00:00Z",
+        "total": "10"
+      },
+      {
+        "Name": "orders_failed",
+        "minute": "2026-10-20T10:05:00Z",
+        "total": "4"
+      }
+    ],
+    "sql_errors": []
+  },
+  "identity_snapshot": {
+    "vault": "kv-example",
+    "principal_id": "00000000-0000-0000-0000-000000000001",
+    "permission_model": "rbac",
+    "role_assignments": [],
+    "has_secrets_user_role": false,
+    "access_policy_secret_permissions": []
+  },
+  "incidents": [
+    {
+      "id": "EX-101",
+      "kind": "incident",
+      "service": "order-service",
+      "occurred_at": "2026-08-10T09:00:00Z",
+      "title": "Example: a worker ran out of disk",
+      "summary": "Placeholder incident: a worker's disk filled and requests slowed.",
+      "resolution": "Placeholder: cleaned up and restarted the worker.",
+      "source": "example incident record"
+    },
+    {
+      "id": "EX-102",
+      "kind": "incident",
+      "service": "order-service",
+      "occurred_at": "2026-09-12T09:00:00Z",
+      "title": "Example: an expired certificate",
+      "summary": "Placeholder incident: a certificate expired before renewal.",
+      "resolution": "Placeholder: certificate renewal, then a restart.",
+      "source": "example incident record"
+    },
+    {
+      "id": "EX-103",
+      "kind": "incident",
+      "service": "order-service",
+      "occurred_at": "2026-10-05T09:00:00Z",
+      "title": "Example: slow queries during a batch job",
+      "summary": "Placeholder incident: an example batch job slowed queries.",
+      "resolution": "Placeholder: moved the job; no restart needed.",
+      "source": "example incident record"
+    }
+  ],
+  "repo": {
+    "src/order-service/app/example.py": "\"\"\"A placeholder module for the fixtures backend.\"\"\"\n\n\nclass Example:\n    def value(self) -> int:\n        return 1\n",
+    "src/order-service/app/main.py": "\"\"\"A placeholder for the order service entry point.\"\"\"\nfrom example import Example\n\nprint(Example().value())\n",
+    "src/order-service/tests/test_example.py": "from example import Example\n\n\ndef test_value():\n    assert Example().value() == 1\n",
+    "runbooks/order-service-keyvault-recovery.md": "# Example runbook\n\nA placeholder runbook for the fixtures backend.\n\n1. Check the example service.\n2. Follow the example steps.\n",
+    "src/order-service/README.md": "# Example service notes\n\nA placeholder document.\nExample connection string: Server=tcp:sql-example.database.windows.net;Uid=example_user;Password=Example-Not-Real-123;\n",
+    "journeys/test_order_journey.py": "def test_journey():\n    pass\n"
+  },
+  "commits": {
+    "src/order-service/app/main.py": [
+      {
+        "sha": "1111aaaa2222",
+        "date": "2026-09-01T10:00:00Z",
+        "author": "example team",
+        "message": "refactor(example): tidy the example module"
+      },
+      {
+        "sha": "0000aaaa1111",
+        "date": "2026-07-01T10:00:00Z",
+        "author": "example team",
+        "message": "feat(example): add the example module"
+      }
+    ],
+    "src/order-service/app/example.py": [
+      {
+        "sha": "0000aaaa1111",
+        "date": "2026-07-01T10:00:00Z",
+        "author": "example team",
+        "message": "feat(example): add the example module"
+      }
+    ]
+  },
+  "secret_metadata": {
+    "vault": "kv-example",
+    "secret": "example-secret",
+    "versions": [
+      {
+        "version": "aaaa01",
+        "created": "2026-09-01T08:00:00Z",
+        "updated": "2026-09-01T08:00:00Z",
+        "enabled": true,
+        "current": true
+      },
+      {
+        "version": "aaaa00",
+        "created": "2026-07-01T08:00:00Z",
+        "updated": "2026-07-01T08:00:00Z",
+        "enabled": true,
+        "current": false
+      }
+    ]
+  },
+  "app_configuration": {
+    "app": "ca-example",
+    "desired": {
+      "EXAMPLE_SETTING": "a"
+    },
+    "current_revision": "ca-example--r2",
+    "revisions": [
+      {
+        "name": "ca-example--r2",
+        "created": "2026-10-19T09:00:00Z",
+        "active": true,
+        "image": "acr.example.io/example@sha256:0000000000000000",
+        "env": {
+          "EXAMPLE_SETTING": "a",
+          "EXAMPLE_URL": "https://example.invalid/"
+        }
+      },
+      {
+        "name": "ca-example--r1",
+        "created": "2026-10-10T09:00:00Z",
+        "active": false,
+        "image": "acr.example.io/example@sha256:0000000000000000",
+        "env": {
+          "EXAMPLE_SETTING": "a",
+          "EXAMPLE_URL": "https://example.invalid/"
+        }
+      }
+    ],
+    "differences_from_desired": []
+  },
+  "network_rules": {
+    "server": "sql-example",
+    "public_network_access": "Enabled",
+    "firewall_rules": [
+      {
+        "name": "example-rule",
+        "start_ip": "10.0.0.1",
+        "end_ip": "10.0.0.1"
+      }
+    ],
+    "allows_azure_services": true
+  },
+  "faults": {
+    "example-fault-a": {
+      "telemetry": {
+        "exceptions": [
+          {
+            "ExceptionType": "example.ExampleError",
+            "OuterMessage": "example dependency call failed",
+            "events": "3",
+            "last_seen": "2026-10-20T10:05:00Z"
+          },
+          {
+            "ExceptionType": "example.ExampleError",
+            "OuterMessage": "example request timed out",
+            "events": "1",
+            "last_seen": "2026-10-20T10:04:00Z"
+          }
+        ],
+        "requests": [
+          {
+            "Name": "POST /api/orders",
+            "ResultCode": "503",
+            "events": "4",
+            "failures": "4"
+          },
+          {
+            "Name": "GET /health",
+            "ResultCode": "200",
+            "events": "10",
+            "failures": "0"
+          }
+        ],
+        "dependencies": [
+          {
+            "Target": "dep.example.net",
+            "DependencyType": "HTTP",
+            "ResultCode": "500",
+            "events": "3",
+            "failures": "3",
+            "last_seen": "2026-10-20T10:05:00Z"
+          },
+          {
+            "Target": "dep.example.net",
+            "DependencyType": "HTTP",
+            "ResultCode": "200",
+            "events": "12",
+            "failures": "0",
+            "last_seen": "2026-10-20T10:06:00Z"
+          }
+        ],
+        "metrics": [
+          {
+            "Name": "orders_completed",
+            "minute": "2026-10-20T10:00:00Z",
+            "total": "10"
+          },
+          {
+            "Name": "orders_failed",
+            "minute": "2026-10-20T10:05:00Z",
+            "total": "4"
+          }
+        ],
+        "sql_errors": [
+          {
+            "sql_error": "50000",
+            "sqlstate": "00000",
+            "ExceptionType": "example.ExampleError",
+            "events": "3",
+            "first_seen": "2026-10-20T10:01:00Z",
+            "last_seen": "2026-10-20T10:05:00Z"
+          }
+        ]
+      },
+      "identity_snapshot": {
+        "vault": "kv-example",
+        "principal_id": "00000000-0000-0000-0000-000000000001",
+        "permission_model": "rbac",
+        "role_assignments": [
+          {
+            "role": "Example Role",
+            "scope": "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-example"
+          }
+        ],
+        "has_secrets_user_role": true,
+        "access_policy_secret_permissions": []
+      }
+    },
+    "example-fault-b": {
+      "app_configuration": {
+        "app": "ca-example",
+        "desired": {
+          "EXAMPLE_SETTING": "a"
+        },
+        "current_revision": "ca-example--r3",
+        "revisions": [
+          {
+            "name": "ca-example--r3",
+            "created": "2026-10-20T09:59:00Z",
+            "active": true,
+            "image": "acr.example.io/example@sha256:0000000000000000",
+            "env": {
+              "EXAMPLE_SETTING": "b",
+              "EXAMPLE_URL": "https://example.invalid/"
+            }
+          },
+          {
+            "name": "ca-example--r2",
+            "created": "2026-10-19T09:00:00Z",
+            "active": false,
+            "image": "acr.example.io/example@sha256:0000000000000000",
+            "env": {
+              "EXAMPLE_SETTING": "a",
+              "EXAMPLE_URL": "https://example.invalid/"
+            }
+          }
+        ],
+        "differences_from_desired": [
+          {
+            "name": "EXAMPLE_SETTING",
+            "desired": "a",
+            "current": "b"
+          }
+        ]
+      }
+    }
+  }
+}

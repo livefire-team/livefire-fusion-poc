@@ -7,6 +7,7 @@ One-sentence definitions of terms used in this project, added the first time eac
 | Access policy (Key Vault) | The older way to grant Key Vault access: a list on the vault itself saying which identity may do what (e.g. get and list secrets); the alternative is RBAC. |
 | ACR (Azure Container Registry) | Azure's private container registry; the lab's `acrlf<suffix>` holds every image the lab runs, pulled with the AcrPull-only `id-lf-acrpull` identity. |
 | ADR | Architecture Decision Record: a short note in `docs/ADR.md` saying what we decided, why, and what else we considered. |
+| AI Search (Azure AI Search) | Azure's search service; WS3 loads its private incident corpus into the `incidents` index so the Planner can search past incidents by keyword or meaning. |
 | Architecture note | `docs/architecture.md`: a one-page description of the order service's parts, request flow, settings and telemetry. |
 | Azure Policy | Rules Azure checks on every create or change request, after the role check; a `deny` rule refuses the request even for an Owner (error `RequestDisallowedByPolicy`). |
 | Backlog (load generator) | The load generator's in-memory list of orders that failed and will be tried again later, with growing waits between tries. |
@@ -43,6 +44,7 @@ One-sentence definitions of terms used in this project, added the first time eac
 | `gh` | The GitHub command-line tool: log in, create repos, open and merge PRs from the terminal. |
 | GHCR | GitHub Container Registry (`ghcr.io`): where our order-service container image is stored; names must be lowercase. |
 | GitHub Actions | GitHub's built-in CI service: it runs the workflows in `.github/workflows/` on GitHub's machines. |
+| GitHub App | An app installed on chosen repos with exact permissions; it signs in with short-lived tokens, so WS3 uses one to read the repo and another to push `candidate/**` branches. |
 | gitleaks | A scanner that searches the whole git history for committed secrets such as passwords and keys; runs in `security.yml`. |
 | Health check | An endpoint that reports whether the app (`/health`) or what it depends on (`/health/dependencies`) is working. |
 | HMAC | A signature made from a message and a secret key; anyone without the key can't make a valid one. The Ops Service's grants use HMAC-SHA256. |
@@ -57,6 +59,7 @@ One-sentence definitions of terms used in this project, added the first time eac
 | Load generator | `src/load-generator/`: a small program that places orders at a steady rate so the order service has real traffic and throughput numbers. |
 | Managed identity | An Azure-managed login for an app (no password to store) that can be granted access to other resources, like our app reading Key Vault. |
 | Merge base | The newest commit two branches share; `git diff <merge base> HEAD` shows only what a branch changed since it left `main`. |
+| MCP (Model Context Protocol) | A standard way for AI agents to call tools over HTTP; WS3's server (`ca-mcp`) gives each agent its own endpoint and nothing else. |
 | Merge commit | A commit that joins a branch into `main` while keeping every original commit; we never squash (ADR-003). |
 | Monkeypatch | A pytest helper that temporarily replaces a function or object during one test (like the database calls) and puts it back afterwards. |
 | Noreply email | A private address GitHub gives you for commits, so your real email is not public. |
