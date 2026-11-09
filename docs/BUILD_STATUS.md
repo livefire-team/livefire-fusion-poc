@@ -5,8 +5,8 @@
 
 **Last updated:** 2026-11-09 (WS2 G2: all 13 gate items met. Joint drill with WS5 done: Drill A and Drill B
 passed. The deny policy is OFF since 2026-11-08. WS1's twin revision test passed; PRs #32, #38 and WS3's #40
-merged. Load generator wiring is PR #41, up to date with `main` and reviewed; waiting on WS1's review of
-`loadgen.bicep` and the owner's "Merge")
+merged. PR #41 merged (1299915): `main.bicep` deploys the load generator; deployed to `lf-eh` and WS1's item 4
+checks passed)
 **Current gate target:** G2 (Mon Nov 9; moved from Nov 2)
 
 ## FIRST THING THE NEXT SESSION SHOULD DO
@@ -280,7 +280,15 @@ Status values: not started | in progress | PR open | merged | blocked
     2. Done: PR #37 (already merged) reviewed against the control plane; it fits (evidence account output, container,
        public access, no shared keys, `allowProtectedAppendWrites`, role actions match `events.py`'s calls). Asked
        WS1: `DRILL_ID` is fixed at deploy time, so how does a run get a live drill's ID (WS5 starts the runs)?
-    3. PR open: [PR #41](https://github.com/livefire-team/livefire-fusion-poc/pull/41), `ws2/loadgen-in-main`.
+    3. Done 2026-11-09: [PR #41](https://github.com/livefire-team/livefire-fusion-poc/pull/41) merged (1299915) and
+       deployed. Only the load generator image was imported (by hand, `load-generator:sha-8339b92`) and
+       `LOADGEN_IMAGE` and `LOADGEN_DRILL_ID` (a dedicated `drill-loadgen-` ID) set; `scripts/deploy.sh images` was
+       NOT run, because it would also move the twin to `order-service` `88214c7` (a workflow-only change, but a new
+       revision of `ca-order`) and the Referee to `1299915`: WS1's call. Preview first (no creates or deletes), then
+       `scripts/deploy.sh apps`: exit 0 in about 4 minutes; `caj-loadgen` replaced in place; the hook created WS3's
+       three `mcp-*-key` secrets (new since #40) and left the other keys alone. azd's validation now warns that the
+       SQL rule `AllowAllWindowsAzureIps` has a reserved word and "will fail": a false alarm, it is Azure's own name
+       for "allow Azure services" and the provision succeeded. History of this item:
        `main.bicep` deploys `loadgen-identity` and `loadgen` when `LOADGEN_IMAGE` is set (`deploy.sh images` imports
        `load-generator` and sets it); `LOADGEN_DRILL_ID` names the event log; `loadgen.bicep` gains optional
        `registryServer`/`pullIdentityId` (WS1 to review). `azd provision --preview` from the branch (values given for
@@ -295,8 +303,11 @@ Status values: not started | in progress | PR open | merged | blocked
        `drill-loadgen-<date>`), not a real drill's: every run writes to that one log. Deploy after merge:
        `REQUESTS_CA_BUNDLE` set, heads-up to WS5, `scripts/deploy.sh images`, `azd env set LOADGEN_DRILL_ID <drill->`,
        `scripts/deploy.sh apps`. This ends the hand-deployed `caj-loadgen` above.
-    4. Mon, after 3: one role row on the evidence container; `metrics.orders` lines in `<drill-id>/events.jsonl`; a
-       write outside `drill-*/events.jsonl` refused (403).
+    4. Done 2026-11-09: `id-lf-loadgen` has one role assignment, WS1's evidence event appender on the evidence
+       container, with the `drill-*/events.jsonl` condition (write and append only; no read, no delete). A run
+       started at 22:22 UTC wrote its first `metrics.orders` line 45 s later (about 30 orders a minute, 0 failed,
+       backlog 0). The 403 for a write elsewhere was checked from the role's condition, not live (that needs a
+       command run as the job's identity). WS1 gets a short private summary from the owner.
     5. Done: PR #32 merged.
     - Keep `duration_s` on Referee results (WS5's Browser minutes tile). Give WS5 a heads-up before any rebuild,
       `policy-off`, `evidence_unlock.py` or provision of `lf-eh`.
@@ -316,7 +327,10 @@ Status values: not started | in progress | PR open | merged | blocked
     `ORDER_IMAGE` is a registry `sha-<40>` tag; the control vault name is fixed, so reprovisioning after `azd down`
     needs `--purge`. Not done on purpose: a `predown` hook that runs `policy-off`, because the policy is
     subscription-wide and a teardown of a second environment would remove it for `lf-eh` too.
-- Last commands run (WS2 Mac, with `.venv` active): `pytest -q referee/tests` on `ws2/loadgen-in-main` after
+- Last commands run (WS2 Mac, with `.venv` active, `REQUESTS_CA_BUNDLE` set, on `main` at 1299915): `az acr import`
+  of `load-generator:sha-8339b92`; `azd env set LOADGEN_IMAGE` and `LOADGEN_DRILL_ID`; `azd provision --preview`;
+  `scripts/deploy.sh apps` (exit 0); `az role assignment list --assignee <LOADGEN_PRINCIPAL_ID> --all`;
+  `az containerapp job start -g <twin rg> -n caj-loadgen`; the event log read back. Before that `pytest -q referee/tests` on `ws2/loadgen-in-main` after
   merging `main` and the review fixes (100 passed); `azd provision --preview` again (same result); before that
   `gh pr review 40 --request-changes`; before that `azd provision --preview` on `ws2/loadgen-in-main` (with
   `REQUESTS_CA_BUNDLE`, `LOADGEN_IMAGE` and `LOADGEN_DRILL_ID` as shell variables only); `pytest -q referee/tests`
@@ -409,6 +423,10 @@ Status values: not started | in progress | PR open | merged | blocked
 See `docs/ADR.md` (latest: ADR-022).
 
 ## Session log (newest first)
+- 2026-11-09 (later): PR #41 merged by the owner (merge commit 1299915). Deployed to `lf-eh` with only the load
+  generator image changed (preview, then `scripts/deploy.sh apps`, exit 0). WS1's item 4 passed: one role row on the
+  evidence container with its path condition; a `caj-loadgen` run wrote `metrics.orders` lines (about 30 orders a
+  minute, 0 failed). `deploy.sh images` would move the twin and the Referee to newer images: left for WS1.
 - 2026-11-09: PR #40 review posted as "changes requested"; WS3 fixed the asked change and merged #40 (the review
   shows dismissed). `main` merged into #41 (conflicts in `deploy.sh`, `main.bicep`, `main.parameters.json`, both
   sides kept), preview re-run with the same result, review pass on #41 with fixes (RED then GREEN on three new
