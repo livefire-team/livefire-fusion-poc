@@ -2,10 +2,10 @@
 # One entry point for the G2 platform, in phases. Run from the repo root, signed in to the lab (az and azd).
 #   scripts/deploy.sh all                     infra, images, apps, verify (a fresh lab)
 #   scripts/deploy.sh infra                   azd provision: control plane and twin (the Ops Service waits for images)
-#   scripts/deploy.sh images [--build] [ref]  order-service, ops-service and referee into the private registry
+#   scripts/deploy.sh images [--build] [ref]  order-service, ops-service, referee, mcp-server into the registry
 #                                             as :sha-<40 hex> of the last commit (at ref, default origin/main) that
 #                                             changed each one: imported from GHCR, or built here with --build
-#   scripts/deploy.sh apps                    azd provision with those images: ca-ops, job-referee, job-ops-smoke
+#   scripts/deploy.sh apps                    azd provision with those images: ca-ops, the jobs, ca-mcp (WS3)
 #   scripts/deploy.sh policy                  the deny policy, proven as you, then the role that lets id-lf-ops try
 #   scripts/deploy.sh policy-off              removes both (a provision never deletes them), e.g. before a lab ends
 #   scripts/deploy.sh github [owner/repo]     a repo's acr-push environment and variables (repo admin only)
@@ -25,6 +25,7 @@ paths_for() {
     order-service) echo "src/order-service .github/workflows/order-service.yml" ;;
     ops-service)   echo "src/ops-service .github/workflows/ops-service.yml" ;;
     referee)       echo "referee journeys .github/workflows/referee.yml" ;;
+    mcp-server)    echo "src/mcp-server .github/workflows/mcp-server.yml" ;;
   esac
 }
 build_args() {  # build_args <component>: docker context and Dockerfile, relative to a checkout
@@ -32,15 +33,19 @@ build_args() {  # build_args <component>: docker context and Dockerfile, relativ
     order-service) echo "src/order-service -f src/order-service/Dockerfile" ;;
     ops-service)   echo "src/ops-service -f src/ops-service/Dockerfile" ;;
     referee)       echo ". -f referee/Dockerfile" ;;
+    mcp-server)    echo "src/mcp-server -f src/mcp-server/Dockerfile" ;;
   esac
 }
 env_name() {
-  case "$1" in order-service) echo ORDER_IMAGE ;; ops-service) echo OPS_IMAGE ;; referee) echo REFEREE_IMAGE ;; esac
+  case "$1" in
+    order-service) echo ORDER_IMAGE ;; ops-service) echo OPS_IMAGE ;; referee) echo REFEREE_IMAGE ;;
+    mcp-server) echo MCP_IMAGE ;;
+  esac
 }
 
 phase_infra() {
   say "azd provision (control plane and twin)"
-  azd provision
+  provision
 }
 
 phase_images() {
@@ -49,10 +54,13 @@ phase_images() {
   for a in "$@"; do case "$a" in --build) build=1 ;; *) ref="$a" ;; esac; done
   [ -n "${REGISTRY_NAME:-}" ] || { echo "no REGISTRY_NAME: run scripts/deploy.sh infra first"; exit 1; }
   git fetch -q origin
-  for c in order-service ops-service referee; do
+  for c in order-service ops-service referee mcp-server; do
     local full
     # shellcheck disable=SC2046  # paths_for prints several paths on purpose
     full="$(git log -1 --first-parent --format=%H "$ref" -- $(paths_for "$c"))"
+    if [ -z "$full" ] && [ "$c" = mcp-server ]; then   # WS3 is optional: a ref before it merged still deploys
+      echo "no commit at $ref touches mcp-server: skipped"; azd env set MCP_IMAGE ""; continue
+    fi
     [ -n "$full" ] || { echo "no commit at $ref touches $c"; exit 1; }
     local tag="sha-$full" short="sha-${full:0:7}" image="$REGISTRY_SERVER/$c:sha-$full"
     say "$c at ${full:0:7}"
@@ -62,8 +70,12 @@ phase_images() {
       local creds=()
       [ -z "${GHCR_TOKEN:-}" ] || creds=(--username "${GHCR_USER:?set GHCR_USER with GHCR_TOKEN}" --password "$GHCR_TOKEN")
       # ${creds[@]+...}: macOS bash 3.2 treats an empty array as unset under set -u
-      az acr import -n "$REGISTRY_NAME" --source "ghcr.io/$GHCR_OWNER/$c:$short" --image "$c:$tag" \
-        ${creds[@]+"${creds[@]}"} -o none
+      if ! az acr import -n "$REGISTRY_NAME" --source "ghcr.io/$GHCR_OWNER/$c:$short" --image "$c:$tag" \
+        ${creds[@]+"${creds[@]}"} -o none; then
+        [ "$c" = mcp-server ] || exit 1                 # WS3's image never blocks the platform's
+        echo "WARNING: mcp-server image not imported (did mcp-server.yml publish $short?); MCP_IMAGE unchanged" >&2
+        continue
+      fi
       echo "imported ghcr.io/$GHCR_OWNER/$c:$short -> $image"
     else
       local dir; dir="$(mktemp -d)"
@@ -79,21 +91,70 @@ phase_images() {
   done
 }
 
+# WS3: ca-mcp reads its keys and GitHub credentials from the control vault at deploy time, so a missing secret would
+# fail the whole provision. Until they are all there, ca-mcp is left out (MCP_IMAGE cleared) and the gap is named.
+# If the vault can't be read at all, the deploy stops instead: that is an access problem, not a missing secret.
+mcp_missing() {
+  local need=(ops-agent-key) existing n
+  # Which files a candidate may change: kept in the azd environment, never in this public repo (ADR-004)
+  [ -n "${MCP_ENGINEER_WRITE_PATHS:-}" ] || echo "azd env value MCP_ENGINEER_WRITE_PATHS"
+  if [ "${MCP_AUTH_MODE:-key}" = key ]; then
+    need+=(mcp-planner-key mcp-engineer-key mcp-recovery-key)
+  else                                                  # entra: the server refuses to start without all four
+    for n in MCP_CLIENT_ID PLANNER_AGENT_OBJECT_ID ENGINEER_AGENT_OBJECT_ID RECOVERY_AGENT_OBJECT_ID; do
+      [ -n "${!n:-}" ] || echo "azd env value $n"
+    done
+  fi
+  if [ "${MCP_GITHUB_AUTH:-app}" = app ]; then
+    need+=(gh-planner-private-key gh-engineer-private-key)
+    for n in GITHUB_PLANNER_APP_ID GITHUB_PLANNER_INSTALLATION_ID GITHUB_ENGINEER_APP_ID GITHUB_ENGINEER_INSTALLATION_ID; do
+      [ -n "${!n:-}" ] || echo "azd env value $n"
+    done
+  else
+    need+=(gh-planner-token gh-engineer-token)
+  fi
+  if ! existing="$(az keyvault secret list --vault-name "${CONTROL_KEYVAULT_NAME:-}" --query "[].name" -o tsv)"; then
+    echo "cannot list the secrets in ${CONTROL_KEYVAULT_NAME:-the control vault}; nothing provisioned" \
+      "(sign-in, role, or behind SSL inspection? set REQUESTS_CA_BUNDLE)"; return 2
+  fi
+  for n in "${need[@]}"; do grep -qx "$n" <<<"$existing" || echo "secret $n in $CONTROL_KEYVAULT_NAME"; done
+}
+
+# Every provision in this script goes through here, so ca-mcp can never fail one (ADR-022)
+provision() {
+  load
+  if [ -n "${MCP_IMAGE:-}" ]; then
+    local missing status=0; missing="$(mcp_missing)" || status=$?
+    # The exit has to be here: one inside mcp_missing would be lost, because that runs inside $(...)
+    if [ "$status" -ne 0 ]; then              # can't tell what is missing: stop, rather than quietly drop ca-mcp
+      printf '%s\n' "$missing" >&2
+      exit 1
+    fi
+    if [ -n "$missing" ]; then
+      printf 'ca-mcp left out of this provision; missing:\n%s\n(see README-WS3.md, Deploy to Azure)\n' "$missing" >&2
+      echo "a running ca-mcp loses its twin vault metadata access until a provision with MCP_IMAGE set" >&2
+      azd env set MCP_IMAGE ""
+    fi
+  fi
+  azd provision
+}
+
 phase_apps() {
   load
   [ -n "${OPS_IMAGE:-}" ] && [ -n "${REFEREE_IMAGE:-}" ] || { echo "run scripts/deploy.sh images first"; exit 1; }
-  say "azd provision (ca-ops, job-referee, job-ops-smoke; twin on $ORDER_IMAGE)"
-  azd provision
+  say "azd provision (ca-ops, job-referee, job-ops-smoke${MCP_IMAGE:+, ca-mcp if ready}; twin on $ORDER_IMAGE)"
+  provision
   load
   echo "OPS_URL=$OPS_URL"
   case "$OPS_URL" in *.internal.*) ;; *) echo "ca-ops is not internal-only"; exit 1 ;; esac
+  [ -z "${MCP_URL:-}" ] || echo "MCP_URL=$MCP_URL"
 }
 
 phase_policy() {
   load
   say "deny policy on"
   azd env set DENY_BROAD_POLICY on
-  azd provision
+  provision
   say "waiting until the broad option is refused by Azure Policy (a new assignment can take up to 30 minutes)"
   local out rc
   for i in $(seq 40); do
@@ -106,7 +167,7 @@ phase_policy() {
   done
   say "let id-lf-ops attempt Contributor (so only Azure Policy can stop it)"
   azd env set BROAD_ATTEMPT_ROLE on
-  azd provision
+  provision
 }
 
 phase_policy_off() {

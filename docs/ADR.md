@@ -429,6 +429,35 @@ Status values: Proposed | Accepted | Superseded | Rejected
 - **Implemented in:** `src/load-generator/loadgen/events.py`, `config.py`, `runner.py`, `__main__.py`,
   `src/load-generator/tests/test_events.py` (PR #35); `infra/modules/loadgen-identity.bicep`, `loadgen.bicep`
 
+## ADR-022: WS3's MCP server lives in this repo and deploys with the platform
+- **Date:** 2026-11-08
+- **Status:** Proposed (WS3); needs WS2's review of the `main.bicep`, `deploy.sh` and `postprovision.sh` changes
+- **Context:** WS3 was built as a standalone extract (`livefire-team/ws3-mcp-server`). The plan has one repo, one azd
+  environment and one `main.bicep`; CI only pushes images, and `azd provision` deploys. A second deploy path for
+  `ca-mcp` would fight the shared template. The Planner reads this repo, so ADR-004's allowlist applies.
+- **Options considered:** (1) keep the extract and deploy `ca-mcp` from its own workflow, with an identity that can
+  assign roles; (2) move WS3 here and add its two modules to `main.bicep`, like the Ops Service.
+- **Decision:** Option 2. `ca-mcp` deploys once `MCP_IMAGE` is set and the Ops Service is deployed (`/recovery`
+  calls it). `deploy.sh images` treats `mcp-server` like the other images; `deploy.sh apps` leaves `ca-mcp` out,
+  naming what is missing, until its GitHub credentials are in the control vault, so WS3 can't fail a platform
+  provision. If the control vault can't be read at all, the deploy stops before `azd provision` instead of
+  dropping `ca-mcp`: an access problem must not look like a deliberate skip. `postprovision.sh` creates the three endpoint keys once (like the Ops keys) and reloads the incident
+  index from `INCIDENT_CORPUS` when it is set. Contract v2.3: the Planner reads only `src/order-service/**` and `runbooks/*.md`, never `docs/`,
+  `CLAUDE.md`, `src/ops-service/`, `referee/` or `scripts/`. On an access-policy twin vault, `id-lf-mcp` gets a
+  secrets `list` policy (metadata, never values), re-added after the twin on every provision.
+  Because this repo is public and the agents read it (ADR-004), nothing drill-specific comes with WS3: the incident
+  corpus stays in the private `ws3-mcp-server` repo (`load-incidents.py --corpus`, or the azd value
+  `INCIDENT_CORPUS`); the fixtures backend ships neutral placeholder evidence (`FIXTURES` points a rehearsal at the
+  private file); and contract v2.4 takes the Engineer's write paths from `ENGINEER_WRITE_PATHS` (azd value
+  `MCP_ENGINEER_WRITE_PATHS`), refusing every write when it is unset and refusing to start on a pattern that could
+  match a protected path. `src/drill-runner/`, `src/ops-service/`, `referee/`, `docs/`, `azure.yaml` and `.gitleaks.toml` join the protected paths,
+  which are now the only in-code limit on writes. File text is redacted before it is cut to size.
+- **Consequences:** WS2's scripts now know about a fourth image. `deploy.sh` leaves `ca-mcp` out until
+  `MCP_ENGINEER_WRITE_PATHS` is set. WS4's Drill Runner list and `CANDIDATE_ALLOWED_PATHS` (ADR-020) must allow the
+  same files; WS4's list should also move to a setting before it lands here. WS3's coverage gate is 80% (the Azure
+  backends are tested only in the lab). WS4's `PROTECTED_PATHS` should match the longer protected list. The standalone repo is retired once this merges.
+- **Implemented in:** this PR (`src/mcp-server/`, `infra/modules/mcp*.bicep`, `.github/workflows/mcp-server.yml`)
+
 ## ADR-00N: <short title>
 - **Date:**
 - **Status:** Proposed
