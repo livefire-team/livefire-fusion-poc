@@ -47,6 +47,9 @@ env_name() {
     load-generator) echo LOADGEN_IMAGE ;;
   esac
 }
+optional() {  # WS3's ca-mcp (ADR-022) and WS1's caj-loadgen (ADR-021): the platform deploys without them
+  case "$1" in mcp-server|load-generator) return 0 ;; *) return 1 ;; esac
+}
 
 phase_infra() {
   say "azd provision (control plane and twin)"
@@ -63,8 +66,8 @@ phase_images() {
     local full
     # shellcheck disable=SC2046  # paths_for prints several paths on purpose
     full="$(git log -1 --first-parent --format=%H "$ref" -- $(paths_for "$c"))"
-    if [ -z "$full" ] && [ "$c" = mcp-server ]; then   # WS3 is optional: a ref before it merged still deploys
-      echo "no commit at $ref touches mcp-server: skipped"; azd env set MCP_IMAGE ""; continue
+    if [ -z "$full" ] && optional "$c"; then           # a ref from before it merged still deploys
+      echo "no commit at $ref touches $c: skipped"; azd env set "$(env_name "$c")" ""; continue
     fi
     [ -n "$full" ] || { echo "no commit at $ref touches $c"; exit 1; }
     local tag="sha-$full" short="sha-${full:0:7}" image="$REGISTRY_SERVER/$c:sha-$full"
@@ -77,8 +80,8 @@ phase_images() {
       # ${creds[@]+...}: macOS bash 3.2 treats an empty array as unset under set -u
       if ! az acr import -n "$REGISTRY_NAME" --source "ghcr.io/$GHCR_OWNER/$c:$short" --image "$c:$tag" \
         ${creds[@]+"${creds[@]}"} -o none; then
-        [ "$c" = mcp-server ] || exit 1                 # WS3's image never blocks the platform's
-        echo "WARNING: mcp-server image not imported (did mcp-server.yml publish $short?); MCP_IMAGE unchanged" >&2
+        optional "$c" || exit 1                         # an optional image never blocks the platform's
+        echo "WARNING: $c image not imported (did $c.yml publish $short?); $(env_name "$c") unchanged" >&2
         continue
       fi
       echo "imported ghcr.io/$GHCR_OWNER/$c:$short -> $image"
@@ -147,7 +150,7 @@ provision() {
 phase_apps() {
   load
   [ -n "${OPS_IMAGE:-}" ] && [ -n "${REFEREE_IMAGE:-}" ] || { echo "run scripts/deploy.sh images first"; exit 1; }
-  say "azd provision (ca-ops, job-referee, job-ops-smoke${MCP_IMAGE:+, ca-mcp if ready}; twin on $ORDER_IMAGE)"
+  say "azd provision (ca-ops, job-referee, job-ops-smoke${MCP_IMAGE:+, ca-mcp if ready}${LOADGEN_IMAGE:+, caj-loadgen}; twin on $ORDER_IMAGE)"
   provision
   load
   echo "OPS_URL=$OPS_URL"
@@ -256,5 +259,5 @@ case "${1:-}" in
   all) phase_infra; phase_images origin/main; phase_apps; phase_verify ;;
   infra|images|apps|policy|github|smoke|verify) p="$1"; shift; "phase_$p" "$@" ;;
   policy-off) phase_policy_off ;;
-  *) sed -n '2,14p' "$0"; exit 2 ;;
+  *) sed -n '2,16p' "$0"; exit 2 ;;
 esac

@@ -303,6 +303,31 @@ def test_images_imports_mcp_server_once_it_is_on_main(sandbox, repo):
     assert f"azd env set MCP_IMAGE acrlftest.azurecr.io/mcp-server:sha-{merge}" in calls
 
 
+AZ_IMPORT_NO_LOADGEN_IN_GHCR = """echo "az $*" >> LOG
+case "$*" in
+  "acr repository show"*"order-service"*) exit 0 ;;
+  "acr repository show"*) exit 1 ;;
+  "acr import"*"load-generator"*) echo "manifest unknown" >&2; exit 1 ;;
+esac
+"""
+
+
+def test_images_carries_on_when_the_load_generator_image_is_missing(sandbox, repo):
+    result = run(sandbox, (repo / "scripts" / "deploy.sh").as_posix(), "images", az_body=AZ_IMPORT_NO_LOADGEN_IN_GHCR,
+                 cwd=repo)
+    assert result.returncode == 0, result.stderr
+    assert "load-generator image not imported" in result.stderr and "LOADGEN_IMAGE unchanged" in result.stderr
+    calls = log_lines(sandbox)
+    assert any(c.startswith("azd env set OPS_IMAGE") for c in calls)
+    assert not any(c.startswith("azd env set LOADGEN_IMAGE") for c in calls)
+
+
+def test_an_unknown_phase_prints_the_whole_usage(sandbox):
+    result = run(sandbox, copy_deploy(sandbox).as_posix(), "verfy", az_body="")
+    assert result.returncode == 2
+    assert result.stdout.rstrip().splitlines()[-1].startswith("#   scripts/deploy.sh verify ")
+
+
 # ---- deploy.sh apps: ca-mcp only when its secrets are in the control vault (ADR-022) ----
 APPS_VALUES = VALUES + """OPS_IMAGE=acrlftest.azurecr.io/ops-service:sha-1
 REFEREE_IMAGE=acrlftest.azurecr.io/referee:sha-1
@@ -378,6 +403,13 @@ def test_apps_leaves_ca_mcp_out_and_names_what_is_missing(sandbox):
     assert "secret gh-engineer-private-key in kv-lfc-test" in result.stderr
     calls = log_lines(sandbox)
     assert calls.index("azd env set MCP_IMAGE ") < calls.index("azd provision")
+
+
+def test_apps_names_caj_loadgen_only_when_its_image_is_set(sandbox):
+    assert "caj-loadgen" not in run_apps(sandbox, ALL_MCP_SECRETS).stdout
+    result = run_apps(sandbox, ALL_MCP_SECRETS, extra="LOADGEN_IMAGE=acrlftest.azurecr.io/load-generator:sha-1\n")
+    assert result.returncode == 0, result.stderr
+    assert "caj-loadgen" in result.stdout
 
 
 def test_apps_deploys_ca_mcp_when_everything_is_there(sandbox):

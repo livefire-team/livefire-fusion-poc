@@ -60,7 +60,7 @@ param searchVectorField string = ''
 
 @description('WS1: <registry>/load-generator:sha-<40 hex>. Empty: no caj-loadgen')
 param loadgenImage string = ''
-@description('WS1: the drill-<id> whose event log gets the metrics.orders lines. Empty: the job writes none')
+@description('WS1: the drill-<id> whose event log gets the metrics.orders lines. Empty or no drill- prefix: none')
 param loadgenDrillId string = ''
 
 var tags = { 'azd-env-name': environmentName, app: 'livefire' }
@@ -253,8 +253,8 @@ module loadgen 'modules/loadgen.bicep' = if (deployLoadgen) {
     appInsightsConnectionString: twin.outputs.appInsightsConnectionString
     identityId: loadgenIdentity!.outputs.identityId
     identityClientId: loadgenIdentity!.outputs.identityClientId
-    // without a drill- ID the job would exit at start, so no event log either
-    eventSource: empty(loadgenDrillId) ? '' : loadgenIdentity!.outputs.eventSource
+    // with an event log the job needs a drill- ID or it exits at start, so any other ID gets the load but no lines
+    eventSource: startsWith(loadgenDrillId, 'drill-') ? loadgenIdentity!.outputs.eventSource : ''
     drillId: loadgenDrillId
   }
 }
