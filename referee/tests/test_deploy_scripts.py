@@ -348,8 +348,8 @@ def test_an_unreadable_vault_stops_the_deploy_instead_of_dropping_ca_mcp(sandbox
     az = 'echo "az $*" >> LOG\ncase "$*" in "keyvault secret list"*) echo Forbidden >&2; exit 1 ;; esac\n'
     result = run(sandbox, copy_deploy(sandbox).as_posix(), phase, az_body=az)
     assert result.returncode != 0
-    assert "can't list the secrets in kv-lfc-test" in result.stderr
-    assert "left out" not in result.stderr
+    assert "cannot list the secrets in kv-lfc-test; nothing provisioned" in result.stderr
+    assert "REQUESTS_CA_BUNDLE" in result.stderr and "left out" not in result.stderr
     calls = log_lines(sandbox)
     assert "azd provision" not in calls and not any(c.startswith("azd env set MCP_IMAGE") for c in calls)
 
@@ -370,6 +370,7 @@ def test_apps_leaves_ca_mcp_out_and_names_what_is_missing(sandbox):
     result = run_apps(sandbox, ALL_MCP_SECRETS.replace("gh-engineer-private-key", ""))
     assert result.returncode == 0, result.stderr
     assert "ca-mcp left out of this provision" in result.stderr
+    assert "a running ca-mcp loses its twin vault metadata access until a provision with MCP_IMAGE set" in result.stderr
     assert "secret gh-engineer-private-key in kv-lfc-test" in result.stderr
     calls = log_lines(sandbox)
     assert calls.index("azd env set MCP_IMAGE ") < calls.index("azd provision")

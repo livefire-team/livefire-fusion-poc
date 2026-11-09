@@ -77,7 +77,8 @@ Status values: not started | in progress | PR open | merged | blocked
 - 2026-11-08: WS3 PR #40 (`ws3/mcp-server-v2`): the MCP server, contract v2.4 and CI moved in from
   `livefire-team/ws3-mcp-server`, with no incident corpus (it stays in the private repo); `ca-mcp` and AI Search
   added to `main.bicep` behind `MCP_IMAGE`; `deploy.sh` and `postprovision.sh` extended (ADR-022). Review fix 2026-11-09: `deploy.sh` stops when the
-  control vault can't be read, instead of leaving `ca-mcp` out. In review.
+  control vault can't be read, instead of leaving `ca-mcp` out; the "left out" message
+  now warns that a running `ca-mcp` loses its twin vault access until the next provision with `MCP_IMAGE` set. In review.
 - 2026-10-31: WS2 branch `ws2-starter` is [PR #16](https://github.com/livefire-team/livefire-fusion-poc/pull/16) to
   `main`: lab probe results doc, WS2 starter files (`azure.yaml`, `infra/main.bicep`, `scripts/`, `referee/`,
   `journeys/`) and two new `twin.bicep` outputs (`logAnalyticsWorkspaceName`, `logAnalyticsCustomerId`; contract
