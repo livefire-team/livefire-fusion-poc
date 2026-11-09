@@ -428,6 +428,18 @@ Status values: Proposed | Accepted | Superseded | Rejected
   catalog wins and this module follows.
 - **Implemented in:** `src/load-generator/loadgen/events.py`, `config.py`, `runner.py`, `__main__.py`,
   `src/load-generator/tests/test_events.py` (PR #35); `infra/modules/loadgen-identity.bicep`, `loadgen.bicep`
+- **Update 2026-11-08 (WS2): wired into `main.bicep`.** `loadgen-identity` (control resource group) and `loadgen`
+  (twin resource group, after the twin) deploy only when `LOADGEN_IMAGE` is set, like the Ops Service's images.
+  `scripts/deploy.sh images` imports `load-generator` into the private registry with the other components and sets
+  `LOADGEN_IMAGE`; like `mcp-server`, a failed import only warns and leaves `LOADGEN_IMAGE` unchanged, so the
+  platform's images still deploy. The job pulls it with `id-lf-acrpull` (new optional `registryServer` and
+  `pullIdentityId` on `loadgen.bicep`, as on `twin.bicep`, ADR-017), and `AZURE_CLIENT_ID` still names
+  `id-lf-loadgen`. The drill ID comes from `LOADGEN_DRILL_ID`; unless it starts with `drill-`, the job gets no
+  `EVENT_SOURCE` and writes no lines, but still places orders (with an event log it would exit with code 2). The job
+  keeps the name `caj-loadgen`, so a provision replaces the hand-deployed one in place. Open: one drill ID per
+  deployment, so every run writes to the same log; lines for a live drill need that drill's ID set before the
+  provision. Outputs `LOADGEN_JOB_NAME` and `LOADGEN_PRINCIPAL_ID`. Implemented in `infra/main.bicep`,
+  `infra/main.parameters.json`, `infra/modules/loadgen.bicep`, `scripts/deploy.sh`.
 
 ## ADR-022: WS3's MCP server lives in this repo and deploys with the platform
 - **Date:** 2026-11-08

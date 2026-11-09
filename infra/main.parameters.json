@@ -91,6 +91,12 @@
     },
     "searchVectorField": {
       "value": "${SEARCH_VECTOR_FIELD}"
+    },
+    "loadgenImage": {
+      "value": "${LOADGEN_IMAGE}"
+    },
+    "loadgenDrillId": {
+      "value": "${LOADGEN_DRILL_ID}"
     }
   }
 }

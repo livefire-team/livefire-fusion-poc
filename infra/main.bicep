@@ -58,12 +58,18 @@ param searchLocation string = ''
 @description('WS3: content_vector once WS4\'s embedding model exists; empty keeps keyword search')
 param searchVectorField string = ''
 
+@description('WS1: <registry>/load-generator:sha-<40 hex>. Empty: no caj-loadgen')
+param loadgenImage string = ''
+@description('WS1: the drill-<id> whose event log gets the metrics.orders lines. Empty or no drill- prefix: none')
+param loadgenDrillId string = ''
+
 var tags = { 'azd-env-name': environmentName, app: 'livefire' }
 // Computed here, not in a module, so other modules can reference the vault with existing and getSecret
 var controlKeyVaultName = 'kv-lfc-${take(uniqueString(subscription().id, environmentName), 13)}'
 var deployOps = !empty(opsImage) && !empty(refereeImage)
 // /recovery calls the Ops Service, so ca-mcp follows it
 var deployMcp = deployOps && !empty(mcpImage)
+var deployLoadgen = !empty(loadgenImage)
 
 resource twinRg 'Microsoft.Resources/resourceGroups@2022-09-01' = {
   name: 'rg-lf-twin-${environmentName}'
@@ -228,6 +234,31 @@ module mcpTwinAccess 'modules/mcp-twin-access.bicep' = if (deployMcp) {
   }
 }
 
+// ---- WS1: the load generator (ADR-015, ADR-021). Replaces the hand-deployed caj-loadgen of the same name ----
+module loadgenIdentity 'modules/loadgen-identity.bicep' = if (deployLoadgen) {
+  scope: controlRg
+  name: 'loadgen-identity'
+  params: { location: location, evidenceAccountName: control.outputs.evidenceAccountName }
+}
+
+module loadgen 'modules/loadgen.bicep' = if (deployLoadgen) {
+  scope: twinRg
+  name: 'loadgen'
+  params: {
+    location: location
+    loadgenImage: loadgenImage
+    registryServer: control.outputs.registryServer
+    pullIdentityId: control.outputs.pullIdentityId
+    orderAppUrl: twin.outputs.orderAppUrl
+    appInsightsConnectionString: twin.outputs.appInsightsConnectionString
+    identityId: loadgenIdentity!.outputs.identityId
+    identityClientId: loadgenIdentity!.outputs.identityClientId
+    // with an event log the job needs a drill- ID or it exits at start, so any other ID gets the load but no lines
+    eventSource: startsWith(loadgenDrillId, 'drill-') ? loadgenIdentity!.outputs.eventSource : ''
+    drillId: loadgenDrillId
+  }
+}
+
 output TWIN_RG string = twinRg.name
 output CONTROL_RG string = controlRg.name
 output AZURE_TENANT_ID string = tenant().tenantId
@@ -264,3 +295,5 @@ output MCP_URL string = deployMcp ? mcp!.outputs.mcpUrl : ''
 output MCP_PRINCIPAL_ID string = deployMcp ? mcp!.outputs.mcpIdentityPrincipalId : ''
 output SEARCH_ENDPOINT string = deployMcp ? mcp!.outputs.searchEndpoint : ''
 output SEARCH_NAME string = deployMcp ? mcp!.outputs.searchName : ''
+output LOADGEN_JOB_NAME string = deployLoadgen ? loadgen!.outputs.loadgenJobName : ''
+output LOADGEN_PRINCIPAL_ID string = deployLoadgen ? loadgenIdentity!.outputs.identityPrincipalId : ''

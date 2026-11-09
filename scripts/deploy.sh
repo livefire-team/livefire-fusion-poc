@@ -2,10 +2,12 @@
 # One entry point for the G2 platform, in phases. Run from the repo root, signed in to the lab (az and azd).
 #   scripts/deploy.sh all                     infra, images, apps, verify (a fresh lab)
 #   scripts/deploy.sh infra                   azd provision: control plane and twin (the Ops Service waits for images)
-#   scripts/deploy.sh images [--build] [ref]  order-service, ops-service, referee, mcp-server into the registry
-#                                             as :sha-<40 hex> of the last commit (at ref, default origin/main) that
-#                                             changed each one: imported from GHCR, or built here with --build
-#   scripts/deploy.sh apps                    azd provision with those images: ca-ops, the jobs, ca-mcp (WS3)
+#   scripts/deploy.sh images [--build] [ref]  order-service, ops-service, referee, mcp-server, load-generator into
+#                                             the registry as :sha-<40 hex> of the last commit (at ref, default
+#                                             origin/main) that changed each one: imported from GHCR, or built here
+#                                             with --build
+#   scripts/deploy.sh apps                    azd provision with those images: ca-ops, the jobs, ca-mcp (WS3),
+#                                             caj-loadgen (WS1)
 #   scripts/deploy.sh policy                  the deny policy, proven as you, then the role that lets id-lf-ops try
 #   scripts/deploy.sh policy-off              removes both (a provision never deletes them), e.g. before a lab ends
 #   scripts/deploy.sh github [owner/repo]     a repo's acr-push environment and variables (repo admin only)
@@ -26,6 +28,7 @@ paths_for() {
     ops-service)   echo "src/ops-service .github/workflows/ops-service.yml" ;;
     referee)       echo "referee journeys .github/workflows/referee.yml" ;;
     mcp-server)    echo "src/mcp-server .github/workflows/mcp-server.yml" ;;
+    load-generator) echo "src/load-generator .github/workflows/load-generator.yml" ;;
   esac
 }
 build_args() {  # build_args <component>: docker context and Dockerfile, relative to a checkout
@@ -34,13 +37,18 @@ build_args() {  # build_args <component>: docker context and Dockerfile, relativ
     ops-service)   echo "src/ops-service -f src/ops-service/Dockerfile" ;;
     referee)       echo ". -f referee/Dockerfile" ;;
     mcp-server)    echo "src/mcp-server -f src/mcp-server/Dockerfile" ;;
+    load-generator) echo "src/load-generator -f src/load-generator/Dockerfile" ;;
   esac
 }
 env_name() {
   case "$1" in
     order-service) echo ORDER_IMAGE ;; ops-service) echo OPS_IMAGE ;; referee) echo REFEREE_IMAGE ;;
     mcp-server) echo MCP_IMAGE ;;
+    load-generator) echo LOADGEN_IMAGE ;;
   esac
+}
+optional() {  # WS3's ca-mcp (ADR-022) and WS1's caj-loadgen (ADR-021): the platform deploys without them
+  case "$1" in mcp-server|load-generator) return 0 ;; *) return 1 ;; esac
 }
 
 phase_infra() {
@@ -54,12 +62,12 @@ phase_images() {
   for a in "$@"; do case "$a" in --build) build=1 ;; *) ref="$a" ;; esac; done
   [ -n "${REGISTRY_NAME:-}" ] || { echo "no REGISTRY_NAME: run scripts/deploy.sh infra first"; exit 1; }
   git fetch -q origin
-  for c in order-service ops-service referee mcp-server; do
+  for c in order-service ops-service referee mcp-server load-generator; do
     local full
     # shellcheck disable=SC2046  # paths_for prints several paths on purpose
     full="$(git log -1 --first-parent --format=%H "$ref" -- $(paths_for "$c"))"
-    if [ -z "$full" ] && [ "$c" = mcp-server ]; then   # WS3 is optional: a ref before it merged still deploys
-      echo "no commit at $ref touches mcp-server: skipped"; azd env set MCP_IMAGE ""; continue
+    if [ -z "$full" ] && optional "$c"; then           # a ref from before it merged still deploys
+      echo "no commit at $ref touches $c: skipped"; azd env set "$(env_name "$c")" ""; continue
     fi
     [ -n "$full" ] || { echo "no commit at $ref touches $c"; exit 1; }
     local tag="sha-$full" short="sha-${full:0:7}" image="$REGISTRY_SERVER/$c:sha-$full"
@@ -72,8 +80,8 @@ phase_images() {
       # ${creds[@]+...}: macOS bash 3.2 treats an empty array as unset under set -u
       if ! az acr import -n "$REGISTRY_NAME" --source "ghcr.io/$GHCR_OWNER/$c:$short" --image "$c:$tag" \
         ${creds[@]+"${creds[@]}"} -o none; then
-        [ "$c" = mcp-server ] || exit 1                 # WS3's image never blocks the platform's
-        echo "WARNING: mcp-server image not imported (did mcp-server.yml publish $short?); MCP_IMAGE unchanged" >&2
+        optional "$c" || exit 1                         # an optional image never blocks the platform's
+        echo "WARNING: $c image not imported (did $c.yml publish $short?); $(env_name "$c") unchanged" >&2
         continue
       fi
       echo "imported ghcr.io/$GHCR_OWNER/$c:$short -> $image"
@@ -142,7 +150,7 @@ provision() {
 phase_apps() {
   load
   [ -n "${OPS_IMAGE:-}" ] && [ -n "${REFEREE_IMAGE:-}" ] || { echo "run scripts/deploy.sh images first"; exit 1; }
-  say "azd provision (ca-ops, job-referee, job-ops-smoke${MCP_IMAGE:+, ca-mcp if ready}; twin on $ORDER_IMAGE)"
+  say "azd provision (ca-ops, job-referee, job-ops-smoke${MCP_IMAGE:+, ca-mcp if ready}${LOADGEN_IMAGE:+, caj-loadgen}; twin on $ORDER_IMAGE)"
   provision
   load
   echo "OPS_URL=$OPS_URL"
@@ -251,5 +259,5 @@ case "${1:-}" in
   all) phase_infra; phase_images origin/main; phase_apps; phase_verify ;;
   infra|images|apps|policy|github|smoke|verify) p="$1"; shift; "phase_$p" "$@" ;;
   policy-off) phase_policy_off ;;
-  *) sed -n '2,14p' "$0"; exit 2 ;;
+  *) sed -n '2,16p' "$0"; exit 2 ;;
 esac
