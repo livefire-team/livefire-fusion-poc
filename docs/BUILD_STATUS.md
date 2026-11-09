@@ -74,6 +74,11 @@ If time runs short before Nov 2, cut #13 then #12 first.
 Status values: not started | in progress | PR open | merged | blocked
 
 ## In progress right now
+- 2026-11-08: WS3 PR #40 (`ws3/mcp-server-v2`): the MCP server, contract v2.4 and CI moved in from
+  `livefire-team/ws3-mcp-server`, with no incident corpus (it stays in the private repo); `ca-mcp` and AI Search
+  added to `main.bicep` behind `MCP_IMAGE`; `deploy.sh` and `postprovision.sh` extended (ADR-022). Review fix 2026-11-09: `deploy.sh` stops when the
+  control vault can't be read, instead of leaving `ca-mcp` out; the "left out" message
+  now warns that a running `ca-mcp` loses its twin vault access until the next provision with `MCP_IMAGE` set. In review.
 - 2026-10-31: WS2 branch `ws2-starter` is [PR #16](https://github.com/livefire-team/livefire-fusion-poc/pull/16) to
   `main`: lab probe results doc, WS2 starter files (`azure.yaml`, `infra/main.bicep`, `scripts/`, `referee/`,
   `journeys/`) and two new `twin.bicep` outputs (`logAnalyticsWorkspaceName`, `logAnalyticsCustomerId`; contract
@@ -353,7 +358,8 @@ Status values: not started | in progress | PR open | merged | blocked
 - Owner, after PR #7 merges and the first `main` run is green: make the GHCR package `order-service` public
   (org Packages -> order-service -> Package settings -> Visibility: Public), then tell WS2 the image
   `ghcr.io/livefire-team/order-service:g1` (`sha-` tags for rehearsals).
-- Tell WS3: keep `docs/` and `CLAUDE.md` off the agents' `read_repository_context` allowlist (ADR-004).
+- Tell WS3: keep `docs/` and `CLAUDE.md` off the agents' `read_repository_context` allowlist (ADR-004). Done in
+  WS3 contract v2.3, current v2.4 (2026-11-08, ADR-022).
 - Tell WS3: the G2 architecture note will be `docs/architecture.md` only — index that file, not all of `docs/`.
 - Contract v1 (`contracts/twin-interface.md`) must be sent to WS2–WS5 the day PR #2 merges.
 - If `CLAUDE.local.md` is missing on this PC, recreate it before writing order-service code (see CLAUDE.md).
@@ -365,9 +371,14 @@ Status values: not started | in progress | PR open | merged | blocked
 - [ ] WS5: metric names (orders_completed, orders_failed{reason}, loadgen_orders_sent, loadgen_orders_dropped, loadgen_backlog_size)
 
 ## Decisions log pointer
-See `docs/ADR.md` (latest: ADR-021).
+See `docs/ADR.md` (latest: ADR-022).
 
 ## Session log (newest first)
+- 2026-11-08: WS3 integration on `ws3/mcp-server-v2` (PR #40, ADR-022), replacing PR #33 after review: no incident
+  corpus, neutral fixtures and wording, Engineer write paths from `MCP_ENGINEER_WRITE_PATHS` (contract v2.4). Review
+  fixes on #40: more protected paths, redaction before the size cut, 401 (not 500) for non-ASCII credentials,
+  coverage gate raised to 80%. 94 WS3 tests pass (coverage 82.8%), 17 deploy-script tests pass, `main.bicep`
+  compiles, `run-local.sh` smoke tests pass.
 - 2026-11-08: Joint drill with WS5 done; both drills gave the expected results (details and drill IDs in the
   local evidence note). The SQL firewall needed the Mac's new public IP first. Deny policy turned off, then
   `deploy.sh apps`; its hook failed on Key Vault (corporate SSL inspection) and left the order app without SQL until
