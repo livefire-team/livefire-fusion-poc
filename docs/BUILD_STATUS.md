@@ -3,9 +3,10 @@
 > Purpose: if a session ends (usage limit, closed laptop), the next Claude session reads THIS file and continues
 > exactly where we stopped. Keep it accurate. Update after every step and PR, and before ending any session.
 
-**Last updated:** 2026-11-08 (WS2 G2: all 13 gate items met. Joint drill with WS5 done: Drill A and Drill B
-passed. The deny policy is OFF since 2026-11-08. WS1's twin revision test passed; PRs #32 and #38 merged. Load
-generator wiring is PR #41; `main.bicep` merge order: WS3 #40, then #41. #40 has WS2's "changes requested")
+**Last updated:** 2026-11-09 (WS2 G2: all 13 gate items met. Joint drill with WS5 done: Drill A and Drill B
+passed. The deny policy is OFF since 2026-11-08. WS1's twin revision test passed; PRs #32, #38 and WS3's #40
+merged. Load generator wiring is PR #41, up to date with `main` and reviewed; waiting on WS1's review of
+`loadgen.bicep` and the owner's "Merge")
 **Current gate target:** G2 (Mon Nov 9; moved from Nov 2)
 
 ## FIRST THING THE NEXT SESSION SHOULD DO
@@ -280,8 +281,13 @@ Status values: not started | in progress | PR open | merged | blocked
        `registryServer`/`pullIdentityId` (WS1 to review). `azd provision --preview` from the branch (values given for
        that command only, not saved in `lf-eh`): `caj-loadgen` Modify (identity, registry, image), no deletes; azd's
        summary hides identities and role assignments. `--preview` runs no azd hooks (tested in a throwaway project).
-       Merge order (WS2 owner, 2026-11-08): #40, then #41. When #40 merges: merge `main` into #41 (merge commit),
-       re-run tests, build and preview, then a review pass. CI on #41 green before that. Deploy after merge:
+       Merge order (WS2 owner, 2026-11-08): #40, then #41. Done 2026-11-09: #40 merged (WS3 fixed WS2's asked change
+       first: an unreadable control vault now stops `deploy.sh` before `azd provision`); `main` merged into #41
+       (`04c2aba`, both sides kept); preview re-run, same result; review pass (9 findings) and fixes (`1bf8679`):
+       `load-generator` is optional in `deploy.sh images` like `mcp-server`, a non-`drill-` ID gets the load but no
+       lines, the usage text is whole again; 100 referee tests pass. GHCR has `load-generator:sha-8339b92`. Next:
+       WS1's review of `loadgen.bicep`, CI green, the owner's "Merge". Use a dedicated drill ID (e.g.
+       `drill-loadgen-<date>`), not a real drill's: every run writes to that one log. Deploy after merge:
        `REQUESTS_CA_BUNDLE` set, heads-up to WS5, `scripts/deploy.sh images`, `azd env set LOADGEN_DRILL_ID <drill->`,
        `scripts/deploy.sh apps`. This ends the hand-deployed `caj-loadgen` above.
     4. Mon, after 3: one role row on the evidence container; `metrics.orders` lines in `<drill-id>/events.jsonl`; a
@@ -305,7 +311,9 @@ Status values: not started | in progress | PR open | merged | blocked
     `ORDER_IMAGE` is a registry `sha-<40>` tag; the control vault name is fixed, so reprovisioning after `azd down`
     needs `--purge`. Not done on purpose: a `predown` hook that runs `policy-off`, because the policy is
     subscription-wide and a teardown of a second environment would remove it for `lf-eh` too.
-- Last commands run (WS2 Mac, with `.venv` active): `azd provision --preview` on `ws2/loadgen-in-main` (with
+- Last commands run (WS2 Mac, with `.venv` active): `pytest -q referee/tests` on `ws2/loadgen-in-main` after
+  merging `main` and the review fixes (100 passed); `azd provision --preview` again (same result); before that
+  `gh pr review 40 --request-changes`; before that `azd provision --preview` on `ws2/loadgen-in-main` (with
   `REQUESTS_CA_BUNDLE`, `LOADGEN_IMAGE` and `LOADGEN_DRILL_ID` as shell variables only); `pytest -q referee/tests`
   (86 passed); PR #40's `test_deploy_scripts.py` (17 passed) in a scratch worktree; before that `gh pr merge 38 --merge`; before that
   `REQUESTS_CA_BUNDLE=... ./scripts/postprovision.sh` on PR #38's branch (baseline PASS); before that
@@ -395,6 +403,10 @@ Status values: not started | in progress | PR open | merged | blocked
 See `docs/ADR.md` (latest: ADR-021).
 
 ## Session log (newest first)
+- 2026-11-09: PR #40 review posted as "changes requested"; WS3 fixed the asked change and merged #40 (the review
+  shows dismissed). `main` merged into #41 (conflicts in `deploy.sh`, `main.bicep`, `main.parameters.json`, both
+  sides kept), preview re-run with the same result, review pass on #41 with fixes (RED then GREEN on three new
+  tests, 100 referee tests pass). Merge order agreed by the owner: #40, then #41.
 - 2026-11-08 (night): WS1's item 3 is PR #41 (`main.bicep` deploys the load generator from the private registry;
   RED then GREEN on the `deploy.sh images` test, 86 referee tests pass, Bicep build and lint clean, lab preview shows
   `caj-loadgen` modified in place and no deletes). PR #40 (WS3) reviewed for WS2's files: one change asked
