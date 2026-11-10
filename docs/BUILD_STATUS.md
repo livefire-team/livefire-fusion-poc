@@ -3,11 +3,10 @@
 > Purpose: if a session ends (usage limit, closed laptop), the next Claude session reads THIS file and continues
 > exactly where we stopped. Keep it accurate. Update after every step and PR, and before ending any session.
 
-**Last updated:** 2026-11-09 (WS2 G2: all 13 gate items met. Joint drill with WS5 done: Drill A and Drill B
-passed. The deny policy is OFF since 2026-11-08. WS1's twin revision test passed; PRs #32, #38 and WS3's #40
-merged. PR #41 merged (1299915): `main.bicep` deploys the load generator; deployed to `lf-eh` and WS1's item 4
-checks passed)
-**Current gate target:** G2 (Mon Nov 9; moved from Nov 2)
+**Last updated:** 2026-11-10 (WS2 G3 planned: the G3 guide and starter kit are on the WS2 Mac, outside git
+(ADR-004); three PRs to come: decisions, WS4 wiring, lab tools. Lab checked read-only: `ca-mcp`, Foundry and the
+Drill Runner are not deployed yet. G2 met 13 of 13; the deny policy is OFF since 2026-11-08)
+**Current gate target:** G3 (Mon Nov 16; moved from Nov 9)
 
 ## FIRST THING THE NEXT SESSION SHOULD DO
 All WS1 PRs (#1-#14) are merged into `main` (2026-10-30, merge commits; last merge 8e37fd0); every `main` run is green.
@@ -327,6 +326,29 @@ Status values: not started | in progress | PR open | merged | blocked
     `ORDER_IMAGE` is a registry `sha-<40>` tag; the control vault name is fixed, so reprovisioning after `azd down`
     needs `--purge`. Not done on purpose: a `predown` hook that runs `policy-off`, because the policy is
     subscription-wide and a teardown of a second environment would remove it for `lf-eh` too.
+- WS2 G3 (Mon Nov 16), planned 2026-11-10. The bar is the PoC plan's G3: one command builds a fresh lab, T-01
+  verified twice in a row from a clean lab, and the T-02, T-03 and T-04 denials visible in the Control Center.
+  The guide (`ws2-g3-build-steps.md`) and the starter kit (`livefire-ws2-g3-starter.zip`, three patches on
+  `162f2dd`) are on the WS2 Mac only (ADR-004). On `162f2dd` with all three applied: `pytest referee/tests` 136
+  passed (21 new lab tests, 15 new deploy-script tests), `main.bicep` builds and lints clean, ShellCheck clean.
+  - PR 1, docs: ADR-023 (the Functions injector and Playwright Workspaces stay on the roadmap), ADR-024 (WS4's
+    Foundry and Drill Runner in `main.bicep`, from the private registry), ADR-025 (a clean lab is a second azd
+    environment, `lf-g3`); four glossary terms.
+  - PR 2: WS4's two modules (the runner pulls with `id-lf-acrpull`), `deploy.sh images` imports the runner and the
+    Control Center from an exact GHCR build, `deploy.sh` leaves the runner and the Control Center out until their
+    inputs exist (like `ca-mcp`), `smoke` retries a failed status call, WS4's `start-drill.sh`.
+  - PR 3: `scripts/lab.sh` (`state`, `new-env`, `teardown`); the post-provision hook stores the GitHub App keys from
+    `GITHUB_APP_KEYS` and creates WS5's two secrets in a fresh control vault.
+  - Read-only lab check 2026-11-10: running are `ca-order`, `ca-ops`, `ca-control-center`, `job-referee`,
+    `job-ops-smoke` and `caj-loadgen`. Not deployed: `ca-mcp` (no GitHub App credentials in the control vault yet),
+    Foundry and the Drill Runner (WS4's Bicep isn't in `main.bicep`). `CONTROL_CENTER_IMAGE` is not set, so
+    `deploy.sh apps` leaves the Control Center as WS5 deployed it. `gpt-5.1` (2025-11-13) GlobalStandard is offered
+    in eastus2 with enough quota. The `referee` image of PR #41's merge reached the lab registry but not GHCR (its
+    `publish` job: `permission_denied: write_package`); PR #42's publish worked.
+  - WS4's runner (`ws4-new` at `f55657a`) calls the Ops Service with the v1 names, which stay supported. Hand-offs
+    for WS4 are in the guide's section 1.
+  - Next, in order: the guide's section 1 asks (three GitHub Apps, WS1's write paths and pre-validated candidate,
+    WS4 status), section 2 carry-overs, then PRs 1-3.
 - Last commands run (WS2 Mac, with `.venv` active, `REQUESTS_CA_BUNDLE` set, on `main` at 1299915): `az acr import`
   of `load-generator:sha-8339b92`; `azd env set LOADGEN_IMAGE` and `LOADGEN_DRILL_ID`; `azd provision --preview`;
   `scripts/deploy.sh apps` (exit 0); `az role assignment list --assignee <LOADGEN_PRINCIPAL_ID> --all`;
@@ -423,6 +445,9 @@ Status values: not started | in progress | PR open | merged | blocked
 See `docs/ADR.md` (latest: ADR-022).
 
 ## Session log (newest first)
+- 2026-11-10: WS2 G3 planned with the owner (PoC plan G3 bar; injector and Workspaces cut; WS2 wires WS4; clean lab
+  in a second azd environment). Lab and the WS3/WS4 repos checked read-only. Guide and starter kit written outside
+  git; 136 tests pass with the kit applied.
 - 2026-11-09 (later): PR #41 merged by the owner (merge commit 1299915). Deployed to `lf-eh` with only the load
   generator image changed (preview, then `scripts/deploy.sh apps`, exit 0). WS1's item 4 passed: one role row on the
   evidence container with its path condition; a `caj-loadgen` run wrote `metrics.orders` lines (about 30 orders a
