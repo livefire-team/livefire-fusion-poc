@@ -3,7 +3,7 @@
 > Purpose: if a session ends (usage limit, closed laptop), the next Claude session reads THIS file and continues
 > exactly where we stopped. Keep it accurate. Update after every step and PR, and before ending any session.
 
-**Last updated:** 2026-11-09 (WS2 G2: all 13 gate items met. Joint drill with WS5 done: Drill A and Drill B
+**Last updated:** 2026-11-10 (**WS1 G2 complete**: all checks met, evidence under "Done". WS2 G2: all 13 gate items met. Joint drill with WS5 done: Drill A and Drill B
 passed. The deny policy is OFF since 2026-11-08. WS1's twin revision test passed; PRs #32, #38 and WS3's #40
 merged. PR #41 merged (1299915): `main.bicep` deploys the load generator; deployed to `lf-eh` and WS1's item 4
 checks passed)
@@ -13,17 +13,21 @@ checks passed)
 All WS1 PRs (#1-#14) are merged into `main` (2026-10-30, merge commits; last merge 8e37fd0); every `main` run is green.
 Ask the owner which owner action below is done, then help with the next open one (G2 is Nov 2).
 `main` is protected by ruleset `protect-main` (changes only via PR), so even status updates need a small PR.
+Since 2026-11-10 `protect-main` also requires 1 approving review (after the last push, from someone other than the
+pusher; stale approvals dismissed), the five `security` checks (gitleaks, pip-audit, bandit, codeql, trivy) and merge
+commits only. Secret scanning with push protection is on, and merged branches are deleted automatically.
 
 Note: plan row numbers and PR numbers differ. Plan #14 (architecture note) is PR #13, and plan #13 (load generator) is PR #14.
 
 ### Owner actions
 1. DONE 2026-10-30: rulesets `candidate-branches` (only admins create/push `candidate/**`) and `protect-main`.
-   Still to do: add WS4's Engineer agent identity as a bypass actor on `candidate-branches` once WS4 names it.
-2. DONE 2026-11-08: all four GHCR packages (`order-service`, `load-generator`, `ops-service`, `referee`) are public;
-   checked by pulling without a login. CI pushes `sha-` tags (plus `g1`/`g2`), never `latest`.
-8. WS1 G2 (2026-11-08): set the repository variable `CANDIDATE_ALLOWED_PATHS` before the candidate-gates PR merges
-   (ADR-020; the value is in the owner's private notes, not in git). Then push the two dry-run candidates and run
-   one as a twin revision with WS2.
+   Still to do (G3): add the Engineer GitHub App (WS3's MCP server) as a bypass actor on `candidate-branches` once
+   WS3 shares its App ID.
+2. DONE 2026-11-08, rechecked 2026-11-10: all six GHCR packages (`order-service`, `load-generator`, `ops-service`,
+   `referee`, `mcp-server`, `control-center`) are public; checked by pulling without a login. CI pushes `sha-` tags
+   (plus `g1`/`g2`), never `latest`.
+8. DONE 2026-11-08: repository variable `CANDIDATE_ALLOWED_PATHS` set (ADR-020; the value is in the owner's private
+   notes, not in git); both dry-run candidates pushed; one ran as a twin revision with WS2 (2026-11-08).
 3. Tell WS2: `azd env set ORDER_IMAGE ghcr.io/livefire-team/order-service:g1`, the `APPINSIGHTS_CONNECTION_STRING`
    output line, and `infra/modules/loadgen.bicep`.
 4. Send WS3 and WS4 their private hand-offs (see `CLAUDE.local.md`).
@@ -361,6 +365,18 @@ Status values: not started | in progress | PR open | merged | blocked
 - Test status: order-service unit tests green 2026-10-29. Twin deployed to Azure by WS2 via `main.bicep`; baseline PASS.
 
 ## Done (with evidence)
+- **WS1 G2 complete (2026-11-10).** Every check met:
+  | Check | Evidence |
+  |---|---|
+  | Admin: `protect-main` and `candidate-branches` active; `CANDIDATE_ALLOWED_PATHS` set; images public | GitHub settings; anonymous pulls (owner actions 1, 2, 8) |
+  | Candidate gates (ADR-020) | PR #34 merged (88214c7): `candidate-scope` in both workflows, security scans and bandit on `candidate/**` |
+  | Valid candidate passes, `g1` unmoved | `candidate/drill-ci-check-1` (416e4ab): order-service 1m31s, security 3m09s; `sha-` and `candidate-` tags plus the registry copy |
+  | Out-of-scope candidate blocked | `candidate/drill-ci-check-2`: failed at `candidate-scope`, nothing published |
+  | Candidate deployed as a twin revision | WS2, 2026-11-08: `scripts/deploy.sh smoke drill --candidate <registry>/order-service:sha-416e4ab...`: SMOKE PASSED, 20 of 20 rows, `deploy_revision` 95.5 s; twin back to min 1 / max 1 |
+  | Load generator from `main.bicep`, private registry | PR #41 merged (1299915), deployed to `lf-eh` by WS2 |
+  | `metrics.orders` writer (ADR-021) | PR #35 merged (8339b92): 114 tests, 99% coverage |
+  | Append-only identity | PR #37 merged (c58ec69); lab check 2026-11-10: exactly one role assignment, the custom event-appender role, scoped to the evidence container |
+  | Lines reach the Control Center | WS5, 2026-11-09: business tiles show about 30 orders a minute, 0 failed, backlog 0 |
 - Machine set up: gh, az + bicep, Docker Desktop installed via winget (git and Python were already present).
 - GitHub org `livefire-team` created by the user; repo `livefire-fusion-poc` created (public, README on `main`).
 - PR #1 scaffold merged (merge commit c3427c7); repo set to merge-commit only.
@@ -414,15 +430,20 @@ Status values: not started | in progress | PR open | merged | blocked
 - If `CLAUDE.local.md` is missing on this PC, recreate it before writing order-service code (see CLAUDE.md).
 
 ## Hand-offs owed
-- [ ] WS2: image name/tag, twin.bicep merged, contract additions (appInsightsConnectionString output, principalType + secretRefreshSeconds), local stack
+- [x] WS2: image name/tag, twin.bicep merged, contract additions (appInsightsConnectionString output, principalType + secretRefreshSeconds), local stack (WS2 deploys the twin and load generator from `main.bicep`)
 - [ ] WS3: Phase 8 items, runbook path, telemetry names
 - [ ] WS4: allowed/protected paths for the Engineer
-- [ ] WS5: metric names (orders_completed, orders_failed{reason}, loadgen_orders_sent, loadgen_orders_dropped, loadgen_backlog_size)
+- [x] WS5: metric names (orders_completed, orders_failed{reason}, loadgen_orders_sent, loadgen_orders_dropped, loadgen_backlog_size) and the `metrics.orders` fields (the Control Center reads them, 2026-11-09)
 
 ## Decisions log pointer
 See `docs/ADR.md` (latest: ADR-022).
 
 ## Session log (newest first)
+- 2026-11-10: **WS1 G2 complete.** Last check: WS2 confirmed the load generator identity has exactly one role
+  assignment (the custom event-appender role on the evidence container). GitHub hardening by the owner:
+  `protect-main` now needs 1 approval and the five `security` checks; secret scanning with push protection on;
+  merged branches auto-deleted (26 old ones removed). Carried into G3: the Engineer App bypass on
+  `candidate-branches`, the Engineer write-path list (WS1, WS3, WS4), and a per-drill ID for `caj-loadgen` runs.
 - 2026-11-09 (later): PR #41 merged by the owner (merge commit 1299915). Deployed to `lf-eh` with only the load
   generator image changed (preview, then `scripts/deploy.sh apps`, exit 0). WS1's item 4 passed: one role row on the
   evidence container with its path condition; a `caj-loadgen` run wrote `metrics.orders` lines (about 30 orders a

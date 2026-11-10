@@ -66,12 +66,12 @@ Version: 1 (2026-10-28) — copied from the WS2 guide's Phase 2 contract via the
 ## Change log
 | Date | Change | Told WS2/3/4/5? |
 |---|---|---|
-| 2026-10-28 | Version 1; repo is `livefire-team/livefire-fusion-poc`, image owner `livefire-team` | pending |
-| 2026-10-29 | WS1 addition (G2): `candidate-<drill-id>-<attempt>` image tags (ADR-014) | pending |
-| 2026-10-29 | WS1 addition (G2): load generator module, image and `loadgen_*` metrics (ADR-015) | pending |
+| 2026-10-28 | Version 1; repo is `livefire-team/livefire-fusion-poc`, image owner `livefire-team` | yes (all five workstreams build on the repo) |
+| 2026-10-29 | WS1 addition (G2): `candidate-<drill-id>-<attempt>` image tags (ADR-014) | WS2 (twin revision test, 2026-11-08) |
+| 2026-10-29 | WS1 addition (G2): load generator module, image and `loadgen_*` metrics (ADR-015) | WS2, WS5 (deployed and read, 2026-11-09) |
 | 2026-10-31 | WS2 addition: `twin.bicep` outputs `logAnalyticsWorkspaceName` and `logAnalyticsCustomerId` (used by WS2's `main.bicep`) | pending |
 | 2026-11-05 | WS2 addition (G2): `twin.bicep` parameters `registryServer` and `pullIdentityId`; the twin's image comes from the lab's private registry (ADR-017) | pending |
-| 2026-11-08 | WS1 addition (G2): candidate pushes run the security scans and bandit, and fail on files outside the allowed paths (ADR-020) | pending |
-| 2026-11-08 | WS1 addition (G2): the load generator writes `metrics.orders` events when `EVENT_SOURCE` is set (ADR-021) | pending |
-| 2026-11-08 | WS1 addition (G2): `loadgen-identity.bicep` and optional identity/event params on `loadgen.bicep` (ADR-021) | pending |
+| 2026-11-08 | WS1 addition (G2): candidate pushes run the security scans and bandit, and fail on files outside the allowed paths (ADR-020) | WS2 (reviews); WS4 (CI gate answer, 2026-11-10) |
+| 2026-11-08 | WS1 addition (G2): the load generator writes `metrics.orders` events when `EVENT_SOURCE` is set (ADR-021) | WS2, WS5 (Control Center reads it, 2026-11-09) |
+| 2026-11-08 | WS1 addition (G2): `loadgen-identity.bicep` and optional identity/event params on `loadgen.bicep` (ADR-021) | WS2 (wired in #41, 2026-11-09) |
 | 2026-11-08 | WS2 addition (G2): `loadgen.bicep` parameters `registryServer` and `pullIdentityId`; `main.bicep` deploys the load generator from the private registry (ADR-021) | pending |
