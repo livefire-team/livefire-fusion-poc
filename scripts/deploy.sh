@@ -7,7 +7,9 @@
 #                                             origin/main) that changed each one: imported from GHCR, or built here
 #                                             with --build
 #   scripts/deploy.sh apps                    azd provision with those images: ca-ops, the jobs, ca-mcp (WS3),
-#                                             caj-loadgen (WS1)
+#                                             caj-loadgen (WS1), and WS5's ca-control-center when CONTROL_CENTER_IMAGE
+#                                             is set (WS5 sets it after its scripts/deploy-cc.sh image puts
+#                                             control-center:sha-<40 hex> in the registry)
 #   scripts/deploy.sh policy                  the deny policy, proven as you, then the role that lets id-lf-ops try
 #   scripts/deploy.sh policy-off              removes both (a provision never deletes them), e.g. before a lab ends
 #   scripts/deploy.sh github [owner/repo]     a repo's acr-push environment and variables (repo admin only)
@@ -156,6 +158,8 @@ phase_apps() {
   echo "OPS_URL=$OPS_URL"
   case "$OPS_URL" in *.internal.*) ;; *) echo "ca-ops is not internal-only"; exit 1 ;; esac
   [ -z "${MCP_URL:-}" ] || echo "MCP_URL=$MCP_URL"
+  if [ -n "${CONTROL_CENTER_IMAGE:-}" ]; then echo "CONTROL_CENTER_URL=${CONTROL_CENTER_URL:-}"
+  else echo "CONTROL_CENTER_IMAGE not set: the Control Center was left as it is (WS5 deploys it with scripts/deploy-cc.sh)"; fi
 }
 
 phase_policy() {
@@ -259,5 +263,5 @@ case "${1:-}" in
   all) phase_infra; phase_images origin/main; phase_apps; phase_verify ;;
   infra|images|apps|policy|github|smoke|verify) p="$1"; shift; "phase_$p" "$@" ;;
   policy-off) phase_policy_off ;;
-  *) sed -n '2,16p' "$0"; exit 2 ;;
+  *) sed -n '2,18p' "$0"; exit 2 ;;
 esac

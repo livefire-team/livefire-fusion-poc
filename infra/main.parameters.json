@@ -97,6 +97,21 @@
     },
     "loadgenDrillId": {
       "value": "${LOADGEN_DRILL_ID}"
+    },
+    "controlCenterImage": {
+      "value": "${CONTROL_CENTER_IMAGE}"
+    },
+    "controlCenterAuthMode": {
+      "value": "${CONTROL_CENTER_AUTH_MODE=passcode}"
+    },
+    "controlCenterEntraClientId": {
+      "value": "${CONTROL_CENTER_ENTRA_CLIENT_ID}"
+    },
+    "controlCenterAllowedIps": {
+      "value": "${CONTROL_CENTER_ALLOWED_IPS}"
+    },
+    "controlCenterTargetRecoveryS": {
+      "value": "${CONTROL_CENTER_TARGET_RECOVERY_S=0}"
     }
   }
 }
