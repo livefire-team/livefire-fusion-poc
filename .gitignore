@@ -3,6 +3,7 @@
 .env
 .env.*
 !.env.example
+!.env.g2.example
 
 # Spec documents and private working notes stay outside git (ADR-004)
 docs/reference/
