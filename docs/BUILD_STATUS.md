@@ -88,7 +88,10 @@ Status values: not started | in progress | PR open | merged | blocked
   `livefire-team/ws3-mcp-server`, with no incident corpus (it stays in the private repo); `ca-mcp` and AI Search
   added to `main.bicep` behind `MCP_IMAGE`; `deploy.sh` and `postprovision.sh` extended (ADR-022). Review fix 2026-11-09: `deploy.sh` stops when the
   control vault can't be read, instead of leaving `ca-mcp` out; the "left out" message
-  now warns that a running `ca-mcp` loses its twin vault access until the next provision with `MCP_IMAGE` set. In review.
+  now warns that a running `ca-mcp` loses its twin vault access until the next provision with `MCP_IMAGE` set. Merged 2026-11-09.
+- 2026-11-11: WS3 G3 checks on `ws3/g3-acceptance`: `scripts/ws3-acceptance.py` (T-03 cross-role 403, T-04
+  `journeys/` write refused, T-08 incident record returned as untrusted data), each confirmed in the drill's events.
+  Passed on a laptop against fixtures, and live in `lf-eh` on 2026-11-11 (PR #46 merged).
 - 2026-10-31: WS2 branch `ws2-starter` is [PR #16](https://github.com/livefire-team/livefire-fusion-poc/pull/16) to
   `main`: lab probe results doc, WS2 starter files (`azure.yaml`, `infra/main.bicep`, `scripts/`, `referee/`,
   `journeys/`) and two new `twin.bicep` outputs (`logAnalyticsWorkspaceName`, `logAnalyticsCustomerId`; contract
@@ -469,6 +472,18 @@ See `docs/ADR.md` (latest: ADR-022).
 - 2026-11-10: WS2 G3 planned with the owner (PoC plan G3 bar; injector and Workspaces cut; WS2 wires WS4; clean lab
   in a second azd environment). Lab and the WS3/WS4 repos checked read-only. Guide and starter kit written outside
   git; 136 tests pass with the kit applied.
+- 2026-11-11 (later): **WS3 `ca-mcp` deployed to `lf-eh`** (`scripts/deploy.sh apps`, image `mcp-server:sha-28271b8`,
+  key mode, GitHub Apps). AI Search had no capacity in eastus2, so `SEARCH_LOCATION=eastus`
+  (`srch-lf-wwssez2am6724-eastus`); index loaded 8 of 8 incidents (keyword only). Deployed smoke test passed with
+  live sources (Log Analytics, ARM, AI Search, GitHub). G3 checks passed live in drill `drill-g3-check-1111`: T-03
+  (403 and a `planner.tool_call` deny event), T-04 (`journeys/` write refused, `engineer.tool_call` deny event), T-08
+  (record returned as untrusted data; the app identity holds no privileged role). Fix: `ws3-acceptance.py` no longer
+  compares the laptop's clock with the server's. Open: the post-provision baseline (`referee.sh baseline`) failed on
+  the deploying machine (no Playwright or pyodbc there), after every other step had run; the order app answered
+  `/health` 200.
+- 2026-11-11: WS3 added `scripts/ws3-acceptance.py` for its G3 checks (T-03, T-04, T-08); all three pass locally.
+  The old `ws3/mcp-server` branch (closed PR #33) was deleted with the owner's approval. `ca-mcp` is not deployed
+  in `lf-eh` yet (only `ca-ops` and `ca-control-center`), so G2's live evidence and the live G3 runs wait on it.
 - 2026-11-10: **WS1 G2 complete.** Last check: WS2 confirmed the load generator identity has exactly one role
   assignment (the custom event-appender role on the evidence container). GitHub hardening by the owner:
   `protect-main` now needs 1 approval and the five `security` checks; secret scanning with push protection on;
