@@ -65,25 +65,32 @@ def read_events(drill: str) -> list[dict] | None:
     return None
 
 
-def deny_event(drill: str, action: str, tool: str, since: str, wait_s: float = 10.0) -> dict | None | bool:
-    """The deny event for this tool, recorded after `since`. None: EVENT_SOURCE unset. False: not found."""
+def deny_events(drill: str, action: str, tool: str) -> list[dict] | None:
+    events = read_events(drill)
+    if events is None:
+        return None
+    return [e for e in events if e.get("action") == action and e.get("result") == "deny"
+            and e.get("details", {}).get("tool") == tool]
+
+
+def new_deny_event(drill: str, action: str, tool: str, before: int | None, wait_s: float = 30.0):
+    """The deny event this check caused: one more matching event than before the call (no clock comparison, so a
+    laptop clock ahead of the server's doesn't hide it). None: EVENT_SOURCE unset. False: not found in time."""
+    if before is None:
+        return None
     deadline = time.monotonic() + wait_s
     while True:
-        events = read_events(drill)
-        if events is None:
-            return None
-        for e in events:
-            d = e.get("details", {})
-            if (e.get("action") == action and e.get("result") == "deny" and d.get("tool") == tool
-                    and e.get("ts", "") >= since):
-                return e
+        found = deny_events(drill, action, tool) or []
+        if len(found) > before:
+            return found[-1]
         if time.monotonic() > deadline:
             return False
         time.sleep(1)
 
 
-def now() -> str:
-    return time.strftime("%Y-%m-%dT%H:%M:%S", time.gmtime())
+def count(drill: str, action: str, tool: str) -> int | None:
+    found = deny_events(drill, action, tool)
+    return None if found is None else len(found)
 
 
 def report_event(found, label: str) -> bool:
@@ -100,7 +107,7 @@ def report_event(found, label: str) -> bool:
 async def t03(drill: str) -> bool:
     """A Planner credential calling an Engineer tool gets 403, recorded as planner.tool_call deny."""
     print("T-03: the Planner's key calls the Engineer's apply_patch")
-    since = now()
+    before = count(drill, "planner.tool_call", "apply_patch")
     body = {"jsonrpc": "2.0", "id": 1, "method": "tools/call",
             "params": {"name": "apply_patch", "arguments": {"drill_id": drill}}}
     r = httpx.post(f"{URL}/engineer/mcp", json=body, timeout=15, headers={
@@ -108,14 +115,14 @@ async def t03(drill: str) -> bool:
         "Accept": "application/json, text/event-stream"})
     ok = r.status_code == 403
     print(f"  HTTP {r.status_code} (expected 403): {r.text[:120]}")
-    ok &= report_event(deny_event(drill, "planner.tool_call", "apply_patch", since), "deny")
+    ok &= report_event(new_deny_event(drill, "planner.tool_call", "apply_patch", before), "deny")
     return ok
 
 
 async def t04(drill: str) -> bool:
     """The Engineer's write to journeys/ is refused by the server, before any GitHub call, and recorded."""
     print(f"T-04: the Engineer's key writes {JOURNEY_PATH}")
-    since = now()
+    before = count(drill, "engineer.tool_call", "apply_patch")
     async with client("engineer", os.environ["ENGINEER_KEY"]) as c:
         r = await c.call_tool("apply_patch", {"drill_id": drill, "attempt": 1, "path": JOURNEY_PATH,
                                               "content": "// acceptance check: must never be written\n",
@@ -124,7 +131,7 @@ async def t04(drill: str) -> bool:
     decision = res.get("authorization", {}).get("decision")
     ok = res.get("refused") is True and decision == "deny" and "protected path" in res.get("error", "")
     print(f"  refused={res.get('refused')} decision={decision}: {res.get('error', '')[:120]}")
-    ok &= report_event(deny_event(drill, "engineer.tool_call", "apply_patch", since), "deny")
+    ok &= report_event(new_deny_event(drill, "engineer.tool_call", "apply_patch", before), "deny")
     return ok
 
 
