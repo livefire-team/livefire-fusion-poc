@@ -84,7 +84,10 @@ Status values: not started | in progress | PR open | merged | blocked
   `livefire-team/ws3-mcp-server`, with no incident corpus (it stays in the private repo); `ca-mcp` and AI Search
   added to `main.bicep` behind `MCP_IMAGE`; `deploy.sh` and `postprovision.sh` extended (ADR-022). Review fix 2026-11-09: `deploy.sh` stops when the
   control vault can't be read, instead of leaving `ca-mcp` out; the "left out" message
-  now warns that a running `ca-mcp` loses its twin vault access until the next provision with `MCP_IMAGE` set. In review.
+  now warns that a running `ca-mcp` loses its twin vault access until the next provision with `MCP_IMAGE` set. Merged 2026-11-09.
+- 2026-11-11: WS3 G3 checks on `ws3/g3-acceptance`: `scripts/ws3-acceptance.py` (T-03 cross-role 403, T-04
+  `journeys/` write refused, T-08 incident record returned as untrusted data), each confirmed in the drill's events.
+  Passed on a laptop against fixtures. Waiting for `ca-mcp` in `lf-eh` to run them live.
 - 2026-10-31: WS2 branch `ws2-starter` is [PR #16](https://github.com/livefire-team/livefire-fusion-poc/pull/16) to
   `main`: lab probe results doc, WS2 starter files (`azure.yaml`, `infra/main.bicep`, `scripts/`, `referee/`,
   `journeys/`) and two new `twin.bicep` outputs (`logAnalyticsWorkspaceName`, `logAnalyticsCustomerId`; contract
@@ -439,6 +442,9 @@ Status values: not started | in progress | PR open | merged | blocked
 See `docs/ADR.md` (latest: ADR-022).
 
 ## Session log (newest first)
+- 2026-11-11: WS3 added `scripts/ws3-acceptance.py` for its G3 checks (T-03, T-04, T-08); all three pass locally.
+  The old `ws3/mcp-server` branch (closed PR #33) was deleted with the owner's approval. `ca-mcp` is not deployed
+  in `lf-eh` yet (only `ca-ops` and `ca-control-center`), so G2's live evidence and the live G3 runs wait on it.
 - 2026-11-10: **WS1 G2 complete.** Last check: WS2 confirmed the load generator identity has exactly one role
   assignment (the custom event-appender role on the evidence container). GitHub hardening by the owner:
   `protect-main` now needs 1 approval and the five `security` checks; secret scanning with push protection on;
