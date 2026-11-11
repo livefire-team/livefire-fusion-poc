@@ -273,6 +273,9 @@ class DrillConfig(Strict):
     policy: AutonomyPolicy
     base_ref: str = "main"                     # the pinned commit the twin and the candidate start from
     image_repo: str = Field(pattern=r"^ghcr\.io/[a-z0-9._-]+/order-service$")
+    image_repo: str = Field(
+        pattern=r"^[a-z0-9][a-z0-9.-]*(?::[0-9]{1,5})?/(?:[a-z0-9._-]+/)*order-service$"
+    )
 
 
 # ---------------------------------------------------------------- the verdict and the evidence package

@@ -132,6 +132,19 @@ def compute_verdict(events: list[dict]) -> VerdictInputs:
     ci_ok = all(any(c.startswith(p) or p.startswith(c) for p in ci_pass_commits) for c in deployed_commits if c)
     if deployed_commits and (not ci_ok or "" in deployed_commits):
         reasons.append("a deployed image has no passing CI result for its commit")
+
+    ci_ok = bool(deployed_commits) and all(
+        len(commit) == 40
+        and all(ch in "0123456789abcdef" for ch in commit)
+        and commit in ci_pass_commits
+        for commit in deployed_commits
+    )
+
+    if not ci_ok:
+        reasons.append(
+            "no deployed image with a matching full-SHA passing CI result"
+        )
+
     journey_ok = final is not None and final.verdict == "PASS"
     if not journey_ok:
         reasons.append("the final customer journey did not pass")
@@ -144,6 +157,7 @@ def compute_verdict(events: list[dict]) -> VerdictInputs:
         policy_passed=policy_ok,
         technical_health_passed=health_after_restore,
         ci_gates_passed=ci_ok and "" not in deployed_commits,
+        ci_gates_passed=ci_ok,
         journey_passed=journey_ok,
         persisted_order_assertion_passed=persisted_ok,
         reasons=reasons,

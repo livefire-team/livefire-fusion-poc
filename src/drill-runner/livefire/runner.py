@@ -87,6 +87,18 @@ async def run_drill(run: Run, poll_s: float = 2.0) -> DrillState:
             s.reason += f"; reversal failed: {exc}"
         await close(run, s)
         await cleanup(run, s, already_reset=True)
+
+        reset_done = False
+
+        try:
+            await run.op("kill" if killed else "reset_twin", timeout=600)
+            reset_done = True
+        except Exception as exc:
+            s.reason += f"; reversal failed: {exc}"
+
+        await close(run, s)
+        await cleanup(run, s, already_reset=reset_done)
+
         return s
     finally:
         watcher.cancel()
@@ -105,6 +117,19 @@ def build_run(args) -> Run:
     cfg = DrillConfig(drill_id=args.drill_id, scenario=args.scenario, policy=policy,
                       base_ref=os.environ.get("BASE_REF", "main"),
                       image_repo=os.environ.get("IMAGE_REPO", "ghcr.io/example/order-service"))
+    image_repo = os.environ.get("IMAGE_REPO", "").strip()
+
+    if not image_repo:
+        if args.stub:
+            image_repo = "ghcr.io/example/order-service"
+        else:
+            sys.exit(
+                "IMAGE_REPO is required for live drills. "
+                "Use the registry configured by WS2."
+            )
+    cfg = DrillConfig(drill_id=args.drill_id, scenario=args.scenario, policy=policy,
+                      base_ref=os.environ.get("BASE_REF", "main"),
+        image_repo=image_repo)
     log = EventLog(store, cfg.drill_id)
     if log.read():
         sys.exit(f"refused: {cfg.drill_id} already has events; every drill needs a new ID")

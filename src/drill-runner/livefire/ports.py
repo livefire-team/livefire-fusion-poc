@@ -66,6 +66,26 @@ class HttpOps:
                     raise DependencyError(f"Ops Service rejected the runner's key ({r.status_code})")
                 if r.status_code == 422:
                     return OpsResult(action=action, result="refused", details=r.json())
+
+                if r.status_code in (401, 403):
+                    raise DependencyError(
+                        f"Ops Service rejected the runner's key ({r.status_code})"
+                    )
+
+                if r.status_code == 409:
+                    payload = r.json()
+                    if payload.get("result") == "stopped":
+                        raise DependencyError(
+                            f"Ops action {action} was stopped; refusing to retry"
+                        )
+
+                if r.status_code == 422:
+                    return OpsResult(
+                        action=action,
+                        result="refused",
+                        details=r.json(),
+                    )
+
                 r.raise_for_status()
                 return OpsResult.model_validate(r.json())
             except (httpx.TransportError, httpx.HTTPStatusError) as exc:
@@ -129,6 +149,7 @@ class GitHubRepo:
 
     API = "https://api.github.com"
     WORKFLOW_FILE = "order-service.yml"
+    WORKFLOW_FILES = ("order-service.yml", "security.yml")
 
     def __init__(self, repo: str, token_provider, transport=None):
         self.repo, self.token = repo, token_provider
@@ -164,6 +185,61 @@ class GitHubRepo:
         failed = [{"job": j["name"], "steps": [s["name"] for s in j.get("steps", []) if s.get("conclusion") == "failure"]}
                   for j in jobs if j.get("conclusion") == "failure"]
         return CiStatus("fail", commit, run["html_url"], failed)
+        pending = False
+        failed = []
+        urls = []
+
+        for workflow in self.WORKFLOW_FILES:
+            data = await self._call(
+                "GET",
+                f"/repos/{self.repo}/actions/workflows/{workflow}/runs",
+                params={
+                    "branch": branch,
+                    "head_sha": commit,
+                    "per_page": 30,
+                },
+            )
+
+            run = next(
+                (
+                    item
+                    for item in data.get("workflow_runs", [])
+                    if item.get("head_sha") == commit
+                    and item.get("head_branch") == branch
+                ),
+                None,
+            )
+
+            if run is None:
+                pending = True
+                continue
+
+            urls.append(run.get("html_url", ""))
+
+            if run.get("status") != "completed":
+                pending = True
+                continue
+
+            if run.get("conclusion") != "success":
+                failed.append({
+                    "workflow": workflow,
+                    "conclusion": run.get("conclusion", "unknown"),
+                    "url": run.get("html_url", ""),
+                })
+
+        if failed:
+            state = "fail"
+        elif pending:
+            state = "pending"
+        else:
+            state = "pass"
+
+        return CiStatus(
+            state=state,
+            commit=commit,
+            url=", ".join(url for url in urls if url),
+            failed=failed,
+        )
 
     async def open_pull_request(self, branch: str, title: str, body: str) -> str:
         pr = await self._call("POST", f"/repos/{self.repo}/pulls",

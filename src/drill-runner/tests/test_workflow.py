@@ -139,6 +139,9 @@ def test_t08_secret_in_agent_output_escalates(tmp_path):
         async def planner(self, task):
             out, usage = await super().planner(task)
             out.recovery_options.hypothesis += " Account" + "Key=REDACTED"
+            out.recovery_options.hypothesis += " " + "".join(
+                ["Account", "Key", "=", "abcdef", "123456"]
+            )
             return out, usage
     run, store = make(tmp_path, scenario="T-08")
     run.agents = LeakyAgents(run.log, "T-08", delay=0)

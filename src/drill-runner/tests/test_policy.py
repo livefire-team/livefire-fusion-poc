@@ -23,6 +23,8 @@ def test_secret_like_values_are_caught():
     assert check_secrets({"note": "token ghp_" + "a" * 30})
     key_prefix = "".join(chr(c) for c in (65, 99, 99, 111, 117, 110, 116, 75, 101, 121, 61))
     assert check_secrets({"note": key_prefix + "abcdefgh1234"})
+    fake_secret = "".join(["Account", "Key", "=", "abcdefgh", "1234"])
+    assert check_secrets({"note": fake_secret})
     assert check_secrets({"note": "the app reads a secret named order-db-password"}) is None
 
 
@@ -65,3 +67,32 @@ def test_a_later_restore_needs_fresh_health():
     events = GOOD + [ev("fault.inject"), ev("fault.restore"), ref("after-refault", "PASS")]
     assert not compute_verdict(events).technical_health_passed
     assert compute_verdict(events[:-1] + [ev("wait.ok"), events[-1]]).verified
+
+def test_verdict_rejects_short_or_mismatched_commit():
+    for commit in ("ab" * 7, "cd" * 20):
+        events = [
+            e for e in GOOD
+            if e["action"] != "deploy.revision"
+        ]
+        events.insert(
+            -1,
+            ev(
+                "deploy.revision",
+                image="ghcr.io/x/order-service:sha-" + commit,
+            ),
+        )
+
+        result = compute_verdict(events)
+        assert not result.ci_gates_passed
+        assert not result.verified
+
+
+def test_verdict_rejects_missing_deployment():
+    events = [
+        e for e in GOOD
+        if e["action"] != "deploy.revision"
+    ]
+
+    result = compute_verdict(events)
+    assert not result.ci_gates_passed
+    assert not result.verified

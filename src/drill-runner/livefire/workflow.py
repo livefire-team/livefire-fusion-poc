@@ -80,6 +80,24 @@ class Run:
         except TimeoutError as exc:
             raise DependencyError(f"Ops action {action} did not finish in time") from exc
 
+    async def op(self, action: str, timeout: float | None = None, **params):
+        try:
+            async with asyncio.timeout(timeout or self.budgets.wait_s + 60):
+                result = await self.ops.call(action, **params)
+
+                if action in ("reset_twin", "kill") and result.result != "ok":
+                    raise DependencyError(
+                        f"Ops action {action} returned {result.result}"
+                    )
+
+                return result
+
+        except TimeoutError as exc:
+            raise DependencyError(
+                f"Ops action {action} did not finish in time"
+            ) from exc
+
+
     def charge(self, usage: Usage) -> None:
         cost = (usage.input_tokens * self.price_per_mtok[0] + usage.output_tokens * self.price_per_mtok[1]) / 1e6
         self.tokens += usage.tokens
