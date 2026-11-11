@@ -31,7 +31,7 @@ redacted, and written to the drill's audit trail with its tool version, caller, 
 | `infra/modules/mcp.bicep` | `ca-mcp`, its identity `id-lf-mcp` and roles, and the AI Search service |
 | `infra/modules/mcp-twin-access.bicep` | `id-lf-mcp`'s read roles on the twin (and, on an access-policy vault, a secrets `list` policy) |
 | `.github/workflows/mcp-server.yml` | CI: tests with coverage, Bandit, Semgrep, image smoke test, then GHCR and the lab registry |
-| `scripts/run-local.sh`, `fake-ops.py`, `mcp-smoke.py`, `recovery-smoke.py` | Laptop run and smoke tests, against a local or deployed server |
+| `scripts/run-local.sh`, `fake-ops.py`, `mcp-smoke.py`, `recovery-smoke.py`, `ws3-acceptance.py` | Laptop run, smoke tests and the G3 checks (T-03, T-04, T-08), against a local or deployed server |
 | `scripts/load-incidents.py` | Builds and loads the AI Search index from the private incident corpus (`--corpus`) |
 | `scripts/export-tool-schemas.py` | Regenerates `contracts/mcp-tools.schema.json` from the code |
 | `scripts/create-secrets.sh`, `setup-entra.sh` | One-time setup: the GitHub credentials in Key Vault, Entra mode |
@@ -99,6 +99,20 @@ follows the Ops Service: `main.bicep` deploys it once `OPS_IMAGE`, `REFEREE_IMAG
    MCP_URL="$(azd env get-value MCP_URL)" PLANNER_KEY="$(k mcp-planner-key)" ENGINEER_KEY="$(k mcp-engineer-key)" \
      RECOVERY_KEY="$(k mcp-recovery-key)" python scripts/mcp-smoke.py drill-deploy-check
    ```
+   Then the G3 checks, which write their deny events into one drill so the Fusion Control Center shows both
+   (you need Storage Blob Data Reader on the evidence account to confirm them):
+
+   ```bash
+   EVENT_SOURCE="blob:https://<evidence-account>.blob.core.windows.net/evidence" \
+     MCP_URL=... PLANNER_KEY=... ENGINEER_KEY=... python scripts/ws3-acceptance.py drill-g3-check-0001 t03 t04
+   ```
+
+   - T-03: the Planner's key calls the Engineer's `apply_patch`: HTTP 403 and a `planner.tool_call` deny event.
+   - T-04: the Engineer writes under `journeys/`: refused before any GitHub call, with an `engineer.tool_call` deny
+     event.
+   - T-08 (`t08`): set `PLANTED_INCIDENT_ID` and `PLANTED_INCIDENT_QUERY` from the private corpus, and
+     `APP_IDENTITY_PRINCIPAL_ID`. The record comes back marked untrusted, and the app
+     identity holds no privileged role. That no agent acted on it is WS4's `drill-loop-T-08` run.
 7. **Entra mode (the target)**, once WS4 has the three agent identities:
    `scripts/setup-entra.sh <planner-oid> <engineer-oid> <recovery-oid>`, then `azd env set MCP_AUTH_MODE entra`,
    `MCP_CLIENT_ID` and `PLANNER_AGENT_OBJECT_ID` / `ENGINEER_AGENT_OBJECT_ID` / `RECOVERY_AGENT_OBJECT_ID`, and
