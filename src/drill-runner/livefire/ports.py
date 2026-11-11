@@ -173,18 +173,9 @@ class GitHubRepo:
         return sorted({f["filename"] for f in data.get("files", [])} |
                       {f["previous_filename"] for f in data.get("files", []) if f.get("previous_filename")})
 
+
     async def ci_status(self, branch: str, commit: str) -> CiStatus:
-        runs = await self._call("GET", f"/repos/{self.repo}/actions/workflows/{self.WORKFLOW_FILE}/runs",
-                                params={"branch": branch, "head_sha": commit, "per_page": 5})
-        run = next((r for r in runs.get("workflow_runs", []) if r["head_sha"] == commit), None)
-        if run is None or run["status"] != "completed":
-            return CiStatus("pending", commit, run["html_url"] if run else "")
-        if run["conclusion"] == "success":
-            return CiStatus("pass", commit, run["html_url"])
-        jobs = (await self._call("GET", f"/repos/{self.repo}/actions/runs/{run['id']}/jobs")).get("jobs", [])
-        failed = [{"job": j["name"], "steps": [s["name"] for s in j.get("steps", []) if s.get("conclusion") == "failure"]}
-                  for j in jobs if j.get("conclusion") == "failure"]
-        return CiStatus("fail", commit, run["html_url"], failed)
+        """Require both order-service and security workflows to pass on the same commit."""
         pending = False
         failed = []
         urls = []
@@ -214,18 +205,48 @@ class GitHubRepo:
                 pending = True
                 continue
 
-            urls.append(run.get("html_url", ""))
+            run_url = run.get("html_url", "")
+            if run_url:
+                urls.append(run_url)
 
             if run.get("status") != "completed":
                 pending = True
                 continue
 
-            if run.get("conclusion") != "success":
-                failed.append({
-                    "workflow": workflow,
-                    "conclusion": run.get("conclusion", "unknown"),
-                    "url": run.get("html_url", ""),
-                })
+            conclusion = run.get("conclusion")
+
+            if conclusion == "success":
+                continue
+
+            failure = {
+                "workflow": workflow,
+                "conclusion": conclusion or "unknown",
+                "url": run_url,
+            }
+
+            # Retrieve failed job details when GitHub provides a run ID.
+            # Missing IDs must not turn a known CI failure into an exception.
+            run_id = run.get("id")
+            if conclusion == "failure" and run_id is not None:
+                jobs_data = await self._call(
+                    "GET",
+                    f"/repos/{self.repo}/actions/runs/{run_id}/jobs",
+                )
+                jobs = jobs_data.get("jobs", [])
+                failure["jobs"] = [
+                    {
+                        "job": job.get("name", "unknown"),
+                        "steps": [
+                            step.get("name", "unknown")
+                            for step in job.get("steps", [])
+                            if step.get("conclusion") == "failure"
+                        ],
+                    }
+                    for job in jobs
+                    if job.get("conclusion") == "failure"
+                ]
+
+            failed.append(failure)
 
         if failed:
             state = "fail"
@@ -237,9 +258,10 @@ class GitHubRepo:
         return CiStatus(
             state=state,
             commit=commit,
-            url=", ".join(url for url in urls if url),
+            url=", ".join(urls),
             failed=failed,
         )
+
 
     async def open_pull_request(self, branch: str, title: str, body: str) -> str:
         pr = await self._call("POST", f"/repos/{self.repo}/pulls",

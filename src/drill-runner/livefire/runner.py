@@ -81,12 +81,6 @@ async def run_drill(run: Run, poll_s: float = 2.0) -> DrillState:
         s = run.state
         s.terminal, s.reason = run.abort
         killed = s.terminal == Verdict.KILLED
-        try:
-            await run.op("kill" if killed else "reset_twin", timeout=600)   # reverses the fault, resets the twin
-        except Exception as exc:
-            s.reason += f"; reversal failed: {exc}"
-        await close(run, s)
-        await cleanup(run, s, already_reset=True)
 
         reset_done = False
 

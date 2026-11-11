@@ -157,7 +157,6 @@ def compute_verdict(events: list[dict]) -> VerdictInputs:
         policy_passed=policy_ok,
         technical_health_passed=health_after_restore,
         ci_gates_passed=ci_ok and "" not in deployed_commits,
-        ci_gates_passed=ci_ok,
         journey_passed=journey_ok,
         persisted_order_assertion_passed=persisted_ok,
         reasons=reasons,
