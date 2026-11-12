@@ -5,8 +5,8 @@
 
 **Last updated:** 2026-11-12 (WS2 G3 in progress: PRs #50 (`lab.sh`), #51 (`deploy.sh all` is the one command),
 #52 (ADR-023 to ADR-025) and #53 (`start-load.sh`) open for review; code freeze planned Fri Nov 13 noon. WS4's
-Foundry, agents and `job-drill-runner` are deployed in `lf-eh`; no drill through the runner yet. The WS2 Mac's azd
-copy of `lf-eh` was brought in step with the lab (`lab.sh sync --apply`). Deny policy still OFF. Earlier: WS1 G2
+Foundry, agents and `job-drill-runner` are deployed in `lf-eh`; the runner's first drill (T-00) passed. A trial
+clean-lab build (`lf-g3`, `deploy.sh all`) came up, ran a T-00, and was torn down. Deny policy still OFF. Earlier: WS1 G2
 complete 2026-11-10; WS2 G2 13 of 13)
 **Current gate target:** G3 (Mon Nov 16)
 
@@ -364,6 +364,27 @@ Status values: not started | in progress | PR open | merged | blocked
     `ws4-new`); the lab registry has the image. An org admin must give this repo Write access to the package, then
     `gh run rerun 43141120000 --failed` before the run's image artifact expires (2026-11-13 02:25 UTC).
   - WS4's packages live in `~/.venvs/ws4` on the WS2 Mac (`PYTHON` for `deploy.sh agents`/`all`); 67 runner tests pass.
+  - Review pass (separate reviewer) on #50 and #51, findings fixed and pushed (summary comments on both PRs): a
+    teardown of a half-built environment could exit 0 without deleting (and with an empty identity could plausibly
+    delete every RBAC Administrator assignment); `all` stopped on a missing runner key; the Control Center's secrets
+    could never be made when only its image was set (now `scripts/cc-secrets.sh`, used by the hook and `deploy.sh`);
+    secrets on command lines; `sync` treated defaults as differences; azd's escaped values. Tests: #50 24, #51 56.
+  - 2026-11-12, `lf-eh`: T-00 through the runner, `drill-20261112-043809` BASELINE_VERIFIED (the runner's first drill).
+  - 2026-11-12, trial clean lab `lf-g3` (owner's OK; no counted runs; CI not repointed):
+    - `lab.sh new-env lf-g3`, then `deploy.sh all`. The infra pass passed: the hook copied the three GitHub App keys
+      from `lf-eh`'s vault, created WS5's two secrets, and the baseline passed.
+    - The first `apps` pass failed on `job-referee` ("Unable to get value using Managed identity ...
+      referee-sql-password"): `ops.bicep` creates the identity's vault role seconds before the job. #51 now retries
+      that one error twice, 90 s apart.
+    - Second `deploy.sh all`: exit 0 in 23 min 46 s (`apps` 21 min). Agents created and verified;
+      `EVIDENCE CHECK PASSED`; the runner was named and skipped (no `drill-runner` in GHCR).
+    - The runner, by `az acr import` from `lf-eh`'s registry and `deploy.sh runner`, hit the same race on
+      `job-drill-runner`; the new retry recovered it.
+    - T-00 `drill-20261112-054147` BASELINE_VERIFIED. `start-load.sh` (#53) started `caj-loadgen` for it, and its
+      `metrics.orders` lines (about 30 a minute, 0 failed) landed in the drill's log. `verify_package.py`: all ok.
+    - `lab.sh teardown lf-g3 --yes`: exit 0, `azd down --purge` 33 min. Nothing left soft-deleted (the two deleted
+      vaults listed belong to the Oct 31 probe resource group); `lf-eh` selected and at baseline.
+    - A fresh `deploy.sh all` should take about 30 to 35 minutes; teardown about 35.
   - Next: reviews and merges of #50 to #53 (and WS4's #49) by Fri noon; WS5 deploys its G3 build to `lf-eh`; first
     T-00 and T-01 through the runner; deny policy on for T-02; Sat: `lf-g3` with `deploy.sh all`, T-01 twice.
 - Last commands run (WS2 Mac, with `.venv` active, `REQUESTS_CA_BUNDLE` set, on `main` at 1299915): `az acr import`
@@ -474,6 +495,9 @@ Status values: not started | in progress | PR open | merged | blocked
 See `docs/ADR.md` (latest: ADR-026; ADR-023 to ADR-025 in PR #52).
 
 ## Session log (newest first)
+- 2026-11-12 (WS2, night): review pass on #50/#51 and fixes; provision retry for a new identity's Key Vault access
+  (found in the trial); T-00 through the runner on `lf-eh` passed; trial `lf-g3` built by `deploy.sh all` (second run
+  exit 0, 23 min 46 s), runner added by the fallback, T-00 passed with the load generator's lines, torn down clean.
 - 2026-11-12 (WS2): G3 v2 plan after PR #48: one command via `deploy.sh all`, `lab.sh sync` before every provision,
   freeze Fri noon. PRs #50 to #53 opened (153 referee tests with #50 to #52; 12 more in #53). WS2 Mac's azd copy
   synced with the lab; WS4 venv created. Found: `drill-runner` GHCR publish refused (org admin action), WS5's G3
