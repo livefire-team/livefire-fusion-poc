@@ -512,3 +512,26 @@ def test_foundry_phase_needs_the_model_and_ca_mcp(sandbox):
 def test_runner_phase_needs_an_image(sandbox):
     result = run_apps(sandbox, ALL_MCP_SECRETS, phase="runner")
     assert result.returncode == 1 and "no RUNNER_IMAGE" in result.stdout
+
+
+def test_postprovision_can_skip_only_the_browser_baseline(sandbox, monkeypatch):
+    monkeypatch.setenv("POSTPROVISION_BASELINE", "off")
+    script = copy_repo_bits(sandbox)
+    result = run(sandbox, script.as_posix(), az_body=AZ_VAULT_HAS_RUNNER_KEY)
+    assert result.returncode == 0, result.stderr
+    calls = log_lines(sandbox)
+    assert "referee baseline" not in calls and "baseline skipped" in result.stdout
+    assert any(c.startswith("sqlcmd") for c in calls)                  # everything before it still ran
+    assert any("containerapp revision restart" in c for c in calls)
+
+
+def test_ws4_foundry_phase_skips_the_local_baseline(sandbox):
+    log = (sandbox / "calls.log").as_posix()
+    values = APPS_VALUES + RUNNER_VALUES + "FOUNDRY_PROJECT_ENDPOINT=https://ais.example/api/projects/p\n"
+    fake(sandbox / "bin" / "azd", f'if [ "$1 $2" = "env get-values" ]; then cat <<\'EOF\'\n{values}EOF\n'
+                                  f'else echo "azd $* baseline=${{POSTPROVISION_BASELINE:-unset}}" >> {log}; fi\n')
+    az = f'echo "az $*" >> LOG\ncase "$*" in "keyvault secret list"*) printf "%s\\n" {ALL_MCP_SECRETS} ;; esac\n'
+    result = run(sandbox, copy_deploy(sandbox).as_posix(), "foundry", az_body=az)
+    assert result.returncode == 0, result.stderr
+    assert "azd provision baseline=off" in log_lines(sandbox)
+    assert "FOUNDRY_PROJECT_ENDPOINT=https://ais.example/api/projects/p" in result.stdout

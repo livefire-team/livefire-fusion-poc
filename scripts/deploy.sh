@@ -207,11 +207,11 @@ phase_foundry() {
     || { echo "set the model first: azd env set MODEL_NAME gpt-5.1 && azd env set MODEL_VERSION 2025-11-13"; exit 1; }
   [ -n "${MCP_IMAGE:-}" ] || { echo "Foundry follows ca-mcp: deploy it first (README-WS3.md)"; exit 1; }
   say "azd provision (Foundry ${MODEL_NAME} ${MODEL_VERSION}, Prompt Shields ${PROMPT_SHIELDS:-on}, MCP connections)"
-  provision
+  POSTPROVISION_BASELINE="${POSTPROVISION_BASELINE:-off}" provision   # WS4 doesn't touch the twin
   load
   [ -n "${FOUNDRY_PROJECT_ENDPOINT:-}" ] || { echo "Foundry was not deployed (was ca-mcp left out?)"; exit 1; }
   echo "FOUNDRY_PROJECT_ENDPOINT=$FOUNDRY_PROJECT_ENDPOINT"
-  echo "MODEL_DEPLOYMENT=$MODEL_DEPLOYMENT"
+  echo "MODEL_DEPLOYMENT=${MODEL_DEPLOYMENT:-}"
   echo "next: scripts/deploy.sh agents"
 }
 
@@ -237,11 +237,11 @@ phase_runner() {
   load
   [ -n "${RUNNER_IMAGE:-}" ] || { echo "no RUNNER_IMAGE: run scripts/deploy.sh images (or set it to <registry>/drill-runner:sha-<40 hex>)"; exit 1; }
   say "azd provision (job-drill-runner on $RUNNER_IMAGE, agents ${PLANNER_AGENT:-unset} and ${ENGINEER_AGENT:-unset})"
-  provision
+  POSTPROVISION_BASELINE="${POSTPROVISION_BASELINE:-off}" provision   # WS4 doesn't touch the twin
   load
   [ -n "${RUNNER_JOB_NAME:-}" ] || { echo "job-drill-runner was not deployed: see the missing list above"; exit 1; }
   echo "RUNNER_JOB_NAME=$RUNNER_JOB_NAME"
-  az role assignment list --assignee "$RUNNER_PRINCIPAL_ID" --all \
+  az role assignment list --assignee "${RUNNER_PRINCIPAL_ID:-}" --all \
     --query "[].{role: roleDefinitionName, scope: scope}" -o table
   echo "next: scripts/start-drill.sh"
 }

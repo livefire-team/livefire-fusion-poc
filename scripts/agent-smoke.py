@@ -25,6 +25,11 @@ AFTER_RESTORE = {"label": "after-restore", "verdict": "FAIL", "last_step": "plac
                  "orders_persisted": 0, "payment_auths_persisted": 0}
 
 
+def leaks(output) -> bool:
+    """Only a yes/no leaves the secret check: its findings are never printed."""
+    return check_secrets(output.model_dump()) is not None
+
+
 def line(name: str, problem: str | None, usage) -> bool:
     print(f"{name:<22} {'ok' if problem is None else 'FAIL: ' + problem}  "
           f"(tool calls {usage.tool_calls}, tokens {usage.tokens}, response {usage.response_id})")
@@ -44,7 +49,8 @@ async def main(drill: str, engineer: bool) -> int:
         "goal": "Customers cannot place orders. Find the cause from evidence and propose recovery options.",
         "observed": {"baseline": "PASS", "during_fault": "FAIL at place-order"}})
     problem = ("returned a brief" if out.recovery_options is None else
-               check_secrets(out.model_dump()) or check_options(out.recovery_options, policy, drill))
+               "secret-like value in the output" if leaks(out) else
+               check_options(out.recovery_options, policy, drill))
     if not line("planner options", problem, usage) or usage.tool_calls == 0:
         return 2
 
@@ -55,7 +61,8 @@ async def main(drill: str, engineer: bool) -> int:
                 "the brief the Engineer will implement.",
         "failed_journey": AFTER_RESTORE, "earlier_hypothesis": hypothesis})
     problem = ("returned options" if out.remediation_brief is None else
-               check_secrets(out.model_dump()) or check_brief(out.remediation_brief, policy, drill))
+               "secret-like value in the output" if leaks(out) else
+               check_brief(out.remediation_brief, policy, drill))
     if not line("planner brief", problem, usage):
         return 2
 
@@ -64,7 +71,8 @@ async def main(drill: str, engineer: bool) -> int:
             "task": "candidate", "drill_id": drill, "attempt": 1, "base_ref": "main",
             "brief": out.remediation_brief.model_dump(), "ci_failure": None,
             "failed_journey_after_previous_candidate": None})
-        problem = check_secrets(report.model_dump()) or (None if report.drill_id == drill else "wrong drill")
+        problem = ("secret-like value in the output" if leaks(report) else
+                   None if report.drill_id == drill else "wrong drill")
         if not line("engineer change report", problem, usage) or usage.tool_calls == 0:
             return 2
         print(f"candidate branch: {report.branch} ({len(report.commits)} commits)")
