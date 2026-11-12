@@ -360,9 +360,10 @@ Status values: not started | in progress | PR open | merged | blocked
     `candidate-branches`. Each machine keeps its own azd copy and every team signs in as the same lab user: the WS2
     Mac's copy was 30 values behind and held three values pasted with curly quotes; `lab.sh sync --apply` fixed it
     (backup of the old copy in `.azure/`, git-ignored), and `INCIDENT_CORPUS` was set by hand.
-  - `drill-runner`'s GHCR `publish` failed (`permission_denied: write_package`: the package was created by
-    `ws4-new`); the lab registry has the image. An org admin must give this repo Write access to the package, then
-    `gh run rerun 43141120000 --failed` before the run's image artifact expires (2026-11-13 02:25 UTC).
+  - `drill-runner` in GHCR: DONE 2026-11-12. The first `publish` failed (`permission_denied: write_package`: the
+    package was created by `ws4-new`); the owner (org admin) gave this repo Write on the package, the failed job was
+    rerun and passed, and `drill-runner:sha-f40239c` pulls without a sign-in (HTTP 200). A fresh lab's
+    `deploy.sh images` now imports the runner; the `az acr import` fallback is no longer needed.
   - WS4's packages live in `~/.venvs/ws4` on the WS2 Mac (`PYTHON` for `deploy.sh agents`/`all`); 67 runner tests pass.
   - Review pass (separate reviewer) on #50 and #51, findings fixed and pushed (summary comments on both PRs): a
     teardown of a half-built environment could exit 0 without deleting (and with an empty identity could plausibly
@@ -495,6 +496,9 @@ Status values: not started | in progress | PR open | merged | blocked
 See `docs/ADR.md` (latest: ADR-026; ADR-023 to ADR-025 in PR #52).
 
 ## Session log (newest first)
+- 2026-11-12 (WS2, morning): `drill-runner` GHCR publish fixed (repo given Write on the package, `publish` rerun
+  green, anonymous pull checked). Still open: reviews on #50 to #53 and #43, WS4's #49 merge, WS5's G3 Control
+  Center on `lf-eh`, deny-policy timing, first T-01 through the runner.
 - 2026-11-12 (WS2, night): review pass on #50/#51 and fixes; provision retry for a new identity's Key Vault access
   (found in the trial); T-00 through the runner on `lf-eh` passed; trial `lf-g3` built by `deploy.sh all` (second run
   exit 0, 23 min 46 s), runner added by the fallback, T-00 passed with the load generator's lines, torn down clean.
