@@ -1,15 +1,16 @@
 #!/usr/bin/env bash
 # One entry point for the G2 platform, in phases. Run from the repo root, signed in to the lab (az and azd).
-#   scripts/deploy.sh all                     infra, images, apps, verify (a fresh lab)
+#   scripts/deploy.sh all                     the one command for a fresh lab (ADR-024): infra, images, apps, then
+#                                             WS4's agents and runner once MODEL_NAME is set, then verify
 #   scripts/deploy.sh infra                   azd provision: control plane and twin (the Ops Service waits for images)
 #   scripts/deploy.sh images [--build] [ref]  order-service, ops-service, referee, mcp-server, load-generator and
 #                                             drill-runner into the registry as :sha-<40 hex> of the last commit (at ref, default
 #                                             origin/main) that changed each one: imported from GHCR, or built here
-#                                             with --build
+#                                             with --build. Then WS5's Control Center, built in its own repo, from the
+#                                             exact GHCR build in CONTROL_CENTER_SOURCE
 #   scripts/deploy.sh apps                    azd provision with those images: ca-ops, the jobs, ca-mcp (WS3),
 #                                             caj-loadgen (WS1), and WS5's ca-control-center when CONTROL_CENTER_IMAGE
-#                                             is set (WS5 sets it after its scripts/deploy-cc.sh image puts
-#                                             control-center:sha-<40 hex> in the registry)
+#                                             is set and its two secrets are in the control vault
 #   scripts/deploy.sh policy                  the deny policy, proven as you, then the role that lets id-lf-ops try
 #   scripts/deploy.sh policy-off              removes both (a provision never deletes them), e.g. before a lab ends
 #   scripts/deploy.sh github [owner/repo]     a repo's acr-push environment and variables (repo admin only)
@@ -107,6 +108,29 @@ phase_images() {
     fi
     azd env set "$(env_name "$c")" "$image"
   done
+  [ -z "${CONTROL_CENTER_SOURCE:-}" ] || import_control_center
+}
+
+# WS5's Control Center is built in its own repo, so there is no commit here to pick it by: CONTROL_CENTER_SOURCE names
+# the exact GHCR build, ghcr.io/<owner>/control-center:sha-<40 hex>, and CONTROL_CENTER_IMAGE follows it (ADR-024)
+import_control_center() {
+  local tag="${CONTROL_CENTER_SOURCE##*:}"
+  [[ "$tag" =~ ^sha-[0-9a-f]{40}$ ]] || { echo "CONTROL_CENTER_SOURCE must end in :sha-<40 hex>, not :$tag"; exit 1; }
+  local image="$REGISTRY_SERVER/control-center:$tag"
+  say "control-center at ${tag:4:7}"
+  if az acr repository show -n "$REGISTRY_NAME" --image "control-center:$tag" -o none 2>/dev/null; then
+    echo "already in the registry: $image"
+  else
+    local creds=()
+    [ -z "${GHCR_TOKEN:-}" ] || creds=(--username "${GHCR_USER:?set GHCR_USER with GHCR_TOKEN}" --password "$GHCR_TOKEN")
+    if ! az acr import -n "$REGISTRY_NAME" --source "$CONTROL_CENTER_SOURCE" --image "control-center:$tag" \
+      ${creds[@]+"${creds[@]}"} -o none; then
+      echo "WARNING: control-center image not imported ($CONTROL_CENTER_SOURCE); CONTROL_CENTER_IMAGE unchanged" >&2
+      return 0
+    fi
+    echo "imported $CONTROL_CENTER_SOURCE -> $image"
+  fi
+  azd env set CONTROL_CENTER_IMAGE "$image"
 }
 
 # WS3: ca-mcp reads its keys and GitHub credentials from the control vault at deploy time, so a missing secret would
@@ -159,8 +183,32 @@ runner_missing() {
   for n in "${need[@]}"; do grep -qx "$n" <<<"$existing" || echo "secret $n in $CONTROL_KEYVAULT_NAME"; done
 }
 
-# Every provision in this script goes through here, so ca-mcp and WS4 can never fail one (ADR-022, ADR-026)
+# WS5: ca-control-center reads its session secret, and the passcode's hash (or Easy Auth's client secret), from the
+# control vault at deploy time. postprovision.sh creates the passcode pair in a new environment; until they exist it
+# is left out
+cc_missing() {
+  local need=(cc-session-secret) existing n
+  if [ "${CONTROL_CENTER_AUTH_MODE:-passcode}" = passcode ]; then need+=(cc-passcode-sha256)
+  else need+=(cc-entra-client-secret); fi
+  if ! existing="$(az keyvault secret list --vault-name "${CONTROL_KEYVAULT_NAME:-}" --query "[].name" -o tsv)"; then
+    echo "cannot list the secrets in ${CONTROL_KEYVAULT_NAME:-the control vault}; nothing provisioned"; return 2
+  fi
+  for n in "${need[@]}"; do grep -qx "$n" <<<"$existing" || echo "secret $n in $CONTROL_KEYVAULT_NAME"; done
+}
+
+# A value pasted from a chat can arrive with curly quotes, or with its * taken as italics: a provision would then
+# write a broken CI sign-in subject or Engineer path list into the lab. Ours are all plain ASCII, so it stops first
+pasted_values() { azd env get-values | LC_ALL=C grep '[^ -~]' | cut -d= -f1 || true; }
+
+# Every provision in this script goes through here, so ca-mcp, WS4 and WS5 can never fail one (ADR-022, ADR-026)
 provision() {
+  local pasted; pasted="$(pasted_values)"
+  if [ -n "$pasted" ]; then
+    printf 'not provisioned: these azd values hold curly quotes or other non-ASCII characters (pasted from a chat?):\n%s\n' \
+      "$pasted" >&2
+    echo "fix each with azd env set <KEY> '<value>', or take the lab's with scripts/lab.sh sync --apply" >&2
+    exit 1
+  fi
   load
   if [ -n "${MCP_IMAGE:-}" ]; then
     local missing status=0; missing="$(mcp_missing)" || status=$?
@@ -182,6 +230,15 @@ provision() {
     if [ -n "$rmissing" ]; then
       printf 'job-drill-runner left out of this provision; missing:\n%s\n(see README-WS4.md)\n' "$rmissing" >&2
       azd env set RUNNER_IMAGE ""
+    fi
+  fi
+  if [ -n "${CONTROL_CENTER_IMAGE:-}" ]; then
+    local cmissing cstatus=0; cmissing="$(cc_missing)" || cstatus=$?
+    if [ "$cstatus" -ne 0 ]; then printf '%s\n' "$cmissing" >&2; exit 1; fi
+    if [ -n "$cmissing" ]; then
+      printf 'ca-control-center left out of this provision; missing:\n%s\n(postprovision.sh creates them: rerun it)\n' \
+        "$cmissing" >&2
+      azd env set CONTROL_CENTER_IMAGE ""
     fi
   fi
   azd provision
@@ -215,12 +272,17 @@ phase_foundry() {
   echo "next: scripts/deploy.sh agents"
 }
 
+need_agent_packages() {
+  local py="${PYTHON:-python3}"
+  "$py" -c 'import azure.ai.projects, yaml' 2>/dev/null \
+    || { echo "install the runner's packages first: $py -m pip install -r src/drill-runner/requirements.txt"; exit 1; }
+}
+
 phase_agents() {
   load
   [ -n "${FOUNDRY_PROJECT_ENDPOINT:-}" ] || { echo "run scripts/deploy.sh foundry first"; exit 1; }
   local py="${PYTHON:-python3}" out planner engineer
-  "$py" -c 'import azure.ai.projects, yaml' 2>/dev/null \
-    || { echo "install the runner's packages first: $py -m pip install -r src/drill-runner/requirements.txt"; exit 1; }
+  need_agent_packages
   say "create both agent versions from src/drill-runner/agents/*.yaml"
   out="$(ENGINEER_WRITE_PATHS="${MCP_ENGINEER_WRITE_PATHS:-}" "$py" scripts/create_agents.py)"
   echo "$out"
@@ -244,6 +306,38 @@ phase_runner() {
   az role assignment list --assignee "${RUNNER_PRINCIPAL_ID:-}" --all \
     --query "[].{role: roleDefinitionName, scope: scope}" -o table
   echo "next: scripts/start-drill.sh"
+}
+
+# The one command for a fresh lab (ADR-024): the platform, then WS4's two passes once the model is set. A part whose
+# inputs are missing is left out and named, as in apps; a failure stops it
+phase_all() {
+  local start=$SECONDS runner
+  load
+  [ -z "${MODEL_NAME:-}" ] || need_agent_packages            # before any change, not after the platform's 15 minutes
+  phase_infra
+  phase_images origin/main
+  load; runner="${RUNNER_IMAGE:-}"         # apps leaves the runner out until the agents are pinned, and clears it
+  phase_apps
+  load
+  if [ -z "${MODEL_NAME:-}" ]; then
+    say "WS4 not deployed: no MODEL_NAME (README-WS4.md)"
+  elif [ -z "${FOUNDRY_PROJECT_ENDPOINT:-}" ]; then
+    say "WS4 not deployed: Foundry follows ca-mcp, which was left out above"
+  else
+    if [ -n "${PLANNER_AGENT:-}" ] && [ -n "${ENGINEER_AGENT:-}" ]; then
+      say "agents already pinned: $PLANNER_AGENT and $ENGINEER_AGENT (scripts/deploy.sh agents makes new versions)"
+    else
+      phase_agents
+    fi
+    if [ -n "$runner" ]; then
+      azd env set RUNNER_IMAGE "$runner"
+      phase_runner
+    else
+      say "job-drill-runner not deployed: no drill-runner image (see images above)"
+    fi
+  fi
+  phase_verify
+  say "deploy.sh all: $(( (SECONDS - start) / 60 )) min $(( (SECONDS - start) % 60 )) s"
 }
 
 phase_policy() {
@@ -316,15 +410,21 @@ phase_smoke() {
     --set-env-vars "CANDIDATE_IMAGE=$candidate" "CANDIDATE_FIXED=$fixed" -o none
   local name; name="$(az containerapp job start -g "$CONTROL_RG" -n "$SMOKE_JOB_NAME" --query name -o tsv)"
   echo "execution $name"
-  local status=""
+  local status="" failed=0
   for _ in $(seq 120); do
-    status="$(az containerapp job execution show -g "$CONTROL_RG" -n "$SMOKE_JOB_NAME" --job-execution-name "$name" \
-      --query properties.status -o tsv)"
-    case "$status" in Succeeded|Failed|Stopped|Degraded) break ;; esac
-    sleep 15
+    # A failed status call (a new execution not listed yet, a dropped connection) is not a failed smoke: try again
+    if ! status="$(az containerapp job execution show -g "$CONTROL_RG" -n "$SMOKE_JOB_NAME" \
+      --job-execution-name "$name" --query properties.status -o tsv)"; then
+      failed=$((failed + 1))
+      [ "$failed" -lt 5 ] || { echo "could not read the execution's status 5 times in a row" >&2; exit 1; }
+    else
+      failed=0
+      case "$status" in Succeeded|Failed|Stopped|Degraded) break ;; esac
+    fi
+    sleep "${SMOKE_POLL_S:-15}"
   done
   echo "status: $status (the console log reaches Log Analytics a minute or two after the end)"
-  sleep 90
+  sleep "${SMOKE_LOG_WAIT_S:-90}"
   az monitor log-analytics query -w "$CONTROL_LOG_ANALYTICS_CUSTOMER_ID" -o tsv --query "[].Log_s" \
     --analytics-query "ContainerAppConsoleLogs_CL | where ContainerGroupName_s startswith '$name'
                        | order by TimeGenerated asc | project Log_s" || true
@@ -344,8 +444,7 @@ phase_verify() {
 }
 
 case "${1:-}" in
-  all) phase_infra; phase_images origin/main; phase_apps; phase_verify ;;
-  infra|images|apps|policy|github|smoke|verify|foundry|agents|runner) p="$1"; shift; "phase_$p" "$@" ;;
+  all|infra|images|apps|policy|github|smoke|verify|foundry|agents|runner) p="$1"; shift; "phase_$p" "$@" ;;
   policy-off) phase_policy_off ;;
-  *) sed -n '2,/^set -euo pipefail$/{/^set -euo/!p}' "$0"; exit 2 ;;
+  *) sed -n '2,/^set -euo pipefail$/{/^set -euo/!p;}' "$0"; exit 2 ;;      # the ; before } is for macOS sed
 esac
