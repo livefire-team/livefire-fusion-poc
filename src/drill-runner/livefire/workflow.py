@@ -12,8 +12,8 @@ from agent_framework import Executor, WorkflowBuilder, WorkflowContext, handler,
 from typing_extensions import Never
 
 from . import evidence
-from .contracts import (ApprovalDecision, ApprovalOption, ApprovalRequest, ChangeReport, DrillConfig, RecoveryOptions,
-                        RemediationBrief, Verdict, VerdictInputs)
+from .contracts import (ApprovalDecision, ApprovalOption, ApprovalRequest, ChangeReport, DrillConfig, Mode,
+                        RecoveryOptions, RemediationBrief, Verdict, VerdictInputs)
 from .policy import check_brief, check_changed_paths, check_options, check_secrets, compute_verdict, gate
 from .ports import AgentPort, DependencyError, EventLog, GuardrailBlocked, OpsPort, RepoPort, Usage
 
@@ -137,7 +137,8 @@ class Stage(Executor):
         except DependencyError as exc:
             s.terminal, s.reason = Verdict.ESCALATED_DEPENDENCY, str(exc)
         except GuardrailBlocked as exc:                    # v1.1: Prompt Shields stopped an agent call
-            self.run_.log.write("guardrail.blocked", "blocked", {"agent": exc.agent, "detail": exc.detail[:200]})
+            self.run_.log.write("guardrail.blocked", "blocked", {"agent": exc.agent, "filter": exc.detail[:80],
+                                                                 "response_id": exc.response_id})
             s.terminal, s.reason = Verdict.ESCALATED_SECURITY, str(exc)
         s.route = "close"
         return False, None
@@ -198,6 +199,7 @@ class Inject(Stage):
             raise Stop(Verdict.ESCALATED_DEPENDENCY, "the Ops Service refused the fault")
         if (await r.op("wait_for", state="forbidden", timeout_s=r.budgets.wait_s)).result != "ok":
             raise Stop(Verdict.ESCALATED_DEPENDENCY, "the fault did not take effect in time")
+        await asyncio.sleep(r.budgets.settle_s)          # let the fault reach the app, not just its health check
         if (await r.op("run_referee", label="during-fault", timeout=300)).result != "FAIL":
             raise Stop(Verdict.ESCALATED_DEPENDENCY, "the fault had no effect on customers")
         s.route = "investigate"
@@ -322,6 +324,14 @@ class Authorize(Stage):
     async def run(self, s):
         r = self.run_
         action = {"broad": "grant_contributor_subscription", "narrow": "restore_kv_secrets_user"}
+        if r.cfg.policy.mode == Mode.AUTONOMOUS_TWIN and "broad" in s.remaining:
+            # Blueprint 3.3 / 9.3: in Autonomous Twin the workflow tests the broad option against the platform without
+            # a person. It is only attempted (never pre-authorized: the type can't allow it); Azure Policy must deny
+            # it, or Recover ends the drill ESCALATED_POLICY. Then the pre-authorized narrow restore runs.
+            r.log.write("approval.policy_test", "ok", {"action": action["broad"], "mode": r.cfg.policy.mode.value,
+                                                      "policy_version": r.cfg.policy.version})
+            s.chosen, s.route = "broad", "recover"
+            return None
         proposed = s.options.recommended if s.options.recommended in s.remaining else s.remaining[0]
         decision = gate(r.cfg.policy, action[proposed])
         if decision == "deny":
@@ -418,6 +428,8 @@ class Prove(Stage):
                     params["timeout_s"] = r.budgets.wait_s
                 if (await r.op(action, **params)).result != "ok":
                     raise Stop(Verdict.ESCALATED_DEPENDENCY, f"the durability check could not {action}")
+                if params.get("state") == "forbidden":
+                    await asyncio.sleep(r.budgets.settle_s)   # the candidate must meet the fault before the restore
             result = await r.op("run_referee", label="after-refault", timeout=300)
         if result.result == "PASS":
             s.route = "verdict"

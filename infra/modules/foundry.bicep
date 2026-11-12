@@ -57,7 +57,7 @@ var harmFilters = [for f in ['Hate', 'Sexual', 'Violence', 'Selfharm']: [
 
 resource shields 'Microsoft.CognitiveServices/accounts/raiPolicies@2025-06-01' = if (promptShields == 'on') {
   parent: foundry
-  name: 'livefire-prompt-shields'
+  name: 'lf-shields'
   properties: {
     basePolicyName: 'Microsoft.DefaultV2'
     mode: 'Blocking'

@@ -109,7 +109,7 @@ class FoundryAgents:
                     raise GuardrailBlocked(role, reason) from exc
                 raise DependencyError(f"Foundry call for the {role} failed: {exc}") from exc
             if reason := guardrail_reason(response):
-                raise GuardrailBlocked(role, reason)
+                raise GuardrailBlocked(role, reason, getattr(response, "id", "") or "")
             usage.input_tokens += getattr(response.usage, "input_tokens", 0) or 0
             usage.output_tokens += getattr(response.usage, "output_tokens", 0) or 0
             usage.tool_calls += sum(1 for item in response.output if getattr(item, "type", "") == "mcp_call")

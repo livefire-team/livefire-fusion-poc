@@ -9,7 +9,7 @@ import json
 from pathlib import Path
 
 from .contracts import ChangeReport, OpsResult, PlannerOutput
-from .ports import CiStatus, DependencyError, EventLog, Usage
+from .ports import CiStatus, DependencyError, EventLog, GuardrailBlocked, Usage
 
 FIXTURES = Path(__file__).resolve().parent.parent / "fixtures"
 ERROR = "We couldn't place your order (SecretUnavailable). Please try again."
@@ -85,8 +85,8 @@ def _sha(*parts) -> str:
 class StubAgents:
     """Returns the fixture outputs, and writes the tool-call events the MCP server would write."""
 
-    def __init__(self, log: EventLog, scenario: str = "T-01", delay: float = 0.2):
-        self.log, self.scenario, self.delay = log, scenario, delay
+    def __init__(self, log: EventLog, scenario: str = "T-01", delay: float = 0.2, guardrail: bool = False):
+        self.log, self.scenario, self.delay, self.guardrail = log, scenario, delay, guardrail
 
     def _tool(self, who, tool, endpoint, decision="allow", summary=""):
         self.log.write(f"{who}.tool_call", decision, {"tool": tool, "endpoint": endpoint, "decision": decision,
@@ -100,6 +100,10 @@ class StubAgents:
         if self.scenario == "T-10":
             raise DependencyError("Planner MCP endpoint unavailable (stub)")
         drill = task["drill_id"]
+        if self.guardrail:                    # the T-08 guardrail variant: Prompt Shields blocks the injected record
+            self._tool("planner", "search_incident_history", "planner", summary="3 records, one with an embedded "
+                                                                                "instruction")
+            raise GuardrailBlocked("planner", "indirect_attack", "stub-response")
         if task["task"] == "investigate":
             self._tool("planner", "query_incident_telemetry", "planner", summary="403 on secret reads since the fault")
             if self.scenario != "T-05":

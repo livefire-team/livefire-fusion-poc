@@ -489,7 +489,10 @@ Status values: Proposed | Accepted | Superseded | Rejected
   blocking; `PROMPT_SHIELDS=off` only if the lab rejects it); a block ends the drill ESCALATED_SECURITY. Contracts
   v1.1 (additive) add the scorecard, the operational-debt record and the next-drill recommendation. The Engineer's
   write paths are configuration only (`ENGINEER_WRITE_PATHS`, from `MCP_ENGINEER_WRITE_PATHS`), filled into the
-  agents' instructions when a version is created; tracked prompts, fixtures and stubs name no fix.
+  agents' instructions when a version is created; tracked prompts, fixtures and stubs name no fix. In Autonomous
+  Twin the workflow tests the broad option itself (`approval.policy_test`), as blueprint 3.3 and 9.3 show; the
+  policy records `required_checks` and `settle_s`, so the CI gate is recomputable from the event log and the app
+  meets the fault before the during-fault check and the durability restore.
 - **Consequences:** Every environment deploys unchanged until it sets the WS4 values. The runner needs one more
   GitHub App (`livefire-runner`) or token. The pull-request title no longer describes the fix. What PR #44 already
   put in `main`'s history stays there: removing it needs a history rewrite, which the lead decides.

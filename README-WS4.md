@@ -11,7 +11,7 @@ Deployment decisions: `docs/ADR.md`, ADR-026. Reference: the WS4 build guide and
 | --- | --- |
 | `src/drill-runner/livefire/` | `contracts.py` (v1.1), `workflow.py` (the stages), `policy.py` (Command Gate, checks, verdict), `ports.py` (Ops, GitHub, event log), `agents.py` (Foundry), `evidence.py` (the sealed package, scorecard, operational debt), `runner.py` (one drill per run), `stubs.py` |
 | `src/drill-runner/agents/` | Both agent definitions (`*.yaml`) and instructions (`*.md`). The instructions carry an `{allowed_paths}` placeholder, filled from `ENGINEER_WRITE_PATHS` when a version is created |
-| `src/drill-runner/tests/` | 62 tests: contracts, policy, the whole workflow on stubs (T-00 to T-10), v1.1, Ops and CI replies |
+| `src/drill-runner/tests/` | 67 tests: contracts, policy, the whole workflow on stubs (T-00 to T-10), v1.1, the Autonomous Twin broad test, the T-08 guardrail variant, Ops and CI replies |
 | `contracts/` | `event-catalog.md`, `handoffs.md` (v1.1), `ops-actions.md` (WS2's v2.1 as implemented), `schemas/` (generated) |
 | `infra/modules/foundry.bicep` | Foundry account, project, the pinned model with Prompt Shields, one MCP connection per agent |
 | `infra/modules/drill-runner.bicep` | `job-drill-runner` and `id-lf-drill-runner` (four roles, none on the twin); pulls with `id-lf-acrpull` |
@@ -38,11 +38,19 @@ Deployment decisions: `docs/ADR.md`, ADR-026. Reference: the WS4 build guide and
 ```bash
 python3.12 -m venv ~/.venvs/ws4 && . ~/.venvs/ws4/bin/activate
 pip install -r src/drill-runner/requirements-dev.txt
-(cd src/drill-runner && pytest -q)                        # 62 passed
+(cd src/drill-runner && pytest -q)                        # 67 passed
 cd src/drill-runner && EVENT_SOURCE=dir:../../evidence python -m livefire.runner --drill-id drill-local-0001 \
   --stub --stub-delay 0 --mode "Autonomous Twin" --auto-approve open_pr   # ends VERIFIED
 python ../../scripts/verify_package.py ../../evidence/drill-local-0001     # seven ok lines
+EVENT_SOURCE=dir:../../evidence python -m livefire.runner --drill-id drill-local-t08g --scenario T-08 --stub \
+  --stub-delay 0 --stub-guardrail --mode "Autonomous Twin"                 # G3: ends ESCALATED_SECURITY
 ```
+
+In Autonomous Twin mode the workflow tests the broad option itself (`approval.policy_test`): the Ops Service attempts
+it, the platform must deny it (`recover.broad denied`), and the pre-authorized narrow restore follows. After the
+fault shows in health, the workflow waits `settle_s` (15 s) so the app meets the fault before the during-fault
+check and before the durability restore. A candidate passes CI only when every workflow in the policy's
+`required_checks` succeeded on its commit, and the verdict re-checks that from `ci.result` alone.
 
 ## Deploy to the lab (two passes, ADR-026)
 
@@ -87,4 +95,8 @@ is missing, rather than fail the lab's deployment.
 - The deny policy is off in `lf-eh`, so the broad option is refused by Azure RBAC (`AuthorizationFailed`), the
   labelled fallback, until WS2 runs `scripts/deploy.sh policy`.
 - Hosted agents with their own Entra IDs (build steps 5A) are not built: this is the prompt-agent fallback (5B),
-  which blueprint 9.4 permits; the lead records it in `docs/decisions.md`.
+  which blueprint 9.4 permits. Drafted for the lead in `docs/decisions.md` (D-001), with the four-role runner
+  identity (D-002, no v1.2 learning loop) and the deny-policy fallback (D-003).
+- Tracing: connect the twin's Application Insights to the project once in the Foundry portal (build steps 4.5), so
+  each `usage` event's `response_id` opens its trace.
+- After merge: tag the contracts `contracts-v1.1` on main and send `contracts/` to every workstream.

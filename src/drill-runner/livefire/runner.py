@@ -111,6 +111,8 @@ def build_run(args) -> Run:
     store = store_from_env()
     expires = (datetime.now(timezone.utc) + timedelta(hours=3)).isoformat()
     policy = AutonomyPolicy(mode=Mode(args.mode), prove_durable=not args.no_prove, expires_at=expires)
+    if args.stub:
+        policy.budgets.settle_s = 0          # a stub twin has no refresh interval to wait out
 
     image_repo = os.environ.get("IMAGE_REPO", "").strip()
     if args.stub:
@@ -133,8 +135,8 @@ def build_run(args) -> Run:
         sys.exit(f"refused: {cfg.drill_id} already has events; every drill needs a new ID")
     if args.stub:
         from .stubs import StubAgents, StubOps, StubRepo
-        ops, agents, repo = StubOps(log, delay=args.stub_delay), StubAgents(log, args.scenario, args.stub_delay), \
-            StubRepo(args.scenario)
+        ops, agents, repo = StubOps(log, delay=args.stub_delay), \
+            StubAgents(log, args.scenario, args.stub_delay, guardrail=args.stub_guardrail), StubRepo(args.scenario)
         meta = {"agents": {"planner": "stub", "engineer": "stub"}, "model_deployment": "stub", "agent_kind": "stub",
                 "prompt_sha256": {r: _sha256((AGENTS_DIR / f"{r}.md").read_text()) for r in ("planner", "engineer")}}
     else:
@@ -144,7 +146,8 @@ def build_run(args) -> Run:
         ops = HttpOps(os.environ["OPS_URL"], os.environ["OPS_KEY"], cfg.drill_id)
         agents = FoundryAgents(os.environ["FOUNDRY_PROJECT_ENDPOINT"], os.environ["PLANNER_AGENT"],
                                os.environ["ENGINEER_AGENT"])
-        repo = GitHubRepo(os.environ["GITHUB_REPO"], token_provider_from_env())
+        repo = GitHubRepo(os.environ["GITHUB_REPO"], token_provider_from_env(),
+                          workflows=cfg.policy.required_checks)
         meta = {"agents": {"planner": os.environ["PLANNER_AGENT"], "engineer": os.environ["ENGINEER_AGENT"]},
                 "model_deployment": os.environ.get("MODEL_DEPLOYMENT", ""),
                 "agent_kind": os.environ.get("AGENT_KIND", "prompt"),
@@ -163,6 +166,8 @@ def main(argv=None) -> int:
                    help="skip the second fault after the fix (shorter, weaker proof)")
     p.add_argument("--stub", action="store_true", help="stub Ops, agents and GitHub (G1)")
     p.add_argument("--stub-delay", type=float, default=1.0, help="seconds per stubbed step, so the UI can follow")
+    p.add_argument("--stub-guardrail", action="store_true",
+                   help="T-08 guardrail variant on stubs: Prompt Shields blocks the Planner (ends ESCALATED_SECURITY)")
     p.add_argument("--auto-approve", default="", help="comma-separated choices for tests, e.g. broad,narrow,deploy,open_pr")
     args = p.parse_args(argv)
     run = build_run(args)

@@ -52,6 +52,13 @@
           "minimum": 30,
           "title": "Agent Timeout S",
           "type": "integer"
+        },
+        "settle_s": {
+          "default": 15,
+          "maximum": 300,
+          "minimum": 0,
+          "title": "Settle S",
+          "type": "integer"
         }
       },
       "title": "Budgets",
@@ -101,6 +108,14 @@
       "default": true,
       "title": "Prove Durable",
       "type": "boolean"
+    },
+    "required_checks": {
+      "items": {
+        "type": "string"
+      },
+      "minItems": 1,
+      "title": "Required Checks",
+      "type": "array"
     },
     "budgets": {
       "$ref": "#/$defs/Budgets"

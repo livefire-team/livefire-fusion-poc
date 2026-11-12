@@ -450,6 +450,9 @@ See `docs/ADR.md` (latest: ADR-022).
   pushes to the lab registry; `security.yml` audits and scans the runner; `start-drill.sh` added. 62 drill-runner
   tests and 28 deploy-script tests pass; Bandit and Semgrep clean; `main.bicep` builds and lints clean. Still
   external: the `livefire-runner` GitHub App and its key, WS1's `start-load.sh`, WS2's deny policy (off).
+  Then the remaining G2/G3 code items: the Autonomous Twin broad test, `settle_s`, required checks recorded in the
+  policy and re-checked by the verdict, `guardrail.blocked` with filter and response_id, the stub T-08 guardrail
+  variant, the `lf-shields` policy name, and `docs/decisions.md` (D-001 to D-003, proposed for the lead). 67 tests.
 - 2026-11-11 (later): **WS3 `ca-mcp` deployed to `lf-eh`** (`scripts/deploy.sh apps`, image `mcp-server:sha-28271b8`,
   key mode, GitHub Apps). AI Search had no capacity in eastus2, so `SEARCH_LOCATION=eastus`
   (`srch-lf-wwssez2am6724-eastus`); index loaded 8 of 8 incidents (keyword only). Deployed smoke test passed with

@@ -20,6 +20,7 @@ def make(tmp_path, scenario="T-01", mode=Mode.SUPERVISED, prove=True, ops=None, 
     store = DirEventStore(str(tmp_path))
     drill = f"drill-test-{scenario.lower()}"
     policy = AutonomyPolicy(mode=mode, prove_durable=prove, expires_at=LATER)
+    policy.budgets.settle_s = 0                                  # stubs have no refresh interval to wait out
     for k, v in budgets.items():
         setattr(policy.budgets, k, v)
     cfg = DrillConfig(drill_id=drill, scenario=scenario, policy=policy, image_repo="ghcr.io/example/order-service")

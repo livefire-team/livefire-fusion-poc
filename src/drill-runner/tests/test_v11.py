@@ -177,3 +177,86 @@ def test_busy_reply_is_retried_once(monkeypatch):
 
 async def _no_sleep(_):
     return None
+
+
+# ---------------------------------------------------------------- G2: the Autonomous Twin broad test (guide Phase 5)
+
+def test_t02_autonomous_twin_attempts_broad_and_policy_denies(tmp_path):
+    run, store = make(tmp_path, mode=Mode.AUTONOMOUS_TWIN)
+    s = drill(run, store, ["open_pr"])
+    assert s.terminal == Verdict.VERIFIED, s.reason
+    seen = [(e["action"], e["result"]) for e in store.read(run.cfg.drill_id)]
+    # tested without a person, denied by the platform, then the pre-authorized narrow restore
+    assert seen.index(("approval.policy_test", "ok")) < seen.index(("recover.broad", "denied")) \
+        < seen.index(("fault.restore", "ok"))
+    events = store.read(run.cfg.drill_id)
+    assert [e["details"]["purpose"] for e in events if e["action"] == "approval.requested"] == ["acceptance"]
+    assert not any(e["action"] == "approval.preauthorized" and e["details"]["action"] == "grant_contributor_subscription"
+                   for e in events)
+
+
+def test_t02_autonomous_twin_ends_escalated_policy_when_broad_is_allowed(tmp_path):
+    run, store = make(tmp_path, scenario="T-02", mode=Mode.AUTONOMOUS_TWIN)
+    run.ops.broad_allowed = True
+    s = drill(run, store, ["open_pr"])
+    assert s.terminal == Verdict.ESCALATED_POLICY and "not denied" in s.reason
+
+
+# ---------------------------------------------------------------- G2: settle_s
+
+def test_settle_wait_comes_before_the_during_fault_check_and_the_durability_restore(tmp_path, monkeypatch):
+    import livefire.workflow as wf
+    run, store = make(tmp_path, mode=Mode.AUTONOMOUS_TWIN)
+    run.cfg.policy.budgets.settle_s = 7
+    slept = []
+    real_sleep = asyncio.sleep
+
+    async def sleep(seconds, *a, **k):
+        if seconds == 7:
+            slept.append(len(store.read(run.cfg.drill_id)))
+            return
+        await real_sleep(seconds, *a, **k)
+    monkeypatch.setattr(wf.asyncio, "sleep", sleep)
+    s = drill(run, store, ["open_pr"])
+    assert s.terminal == Verdict.VERIFIED, s.reason
+    events = store.read(run.cfg.drill_id)
+    assert len(slept) == 2                               # the fault, and the durability re-fault
+    first, second = slept
+    assert events[first - 1]["action"] == "wait.forbidden" and events[first]["action"] == "referee.during-fault"
+    assert events[second - 1]["action"] == "wait.forbidden" and events[second]["action"] == "fault.restore"
+
+
+# ---------------------------------------------------------------- G2: required checks, recomputable from events
+
+def test_verdict_requires_every_required_check_recorded_in_the_policy(tmp_path):
+    run, store = make(tmp_path, mode=Mode.AUTONOMOUS_TWIN)
+    original = run.repo.ci_status
+
+    async def ci_status(branch, commit):
+        status = await original(branch, commit)
+        if status.state == "pass":
+            status.checks = {"order-service.yml": "success"}          # security.yml missing from the record
+        return status
+    run.repo.ci_status = ci_status
+    s = drill(run, store, ["open_pr"])
+    assert s.terminal == Verdict.ESCALATED_EVIDENCE
+    assert not s.verdict_inputs.ci_gates_passed
+    assert any("lacks a required check: security.yml" in r for r in s.verdict_inputs.reasons)
+    start = next(e for e in store.read(run.cfg.drill_id) if e["action"] == "drill.start")
+    assert start["details"]["policy"]["required_checks"] == ["order-service.yml", "security.yml"]
+
+
+# ---------------------------------------------------------------- G3: the T-08 guardrail variant on stubs
+
+def test_t08_guardrail_variant_on_stubs_from_the_command_line(tmp_path, monkeypatch):
+    from livefire import runner
+    monkeypatch.setenv("EVENT_SOURCE", f"dir:{tmp_path}")
+    assert runner.main(["--drill-id", "drill-t08-guardrail", "--scenario", "T-08", "--stub", "--stub-delay", "0",
+                        "--stub-guardrail", "--mode", "Autonomous Twin"]) == 3
+    events = [json.loads(line) for line in (tmp_path / "drill-t08-guardrail" / "events.jsonl").read_text().splitlines()]
+    blocked = next(e for e in events if e["action"] == "guardrail.blocked")
+    assert blocked["details"] == {"agent": "planner", "filter": "indirect_attack", "response_id": "stub-response"}
+    assert next(e for e in events if e["action"] == "verdict")["result"] == "ESCALATED_SECURITY"
+    after = events[events.index(blocked):]
+    assert not any(e["action"].endswith(".tool_call") or e["action"] in ("fault.restore", "recover.broad")
+                   for e in after)

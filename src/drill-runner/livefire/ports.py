@@ -24,9 +24,9 @@ class DependencyError(RuntimeError):
 class GuardrailBlocked(RuntimeError):
     """v1.1: the model deployment's guardrail (Prompt Shields) blocked an agent call. Ends ESCALATED_SECURITY."""
 
-    def __init__(self, agent: str, detail: str):
+    def __init__(self, agent: str, detail: str, response_id: str = ""):
         super().__init__(f"the guardrail blocked the {agent}: {detail}")
-        self.agent, self.detail = agent, detail
+        self.agent, self.detail, self.response_id = agent, detail, response_id
 
 
 # ---------------------------------------------------------------- event log
@@ -141,8 +141,9 @@ class GitHubRepo:
     API = "https://api.github.com"
     WORKFLOW_FILES = ("order-service.yml", "security.yml")
 
-    def __init__(self, repo: str, token_provider, transport=None):
+    def __init__(self, repo: str, token_provider, transport=None, workflows: list[str] | None = None):
         self.repo, self.token = repo, token_provider
+        self.workflows = tuple(workflows or self.WORKFLOW_FILES)   # the policy's required_checks
         self.http = httpx.AsyncClient(base_url=self.API, timeout=30, transport=transport)
 
     async def _call(self, method: str, url: str, **kw) -> dict:
@@ -165,13 +166,13 @@ class GitHubRepo:
 
 
     async def ci_status(self, branch: str, commit: str) -> CiStatus:
-        """Require both order-service and security workflows to pass on the same commit."""
+        """Every required workflow (the policy's required_checks) must pass on this exact commit and branch."""
         pending = False
         failed = []
         urls = []
         checks: dict[str, str] = {}
 
-        for workflow in self.WORKFLOW_FILES:
+        for workflow in self.workflows:
             data = await self._call(
                 "GET",
                 f"/repos/{self.repo}/actions/workflows/{workflow}/runs",

@@ -264,6 +264,10 @@ class Budgets(Strict):
     approval_timeout_s: int = Field(default=900, ge=30)
     ci_timeout_s: int = Field(default=900, ge=60)
     agent_timeout_s: int = Field(default=600, ge=30)
+    # v1.1: after health shows the fault, the app may still be running on a value it read before the fault (its
+    # refresh interval, SECRET_REFRESH_SECONDS). Without this wait the during-fault check can pass, and the
+    # durability check can restore before the candidate ever met the fault, proving nothing.
+    settle_s: int = Field(default=15, ge=0, le=300)
 
 
 class AutonomyPolicy(Strict):
@@ -275,6 +279,9 @@ class AutonomyPolicy(Strict):
         default_factory=lambda: ["restore_kv_secrets_user", "deploy_candidate_to_twin"])
     min_confidence: float = Field(default=0.6, ge=0, le=1)
     prove_durable: bool = True        # after the fix passes, fault and restore again; the fix must recover alone
+    # v1.1: the CI workflows a candidate's exact commit must pass. Recorded in the policy on drill.start, so the
+    # verdict can be recomputed from the event log alone (ci.result carries each one's conclusion).
+    required_checks: list[str] = Field(default_factory=lambda: ["order-service.yml", "security.yml"], min_length=1)
     budgets: Budgets = Field(default_factory=Budgets)
     expires_at: str
 
