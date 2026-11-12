@@ -55,6 +55,9 @@ var harmFilters = [for f in ['Hate', 'Sexual', 'Violence', 'Selfharm']: [
   { name: f, blocking: true, enabled: true, severityThreshold: 'Medium', source: 'Completion' }
 ]]
 
+// An AI Services account takes one change at a time. Created side by side, the project failed with RequestConflict
+// ("another operation is in progress on the resource"), so every child waits for the one before it:
+// account, project, the two connections, Prompt Shields, the model.
 resource shields 'Microsoft.CognitiveServices/accounts/raiPolicies@2025-06-01' = if (promptShields == 'on') {
   parent: foundry
   name: 'lf-shields'
@@ -66,6 +69,7 @@ resource shields 'Microsoft.CognitiveServices/accounts/raiPolicies@2025-06-01' =
       { name: 'Indirect Attack', blocking: true, enabled: true, source: 'Prompt' }
     ])
   }
+  dependsOn: [plannerConnection, engineerConnection]
 }
 
 resource model 'Microsoft.CognitiveServices/accounts/deployments@2025-06-01' = {
@@ -77,6 +81,7 @@ resource model 'Microsoft.CognitiveServices/accounts/deployments@2025-06-01' = {
     versionUpgradeOption: 'NoAutoUpgrade'
     raiPolicyName: promptShields == 'on' ? shields.name : null
   }
+  dependsOn: [engineerConnection]   // and, through raiPolicyName, after Prompt Shields
 }
 
 // One connection per MCP endpoint. Each holds only its own endpoint's key, sent as the Authorization header.
@@ -102,6 +107,7 @@ resource engineerConnection 'Microsoft.CognitiveServices/accounts/projects/conne
     credentials: { keys: { Authorization: 'Bearer ${engineerMcpKey}' } }
     metadata: { type: 'generic_mcp' }
   }
+  dependsOn: [plannerConnection]
 }
 
 // The person running create_agents.py creates agent versions in this project only.
