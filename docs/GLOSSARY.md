@@ -7,8 +7,10 @@ One-sentence definitions of terms used in this project, added the first time eac
 | Access policy (Key Vault) | The older way to grant Key Vault access: a list on the vault itself saying which identity may do what (e.g. get and list secrets); the alternative is RBAC. |
 | ACR (Azure Container Registry) | Azure's private container registry; the lab's `acrlf<suffix>` holds every image the lab runs, pulled with the AcrPull-only `id-lf-acrpull` identity. |
 | ADR | Architecture Decision Record: a short note in `docs/ADR.md` saying what we decided, why, and what else we considered. |
+| Agent pin | The exact version of a Foundry agent, written `name:version` (e.g. `lf-planner:3`); `scripts/deploy.sh agents` sets `PLANNER_AGENT` and `ENGINEER_AGENT`, and the Drill Runner calls only those versions. |
 | AI Search (Azure AI Search) | Azure's search service; WS3 loads its private incident corpus into the `incidents` index so the Planner can search past incidents by keyword or meaning. |
 | Architecture note | `docs/architecture.md`: a one-page description of the order service's parts, request flow, settings and telemetry. |
+| azd environment | One named set of settings for `azd` (e.g. `lf-eh`, `lf-g3`), kept in `.azure/<name>/.env` on each machine; two machines can hold different copies of the same environment, which `scripts/lab.sh sync` compares with the lab. |
 | Azure Policy | Rules Azure checks on every create or change request, after the role check; a `deny` rule refuses the request even for an Owner (error `RequestDisallowedByPolicy`). |
 | Backlog (load generator) | The load generator's in-memory list of orders that failed and will be tried again later, with growing waits between tries. |
 | Bandit | A Python security linter that flags risky code (shell injection, weak crypto, hard-coded passwords); `security.yml` fails on its medium or high findings (ADR-020). |
@@ -19,6 +21,7 @@ One-sentence definitions of terms used in this project, added the first time eac
 | Cache | A copy of a value kept in memory so the app doesn't fetch it again every time; our secret provider caches the DB password. |
 | Candidate branch | A branch named `candidate/<drill-id>-<attempt>` holding a proposed change; CI builds it and publishes a `candidate-<drill-id>-<attempt>` image for a trial deploy. |
 | CI (continuous integration) | Automatically testing and building every change on a server (for us, GitHub Actions) so problems show up before merging. |
+| Clean lab | For G3: a second azd environment (`lf-g3`) built from nothing by `scripts/deploy.sh all`, so drills there prove the one-command rebuild while `lf-eh` stays up (ADR-025). |
 | Clone | Download a linked local copy of a GitHub repo, so you can work on it and push changes back. |
 | CodeQL | GitHub's code-security scanner that reads our Python code for security bugs; free on public repos, runs in `security.yml`. |
 | Commit | A saved snapshot of changes in git, with a message describing it. |
@@ -26,8 +29,13 @@ One-sentence definitions of terms used in this project, added the first time eac
 | Container registry | An online store for container images that platforms pull from; ours is GHCR. |
 | Conventional commit | A commit message that starts with its type, e.g. `feat:`, `fix:`, `docs:`, `chore:`, `test:`, `ci:`. |
 | Coverage (test coverage) | The share of code lines that the tests actually run, measured with `pytest --cov`; we require at least 80% on `src/order-service/app`. |
+| Curly quotes (smart quotes) | The typographic quotes ‘ ’ “ ” that chat apps and word processors put in place of plain ' and "; pasted into a setting they become part of its value, so `deploy.sh` refuses to provision with one. |
 | Custom role (Azure) | A role we define ourselves with only the actions it lists, e.g. "restart this one order app"; used so `id-lf-ops` gets no broader right than it needs. |
 | Data action (Azure) | A permission on the data inside a resource (e.g. append to a blob) rather than on the resource itself (e.g. change the storage account). The load generator's role has only two data actions: create a blob and append to one. |
+| Deployment history (Azure) | Azure's record of each `azd provision` in the subscription, with its parameters and outputs (secure ones blank); `lab.sh sync` reads the last successful one. |
+| Drill Runner | WS4's Container Apps Job `job-drill-runner`: one execution per drill; it runs the workflow, calls the agents and the Ops Service, and computes the verdict. |
+| Foundry (Microsoft Foundry) | Azure's service for AI models and agents; the project `proj-livefire` holds the `gpt-5.1` deployment and the Planner and Engineer agents. |
+| Prompt Shields | A Foundry content filter on the model deployment (`lf-shields`) that blocks jailbreak and indirect prompt-injection attempts; a block ends the drill `ESCALATED_SECURITY`. |
 | Role assignment condition (Azure ABAC) | An extra rule on a role assignment, checked on each request; e.g. "writes are allowed only to blobs named `drill-*/events.jsonl`". |
 | CVE | Common Vulnerabilities and Exposures: the public ID (like `CVE-2026-12345`) given to a known security flaw in a piece of software. |
 | Dependency override | A FastAPI feature (`app.dependency_overrides`) that swaps a dependency for a test stand-in; our tests use pytest's monkeypatch instead because `main.py` uses module-level objects. |
