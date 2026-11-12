@@ -19,21 +19,24 @@ from .workflow import DrillState, Run, build_workflow, cleanup, close
 
 RUNNER_VERSION = os.environ.get("RUNNER_VERSION", "dev")
 AGENTS_DIR = Path(__file__).resolve().parent.parent / "agents"
+# Stub runs only: placeholder write paths, the same ones WS3's laptop run uses. Live drills get the real list from
+# the job (ENGINEER_WRITE_PATHS, set from the azd value MCP_ENGINEER_WRITE_PATHS), never from this repo (ADR-004).
+STUB_WRITE_PATHS = "src/order-service/app/example.py,src/order-service/tests/test_*.py,runbooks/*.md"
 
 
-async def ask(run: Run, request: ApprovalRequest, poll_s: float) -> ApprovalDecision:
+async def ask(run: Run, question: ApprovalRequest, poll_s: float) -> ApprovalDecision:
     """Publishes the question for the Control Center and waits for the matching approval.decided event."""
-    run.log.write("approval.requested", "ok", request.model_dump())
+    run.log.write("approval.requested", "ok", question.model_dump())
     deadline = time.monotonic() + run.budgets.approval_timeout_s
     while time.monotonic() < deadline:
         for e in run.log.read():
             d = e.get("details") or {}
-            if e["action"] == "approval.decided" and d.get("request_id") == request.request_id:
+            if e["action"] == "approval.decided" and d.get("request_id") == question.request_id:
                 return ApprovalDecision.model_validate({k: d.get(k) for k in ApprovalDecision.model_fields if k in d})
         await asyncio.sleep(poll_s)
-    run.log.write("approval.decided", "timeout", {"request_id": request.request_id, "option_id": "timeout",
+    run.log.write("approval.decided", "timeout", {"request_id": question.request_id, "option_id": "timeout",
                                                   "approver": "nobody", "method": "timeout"})
-    return ApprovalDecision(request_id=request.request_id, option_id="timeout")
+    return ApprovalDecision(request_id=question.request_id, option_id="timeout")
 
 
 async def drive(run: Run, poll_s: float) -> DrillState:
@@ -110,21 +113,20 @@ def build_run(args) -> Run:
     policy = AutonomyPolicy(mode=Mode(args.mode), prove_durable=not args.no_prove, expires_at=expires)
 
     image_repo = os.environ.get("IMAGE_REPO", "").strip()
-
-    if not image_repo:
-        if args.stub:
-            image_repo = "ghcr.io/example/order-service"
-        else:
-            sys.exit(
-                "IMAGE_REPO is required for live drills. "
-                "Use the registry configured by WS2."
-            )
+    if args.stub:
+        image_repo = image_repo or "ghcr.io/example/order-service"
+        os.environ.setdefault("ENGINEER_WRITE_PATHS", STUB_WRITE_PATHS)
+    elif not image_repo:
+        sys.exit("IMAGE_REPO is required for live drills: <registry>/order-service, as the Ops Service deploys it")
+    elif not os.environ.get("ENGINEER_WRITE_PATHS", "").strip():
+        sys.exit("ENGINEER_WRITE_PATHS is required for live drills (the azd value MCP_ENGINEER_WRITE_PATHS)")
     cfg = DrillConfig(
         drill_id=args.drill_id,
         scenario=args.scenario,
         policy=policy,
         base_ref=os.environ.get("BASE_REF", "main"),
         image_repo=image_repo,
+        target_recovery_s=int(os.environ.get("TARGET_RECOVERY_S", "1800")),
     )
     log = EventLog(store, cfg.drill_id)
     if log.read():
@@ -133,7 +135,7 @@ def build_run(args) -> Run:
         from .stubs import StubAgents, StubOps, StubRepo
         ops, agents, repo = StubOps(log, delay=args.stub_delay), StubAgents(log, args.scenario, args.stub_delay), \
             StubRepo(args.scenario)
-        meta = {"agents": {"planner": "stub", "engineer": "stub"}, "model_deployment": "stub",
+        meta = {"agents": {"planner": "stub", "engineer": "stub"}, "model_deployment": "stub", "agent_kind": "stub",
                 "prompt_sha256": {r: _sha256((AGENTS_DIR / f"{r}.md").read_text()) for r in ("planner", "engineer")}}
     else:
         from .agents import FoundryAgents
@@ -145,6 +147,7 @@ def build_run(args) -> Run:
         repo = GitHubRepo(os.environ["GITHUB_REPO"], token_provider_from_env())
         meta = {"agents": {"planner": os.environ["PLANNER_AGENT"], "engineer": os.environ["ENGINEER_AGENT"]},
                 "model_deployment": os.environ.get("MODEL_DEPLOYMENT", ""),
+                "agent_kind": os.environ.get("AGENT_KIND", "prompt"),
                 "prompt_sha256": agents.instruction_hashes()}
     meta.update({"contract_version": CONTRACT_VERSION, "runner_version": RUNNER_VERSION})
     price = (float(os.environ.get("PRICE_INPUT_PER_MTOK", "0")), float(os.environ.get("PRICE_OUTPUT_PER_MTOK", "0")))

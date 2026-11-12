@@ -90,6 +90,11 @@ jobs:
           pip-audit --desc on \
             -r src/mcp-server/requirements.txt \
             -r src/mcp-server/requirements-dev.txt
+      - name: Audit the Drill Runner's pinned dependencies
+        run: |
+          pip-audit --desc on \
+            -r src/drill-runner/requirements.txt \
+            -r src/drill-runner/requirements-dev.txt
 
   # The same allowed-path check as order-service.yml's candidate-scope (ADR-020), here because this workflow runs on
   # every candidate push, also those order-service's paths filter skips. The check script comes from main.
@@ -203,3 +208,9 @@ jobs:
         run: |
           "$RUNNER_TEMP/trivy" image --scanners vuln \
             --severity HIGH,CRITICAL --ignore-unfixed --exit-code 1 mcp-server:scan
+      - name: Build the drill-runner image
+        run: docker build -t drill-runner:scan src/drill-runner
+      - name: Scan the drill-runner image
+        run: |
+          "$RUNNER_TEMP/trivy" image --scanners vuln \
+            --severity HIGH,CRITICAL --ignore-unfixed --exit-code 1 drill-runner:scan

@@ -442,6 +442,14 @@ Status values: not started | in progress | PR open | merged | blocked
 See `docs/ADR.md` (latest: ADR-022).
 
 ## Session log (newest first)
+- 2026-11-12: WS4 G2 integration completed on `feature/ws4-g2-integration` (PR #48, ADR-026). Merge leftovers
+  from PR #44 fixed (duplicate `image_repo`, Ops status checks, `ci_ok`); contracts v1.1 (scorecard, operational debt,
+  next-drill recommendation, `guardrail.blocked`); the Engineer write paths and the expected fix removed from tracked
+  prompts, fixtures, stubs and code (ADR-004): they are configuration now. Foundry (with Prompt Shields) and
+  `job-drill-runner` wired into `main.bicep` behind gates; `deploy.sh foundry|agents|runner`; `drill-runner.yml`
+  pushes to the lab registry; `security.yml` audits and scans the runner; `start-drill.sh` added. 62 drill-runner
+  tests and 28 deploy-script tests pass; Bandit and Semgrep clean; `main.bicep` builds and lints clean. Still
+  external: the `livefire-runner` GitHub App and its key, WS1's `start-load.sh`, WS2's deny policy (off).
 - 2026-11-11 (later): **WS3 `ca-mcp` deployed to `lf-eh`** (`scripts/deploy.sh apps`, image `mcp-server:sha-28271b8`,
   key mode, GitHub Apps). AI Search had no capacity in eastus2, so `SEARCH_LOCATION=eastus`
   (`srch-lf-wwssez2am6724-eastus`); index loaded 8 of 8 incidents (keyword only). Deployed smoke test passed with

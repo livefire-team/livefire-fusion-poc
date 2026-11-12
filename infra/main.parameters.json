@@ -112,6 +112,42 @@
     },
     "controlCenterTargetRecoveryS": {
       "value": "${CONTROL_CENTER_TARGET_RECOVERY_S=0}"
+    },
+    "modelName": {
+      "value": "${MODEL_NAME=}"
+    },
+    "modelVersion": {
+      "value": "${MODEL_VERSION=}"
+    },
+    "modelCapacity": {
+      "value": "${MODEL_CAPACITY=50}"
+    },
+    "promptShields": {
+      "value": "${PROMPT_SHIELDS=on}"
+    },
+    "plannerAgent": {
+      "value": "${PLANNER_AGENT=}"
+    },
+    "engineerAgent": {
+      "value": "${ENGINEER_AGENT=}"
+    },
+    "runnerImage": {
+      "value": "${RUNNER_IMAGE=}"
+    },
+    "runnerGithubAuth": {
+      "value": "${RUNNER_GITHUB_AUTH=app}"
+    },
+    "runnerGithubAppId": {
+      "value": "${RUNNER_GITHUB_APP_ID=}"
+    },
+    "runnerGithubInstallationId": {
+      "value": "${RUNNER_GITHUB_INSTALLATION_ID=}"
+    },
+    "targetRecoveryS": {
+      "value": "${TARGET_RECOVERY_S=1800}"
+    },
+    "runnerDefaultMode": {
+      "value": "${RUNNER_DEFAULT_MODE=Autonomous Twin}"
     }
   }
 }

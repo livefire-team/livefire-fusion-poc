@@ -1,48 +1,148 @@
 name: drill-runner
 
+# WS4's Drill Runner. Pull requests run `test` and `image`. Pushes to main also `publish` the exact smoke-tested image to
+# GHCR as :sha-<short sha>, and `acr` pushes it to the lab's private registry as :sha-<full sha> when the acr-push
+# environment has been set up for the current lab (scripts/deploy.sh github), which is what scripts/deploy.sh images
+# and job-drill-runner use (ADR-026). Actions are pinned to full commit SHAs (ADR-011). Secrets, dependency and image
+# scans for this service run in security.yml (ADR-013).
 on:
   push:
     branches: [main]
-    paths: ['src/drill-runner/**', 'contracts/**', '.github/workflows/drill-runner.yml']
+    paths: ['src/drill-runner/**', 'contracts/schemas/**', 'scripts/create_agents.py', 'scripts/export_schemas.py',
+            '.github/workflows/drill-runner.yml']
   pull_request:
-    paths: ['src/drill-runner/**', 'contracts/**']
+    paths: ['src/drill-runner/**', 'contracts/schemas/**', 'scripts/create_agents.py', 'scripts/export_schemas.py',
+            '.github/workflows/drill-runner.yml']
   workflow_dispatch:
 
 permissions:
   contents: read
-  packages: write
+
+concurrency:
+  group: drill-runner-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
-  test-build-push:
+  test:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
     steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
         with:
           python-version: '3.12'
-
+      - name: Install dependencies
+        run: pip install -r src/drill-runner/requirements-dev.txt
+      # Includes the stale-schema test: contracts/schemas must match the code
       - name: Contract, policy and workflow tests (all stubs, no Azure)
-        run: |
-          pip install -r src/drill-runner/requirements-dev.txt
-          cd src/drill-runner && pytest -q
-
-      - name: Agent definitions build
+        working-directory: src/drill-runner
+        run: pytest -q
+      - name: Agent definitions build (placeholder write paths; the real ones are configuration, ADR-004)
         run: python scripts/create_agents.py --dry-run > /dev/null
+      - name: Bandit and Semgrep (own virtual environment, so they can't change the app's dependencies)
+        run: |
+          python -m venv "$RUNNER_TEMP/scan"
+          "$RUNNER_TEMP/scan/bin/pip" install -q bandit==1.9.4 semgrep==1.184.0
+          "$RUNNER_TEMP/scan/bin/bandit" -q -r src/drill-runner/livefire
+          "$RUNNER_TEMP/scan/bin/semgrep" scan --config p/python --config p/security-audit --metrics off --error \
+            --quiet src/drill-runner/livefire
 
-      - name: Image name (GHCR needs lowercase)
-        run: echo "IMAGE=ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/drill-runner" >> "$GITHUB_ENV"
+  image:
+    needs: test
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    outputs:
+      image-id: ${{ steps.save.outputs.image-id }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Build image
+        run: docker build -t drill-runner:ci src/drill-runner
+      # One whole stubbed drill inside the image: no Azure, Foundry or GitHub. It must end VERIFIED.
+      - name: Smoke test
+        run: |
+          docker run --rm -e EVENT_SOURCE=dir:/tmp/evidence drill-runner:ci --drill-id drill-ci-0001 --stub \
+            --stub-delay 0 --mode "Autonomous Twin" --auto-approve open_pr | tee smoke.txt
+          grep -q "drill-ci-0001: VERIFIED" smoke.txt
+      - name: Save the tested image
+        id: save
+        run: |
+          echo "image-id=$(docker image inspect --format '{{.Id}}' drill-runner:ci)" >> "$GITHUB_OUTPUT"
+          docker save drill-runner:ci | gzip > drill-runner-image.tar.gz
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: drill-runner-image
+          path: drill-runner-image.tar.gz
+          retention-days: 1
+          compression-level: 0
+          if-no-files-found: error
 
-      - uses: docker/login-action@v3
-        if: github.event_name != 'pull_request'
+  publish:
+    needs: image
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: drill-runner-image
+      - name: Load the tested image and check it is the same one
+        env:
+          EXPECTED_ID: ${{ needs.image.outputs.image-id }}
+        run: |
+          gunzip -c drill-runner-image.tar.gz | docker load
+          [ "$(docker image inspect --format '{{.Id}}' drill-runner:ci)" = "$EXPECTED_ID" ] || { echo "image ID mismatch"; exit 1; }
+      - name: Log in to GHCR
+        uses: docker/login-action@81c6f93d4bc991e510b342a00b419b3bb4efc5c6 # v4.7.0
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Push :sha-<short sha>
+        run: |
+          IMAGE="ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/drill-runner:sha-${GITHUB_SHA::7}"
+          docker tag drill-runner:ci "$IMAGE" && docker push "$IMAGE"
 
-      - uses: docker/build-push-action@v6
+  acr:
+    needs: image
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment: acr-push
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
-          context: src/drill-runner
-          push: ${{ github.event_name != 'pull_request' }}
-          tags: |
-            ${{ env.IMAGE }}:sha-${{ github.sha }}
+          name: drill-runner-image
+      - name: Push :sha-<full sha> to the lab registry (OIDC, no stored secret)
+        env:
+          EXPECTED_ID: ${{ needs.image.outputs.image-id }}
+          AZURE_CLIENT_ID: ${{ vars.AZURE_CLIENT_ID }}
+          AZURE_TENANT_ID: ${{ vars.AZURE_TENANT_ID }}
+          AZURE_SUBSCRIPTION_ID: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+          ACR_NAME: ${{ vars.ACR_NAME }}
+          ACR_SERVER: ${{ vars.ACR_SERVER }}
+        run: |
+          if [ -z "$ACR_NAME" ]; then echo "no lab registry configured; run scripts/deploy.sh github"; exit 0; fi
+          gunzip -c drill-runner-image.tar.gz | docker load
+          [ "$(docker image inspect --format '{{.Id}}' drill-runner:ci)" = "$EXPECTED_ID" ] || { echo "image ID mismatch"; exit 1; }
+          token=$(curl -sSf -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
+            "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=api://AzureADTokenExchange" | jq -r .value)
+          az login --service-principal -u "$AZURE_CLIENT_ID" -t "$AZURE_TENANT_ID" --federated-token "$token" \
+            --allow-no-subscriptions -o none
+          az account set --subscription "$AZURE_SUBSCRIPTION_ID"
+          az acr login -n "$ACR_NAME"
+          docker tag drill-runner:ci "$ACR_SERVER/drill-runner:sha-$GITHUB_SHA"
+          docker push "$ACR_SERVER/drill-runner:sha-$GITHUB_SHA"

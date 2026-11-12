@@ -2,12 +2,17 @@
 param location string
 @description('Resource ID of the control Container Apps environment (WS2)')
 param environmentId string
-@description('Image, e.g. ghcr.io/<org>/drill-runner:sha-<commit>')
+@description('Image in the private registry: <registry>/drill-runner:sha-<40 hex>')
 param image string
+@description('The private registry and its pull identity (WS2 control.bicep, id-lf-acrpull; ADR-024/026)')
+param registryServer string
+param pullIdentityId string
 @description('Control Key Vault holding ops-runner-key and the runner GitHub credential')
 param keyVaultName string
 param evidenceAccountName string
 param evidenceContainer string = 'evidence'
+@description('https://<account>.blob.core.windows.net/evidence, from control.bicep')
+param evidenceBlobUrl string
 @description('foundry.bicep outputs')
 param foundryName string
 param projectName string
@@ -24,11 +29,18 @@ param githubRepo string
 param githubAuth string = 'app'
 param githubAppId string = ''
 param githubInstallationId string = ''
-@description('ghcr.io/<owner>/order-service, where CI pushes candidate images')
+@description('<registry>/order-service: where CI pushes candidate images as :sha-<40 hex>, which the Ops Service deploys')
 param imageRepo string
 param baseRef string = 'main'
+@description('The files a candidate may change (the azd value MCP_ENGINEER_WRITE_PATHS; never in this repo, ADR-004)')
+param engineerWritePaths string
+@description('v1.1: the scenario recovery target in seconds, written on drill.start (blueprint 1.6)')
+param targetRecoveryS string = '1800'
+@description('prompt (fallback, build steps 5B) or hosted (5A)')
+@allowed(['prompt', 'hosted'])
+param agentKind string = 'prompt'
 @allowed(['Advisory', 'Supervised', 'Autonomous Twin'])
-param defaultMode string = 'Supervised'
+param defaultMode string = 'Autonomous Twin'
 @description('USD per million tokens, from the Azure pricing page for the deployed model; 0 shows no cost')
 param priceInputPerMtok string = '0'
 param priceOutputPerMtok string = '0'
@@ -138,11 +150,12 @@ resource job 'Microsoft.App/jobs@2024-03-01' = {
   location: location
   identity: {
     type: 'UserAssigned'
-    userAssignedIdentities: { '${identity.id}': {} }
+    userAssignedIdentities: { '${identity.id}': {}, '${pullIdentityId}': {} }
   }
   properties: {
     environmentId: environmentId
     configuration: {
+      registries: [{ server: registryServer, identity: pullIdentityId }]
       triggerType: 'Manual'
       replicaTimeout: 7200 // seconds; above the drill's own 5,400 s budget
       replicaRetryLimit: 0 // never rerun a drill automatically
@@ -160,7 +173,7 @@ resource job 'Microsoft.App/jobs@2024-03-01' = {
           resources: { cpu: json('0.5'), memory: '1Gi' }
           env: concat([
             { name: 'AZURE_CLIENT_ID', value: identity.properties.clientId }
-            { name: 'EVENT_SOURCE', value: 'blob:${evidenceAccount.properties.primaryEndpoints.blob}/${evidenceContainer}' }
+            { name: 'EVENT_SOURCE', value: 'blob:${evidenceBlobUrl}' }
             { name: 'OPS_URL', value: opsUrl }
             { name: 'OPS_KEY', secretRef: 'ops-key' }
             { name: 'FOUNDRY_PROJECT_ENDPOINT', value: projectEndpoint }
@@ -170,6 +183,9 @@ resource job 'Microsoft.App/jobs@2024-03-01' = {
             { name: 'GITHUB_REPO', value: githubRepo }
             { name: 'IMAGE_REPO', value: imageRepo }
             { name: 'BASE_REF', value: baseRef }
+            { name: 'ENGINEER_WRITE_PATHS', value: engineerWritePaths }
+            { name: 'TARGET_RECOVERY_S', value: targetRecoveryS }
+            { name: 'AGENT_KIND', value: agentKind }
             { name: 'MODE', value: defaultMode }
             { name: 'PROVE_DURABLE', value: '1' }
             { name: 'RUNNER_VERSION', value: last(split(image, ':')) }

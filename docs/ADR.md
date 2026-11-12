@@ -470,6 +470,32 @@ Status values: Proposed | Accepted | Superseded | Rejected
   backends are tested only in the lab). WS4's `PROTECTED_PATHS` should match the longer protected list. The standalone repo is retired once this merges.
 - **Implemented in:** this PR (`src/mcp-server/`, `infra/modules/mcp*.bicep`, `.github/workflows/mcp-server.yml`)
 
+## ADR-026: WS4's Foundry and Drill Runner deploy with the platform, in two gated passes
+- **Date:** 2026-11-12
+- **Status:** Proposed (WS4); needs WS2's review of the `main.bicep` and `deploy.sh` changes. Numbered after WS2's
+  planned ADR-023 to ADR-025; it covers what WS2's planned ADR-024 describes, so WS2's PR 2 can rebase on it.
+- **Context:** WS4 came in as a pasteable snippet (`infra/main.ws4-snippet.bicep`) that didn't compile against
+  `main.bicep` (`githubRepo`), read `mcp.outputs` though `mcp` is conditional, had required parameters every
+  team's environment would lack, and pulled the runner from GHCR with no registry identity. PR #44 also put the
+  Engineer's write paths and the expected fix in tracked prompts, fixtures and code (ADR-004).
+- **Options considered:** (1) WS4 deploys from its own template; (2) the snippet as it was; (3) WS4 in `main.bicep`
+  behind gates, like ca-mcp (ADR-022).
+- **Decision:** Option 3. Foundry deploys only with ca-mcp and once `MODEL_NAME` and `MODEL_VERSION` are set; it
+  reads the two MCP keys from the control vault at deploy time. `job-drill-runner` deploys once the agents are
+  pinned and `RUNNER_IMAGE` is set; `deploy.sh` leaves it out, naming what's missing, until `ops-runner-key` and the
+  runner's GitHub credential are in the vault. The job pulls `drill-runner:sha-<40 hex>` from the lab registry with
+  `id-lf-acrpull`; `drill-runner.yml` pushes it there like the other images. `deploy.sh foundry`, `agents` and
+  `runner` run the two passes. The model deployment carries Prompt Shields (jailbreak and indirect-attack filters
+  blocking; `PROMPT_SHIELDS=off` only if the lab rejects it); a block ends the drill ESCALATED_SECURITY. Contracts
+  v1.1 (additive) add the scorecard, the operational-debt record and the next-drill recommendation. The Engineer's
+  write paths are configuration only (`ENGINEER_WRITE_PATHS`, from `MCP_ENGINEER_WRITE_PATHS`), filled into the
+  agents' instructions when a version is created; tracked prompts, fixtures and stubs name no fix.
+- **Consequences:** Every environment deploys unchanged until it sets the WS4 values. The runner needs one more
+  GitHub App (`livefire-runner`) or token. The pull-request title no longer describes the fix. What PR #44 already
+  put in `main`'s history stays there: removing it needs a history rewrite, which the lead decides.
+- **Implemented in:** PR #48 (`infra/modules/foundry.bicep`, `drill-runner.bicep`, `main.bicep`, `scripts/deploy.sh`,
+  `.github/workflows/drill-runner.yml`, `src/drill-runner/`)
+
 ## ADR-00N: <short title>
 - **Date:**
 - **Status:** Proposed

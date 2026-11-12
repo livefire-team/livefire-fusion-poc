@@ -16,6 +16,9 @@ param engineerMcpKey string
 param principalId string
 @allowed(['User', 'ServicePrincipal'])
 param principalType string = 'User'
+@description('v1.1 (guide 7.2): Prompt Shields on the model deployment. off only if the lab rejects the policy')
+@allowed(['on', 'off'])
+param promptShields string = 'on'
 
 var suffix = uniqueString(resourceGroup().id)
 var azureAiUserRoleId = '53ca6127-db72-4b80-b1b0-d745d6d5456d'
@@ -45,6 +48,26 @@ resource project 'Microsoft.CognitiveServices/accounts/projects@2025-06-01' = {
   }
 }
 
+// Prompt Shields (blueprint 7.2): the jailbreak and indirect-attack filters block, alongside the default content
+// filters at their default thresholds. A blocked call ends the drill ESCALATED_SECURITY (guardrail.blocked).
+var harmFilters = [for f in ['Hate', 'Sexual', 'Violence', 'Selfharm']: [
+  { name: f, blocking: true, enabled: true, severityThreshold: 'Medium', source: 'Prompt' }
+  { name: f, blocking: true, enabled: true, severityThreshold: 'Medium', source: 'Completion' }
+]]
+
+resource shields 'Microsoft.CognitiveServices/accounts/raiPolicies@2025-06-01' = if (promptShields == 'on') {
+  parent: foundry
+  name: 'livefire-prompt-shields'
+  properties: {
+    basePolicyName: 'Microsoft.DefaultV2'
+    mode: 'Blocking'
+    contentFilters: concat(flatten(harmFilters), [
+      { name: 'Jailbreak', blocking: true, enabled: true, source: 'Prompt' }
+      { name: 'Indirect Attack', blocking: true, enabled: true, source: 'Prompt' }
+    ])
+  }
+}
+
 resource model 'Microsoft.CognitiveServices/accounts/deployments@2025-06-01' = {
   parent: foundry
   name: modelName
@@ -52,6 +75,7 @@ resource model 'Microsoft.CognitiveServices/accounts/deployments@2025-06-01' = {
   properties: {
     model: { format: 'OpenAI', name: modelName, version: modelVersion }
     versionUpgradeOption: 'NoAutoUpgrade'
+    raiPolicyName: promptShields == 'on' ? shields.name : null
   }
 }
 
@@ -95,3 +119,4 @@ output foundryName string = foundry.name
 output projectName string = project.name
 output projectEndpoint string = 'https://${foundry.name}.services.ai.azure.com/api/projects/${project.name}'
 output modelDeployment string = model.name
+output promptShields string = promptShields

@@ -6,8 +6,10 @@
   python scripts/create_agents.py --verify lf-planner:3 lf-engineer:2
                                                 check that pinned versions still match the YAML
 
-Needs FOUNDRY_PROJECT_ENDPOINT, MODEL_DEPLOYMENT and MCP_URL, and Azure AI User on the project.
-Agents are only ever changed here, never in the portal, so every version is in git.
+Needs FOUNDRY_PROJECT_ENDPOINT, MODEL_DEPLOYMENT, MCP_URL and ENGINEER_WRITE_PATHS, and Azure AI User on the project.
+Agents are only ever changed here, never in the portal, so every version is in git. The instructions in git carry
+an {allowed_paths} placeholder: the write paths are filled in from ENGINEER_WRITE_PATHS (the azd value
+MCP_ENGINEER_WRITE_PATHS) when a version is created, so they live in Foundry and never in this repo (ADR-004).
 """
 import argparse
 import hashlib
@@ -27,9 +29,18 @@ from livefire.agents import strict_schema  # noqa: E402
 ROLES = {"planner": "planner.yaml", "engineer": "engineer.yaml"}
 
 
-def load(role: str) -> tuple[dict, str]:
+def load(role: str, write_paths: str) -> tuple[dict, str]:
     spec = yaml.safe_load((RUNNER / "agents" / ROLES[role]).read_text())
-    return spec, (RUNNER / "agents" / spec["instructions_file"]).read_text()
+    text = (RUNNER / "agents" / spec["instructions_file"]).read_text()
+    return spec, text.replace("{allowed_paths}", write_paths)
+
+
+def write_paths_from_env() -> str:
+    os.environ.setdefault("ENGINEER_WRITE_PATHS", os.environ.get("MCP_ENGINEER_WRITE_PATHS", ""))
+    patterns = contracts.engineer_write_paths()      # refuses unsafe or protected patterns
+    if not patterns:
+        sys.exit("set ENGINEER_WRITE_PATHS (or MCP_ENGINEER_WRITE_PATHS): the files a candidate may change")
+    return ", ".join(patterns)
 
 
 def definition(spec: dict, instructions: str, model: str, mcp_url: str, connection_id: str):
@@ -63,19 +74,20 @@ def main() -> int:
 
     if args.dry_run:
         for role in ROLES:
-            spec, instructions = load(role)
+            spec, instructions = load(role, "<ENGINEER_WRITE_PATHS>")
             d = definition(spec, instructions, model, mcp_url, f"<id of {spec['mcp']['connection']}>")
             print(json.dumps({"agent_name": spec["name"], "definition": d.as_dict()}, indent=2)[:4000])
         return 0
 
     from azure.ai.projects import AIProjectClient
     from azure.identity import DefaultAzureCredential
+    paths = write_paths_from_env()
     project = AIProjectClient(endpoint=os.environ["FOUNDRY_PROJECT_ENDPOINT"], credential=DefaultAzureCredential())
 
     if args.verify:
         ok = True
         for role, pin in zip(ROLES, args.verify):
-            spec, instructions = load(role)
+            spec, instructions = load(role, paths)
             name, _, version = pin.partition(":")
             got = project.agents.get_version(agent_name=name, agent_version=version).definition
             tool = got.tools[0]
@@ -93,7 +105,7 @@ def main() -> int:
         return 0 if ok else 1
 
     for role in ROLES:
-        spec, instructions = load(role)
+        spec, instructions = load(role, paths)
         connection = project.connections.get(spec["mcp"]["connection"])
         version = project.agents.create_version(
             agent_name=spec["name"], description=spec["description"],

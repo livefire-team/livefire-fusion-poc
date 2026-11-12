@@ -21,6 +21,14 @@ class DependencyError(RuntimeError):
     """A required dependency failed or returned an invalid contract. Ends the drill as ESCALATED_DEPENDENCY."""
 
 
+class GuardrailBlocked(RuntimeError):
+    """v1.1: the model deployment's guardrail (Prompt Shields) blocked an agent call. Ends ESCALATED_SECURITY."""
+
+    def __init__(self, agent: str, detail: str):
+        super().__init__(f"the guardrail blocked the {agent}: {detail}")
+        self.agent, self.detail = agent, detail
+
+
 # ---------------------------------------------------------------- event log
 
 class EventLog:
@@ -65,28 +73,10 @@ class HttpOps:
                 if r.status_code in (401, 403):
                     raise DependencyError(f"Ops Service rejected the runner's key ({r.status_code})")
                 if r.status_code == 422:
-                    return OpsResult(action=action, result="refused", details=r.json())
-
-                if r.status_code in (401, 403):
-                    raise DependencyError(
-                        f"Ops Service rejected the runner's key ({r.status_code})"
-                    )
-
-                if r.status_code == 409:
-                    payload = r.json()
-                    if payload.get("result") == "stopped":
-                        raise DependencyError(
-                            f"Ops action {action} was stopped; refusing to retry"
-                        )
-
-                if r.status_code == 422:
-                    return OpsResult(
-                        action=action,
-                        result="refused",
-                        details=r.json(),
-                    )
-
-                r.raise_for_status()
+                    return OpsResult(action=action, result="refused", details=r.json().get("details", {}))
+                if r.status_code == 409 and r.json().get("result") == "stopped":
+                    raise DependencyError(f"Ops action {action} was stopped by the kill switch; not retried")
+                r.raise_for_status()                      # 409 busy and 503 error: retried once below
                 return OpsResult.model_validate(r.json())
             except (httpx.TransportError, httpx.HTTPStatusError) as exc:
                 last = exc
@@ -135,6 +125,7 @@ class CiStatus:
     commit: str = ""               # full head SHA the run tested
     url: str = ""
     failed: list[dict] = field(default_factory=list)
+    checks: dict[str, str] = field(default_factory=dict)   # v1.1: workflow file -> conclusion (or pending/missing)
 
 
 class RepoPort(Protocol):
@@ -148,7 +139,6 @@ class GitHubRepo:
     """The runner's own GitHub credential: read CI and diffs, open one pull request. It cannot push or merge."""
 
     API = "https://api.github.com"
-    WORKFLOW_FILE = "order-service.yml"
     WORKFLOW_FILES = ("order-service.yml", "security.yml")
 
     def __init__(self, repo: str, token_provider, transport=None):
@@ -179,6 +169,7 @@ class GitHubRepo:
         pending = False
         failed = []
         urls = []
+        checks: dict[str, str] = {}
 
         for workflow in self.WORKFLOW_FILES:
             data = await self._call(
@@ -203,6 +194,7 @@ class GitHubRepo:
 
             if run is None:
                 pending = True
+                checks[workflow] = "missing"
                 continue
 
             run_url = run.get("html_url", "")
@@ -211,9 +203,11 @@ class GitHubRepo:
 
             if run.get("status") != "completed":
                 pending = True
+                checks[workflow] = "pending"
                 continue
 
             conclusion = run.get("conclusion")
+            checks[workflow] = conclusion or "unknown"
 
             if conclusion == "success":
                 continue
@@ -260,6 +254,7 @@ class GitHubRepo:
             commit=commit,
             url=", ".join(urls),
             failed=failed,
+            checks=checks,
         )
 
 

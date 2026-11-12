@@ -15,7 +15,7 @@ from . import evidence
 from .contracts import (ApprovalDecision, ApprovalOption, ApprovalRequest, ChangeReport, DrillConfig, RecoveryOptions,
                         RemediationBrief, Verdict, VerdictInputs)
 from .policy import check_brief, check_changed_paths, check_options, check_secrets, compute_verdict, gate
-from .ports import AgentPort, DependencyError, EventLog, OpsPort, RepoPort, Usage
+from .ports import AgentPort, DependencyError, EventLog, GuardrailBlocked, OpsPort, RepoPort, Usage
 
 
 class BudgetExceeded(RuntimeError):
@@ -77,19 +77,11 @@ class Run:
         try:
             async with asyncio.timeout(timeout or self.budgets.wait_s + 60):
                 result = await self.ops.call(action, **params)
-
-                if action in ("reset_twin", "kill") and result.result != "ok":
-                    raise DependencyError(
-                        f"Ops action {action} returned {result.result}"
-                    )
-
-                return result
-
         except TimeoutError as exc:
-            raise DependencyError(
-                f"Ops action {action} did not finish in time"
-            ) from exc
-
+            raise DependencyError(f"Ops action {action} did not finish in time") from exc
+        if action in ("reset_twin", "kill") and result.result != "ok":
+            raise DependencyError(f"Ops action {action} returned {result.result}")
+        return result
 
     def charge(self, usage: Usage) -> None:
         cost = (usage.input_tokens * self.price_per_mtok[0] + usage.output_tokens * self.price_per_mtok[1]) / 1e6
@@ -144,6 +136,9 @@ class Stage(Executor):
             s.terminal, s.reason = Verdict.ESCALATED_BUDGET, str(exc)
         except DependencyError as exc:
             s.terminal, s.reason = Verdict.ESCALATED_DEPENDENCY, str(exc)
+        except GuardrailBlocked as exc:                    # v1.1: Prompt Shields stopped an agent call
+            self.run_.log.write("guardrail.blocked", "blocked", {"agent": exc.agent, "detail": exc.detail[:200]})
+            s.terminal, s.reason = Verdict.ESCALATED_SECURITY, str(exc)
         s.route = "close"
         return False, None
 
@@ -174,6 +169,7 @@ class Prepare(Stage):
     async def run(self, s):
         r = self.run_
         r.log.write("drill.start", "ok", {"mode": r.cfg.policy.mode.value, "scenario": r.cfg.scenario,
+                                          "target_recovery_s": r.cfg.target_recovery_s,
                                           "policy": r.cfg.policy.model_dump(mode="json"), **r.meta})
         await r.op("reset_twin")
         if (await r.op("wait_for", state="ok", timeout_s=r.budgets.wait_s)).result != "ok":
@@ -306,7 +302,8 @@ class Ci(Stage):
                 raise Stop(Verdict.ESCALATED_DEPENDENCY, "CI did not finish in time")
             await asyncio.sleep(self.poll_s)
         r.log.write("ci.result", status.state, {"attempt": s.attempt, "branch": branch, "commit": commit,
-                                                "run_url": status.url, "failed": status.failed})
+                                                "run_url": status.url, "failed": status.failed,
+                                                "checks": status.checks})
         if status.state == "pass":
             s.commit, s.ci_url, s.image = commit, status.url, f"{r.cfg.image_repo}:sha-{commit}"
             s.route = "deploy"
@@ -446,7 +443,7 @@ class Accept(Stage):
             r.log.write("package.pr", "rejected", {"branch": report.branch, "approver": decision.approver})
             return
         try:
-            title = f"[{r.cfg.drill_id}] Recover from cached Key Vault failures (candidate {s.attempt})"
+            title = f"[{r.cfg.drill_id}] Durable fix from LiveFire drill (candidate {s.attempt})"
             s.pr_url = await r.repo.open_pull_request(report.branch, title, evidence.pull_request_body(r, s))
             r.log.write("package.pr", "ok", {"url": s.pr_url, "branch": report.branch, "approver": decision.approver})
         except DependencyError as exc:

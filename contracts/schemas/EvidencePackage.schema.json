@@ -107,6 +107,67 @@
       "title": "Budgets",
       "type": "object"
     },
+    "DebtItem": {
+      "additionalProperties": false,
+      "description": "v1.1: one operational-debt finding (blueprint 2.2). Composed by the workflow, never by a model.",
+      "properties": {
+        "kind": {
+          "enum": [
+            "application-resilience",
+            "regression-coverage",
+            "runbook",
+            "knowledge"
+          ],
+          "title": "Kind",
+          "type": "string"
+        },
+        "finding": {
+          "maxLength": 400,
+          "minLength": 1,
+          "title": "Finding",
+          "type": "string"
+        },
+        "evidence_refs": {
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 8,
+          "minItems": 1,
+          "title": "Evidence Refs",
+          "type": "array"
+        },
+        "artifact": {
+          "maxLength": 300,
+          "title": "Artifact",
+          "type": "string"
+        },
+        "residual_risk": {
+          "maxLength": 400,
+          "title": "Residual Risk",
+          "type": "string"
+        },
+        "status": {
+          "enum": [
+            "candidate",
+            "proposed",
+            "recorded",
+            "unresolved"
+          ],
+          "title": "Status",
+          "type": "string"
+        }
+      },
+      "required": [
+        "kind",
+        "finding",
+        "evidence_refs",
+        "artifact",
+        "residual_risk",
+        "status"
+      ],
+      "title": "DebtItem",
+      "type": "object"
+    },
     "Mode": {
       "enum": [
         "Advisory",
@@ -115,6 +176,119 @@
       ],
       "title": "Mode",
       "type": "string"
+    },
+    "Scorecard": {
+      "additionalProperties": false,
+      "description": "v1.1, blueprint 1.6: computed only from events.jsonl (including WS1's metrics.orders).",
+      "properties": {
+        "target_recovery_s": {
+          "title": "Target Recovery S",
+          "type": "integer"
+        },
+        "verified_recovery_s": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Verified Recovery S"
+        },
+        "false_green_s": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "False Green S"
+        },
+        "failed_orders": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Failed Orders"
+        },
+        "peak_backlog": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Peak Backlog"
+        },
+        "orders_per_min_before": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Orders Per Min Before"
+        },
+        "orders_per_min_after": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Orders Per Min After"
+        },
+        "decision_latency_s": {
+          "title": "Decision Latency S",
+          "type": "number"
+        },
+        "policy_denials": {
+          "title": "Policy Denials",
+          "type": "integer"
+        },
+        "durable_improvements": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Durable Improvements",
+          "type": "array"
+        },
+        "cost": {
+          "additionalProperties": {
+            "type": "number"
+          },
+          "title": "Cost",
+          "type": "object"
+        }
+      },
+      "required": [
+        "target_recovery_s",
+        "verified_recovery_s",
+        "false_green_s",
+        "failed_orders",
+        "peak_backlog",
+        "orders_per_min_before",
+        "orders_per_min_after",
+        "decision_latency_s",
+        "policy_denials",
+        "durable_improvements",
+        "cost"
+      ],
+      "title": "Scorecard",
+      "type": "object"
     },
     "Verdict": {
       "description": "Terminal states (blueprint A.7). Only the workflow sets one; no model can.",
@@ -184,7 +358,7 @@
   "description": "evidence/<drill_id>/package.json: the sealed summary of one drill (blueprint 8.1, A.9).",
   "properties": {
     "contract_version": {
-      "default": "1.0",
+      "default": "1.1",
       "title": "Contract Version",
       "type": "string"
     },
@@ -303,6 +477,29 @@
       },
       "title": "Residual Risks",
       "type": "array"
+    },
+    "scorecard": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/Scorecard"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "operational_debt": {
+      "items": {
+        "$ref": "#/$defs/DebtItem"
+      },
+      "title": "Operational Debt",
+      "type": "array"
+    },
+    "next_drill_recommendation": {
+      "default": "",
+      "title": "Next Drill Recommendation",
+      "type": "string"
     }
   },
   "required": [
