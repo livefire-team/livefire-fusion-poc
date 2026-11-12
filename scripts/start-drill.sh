@@ -29,9 +29,11 @@ body=$(az containerapp job show -n "$JOB" -g "$CONTROL_RG" --query "properties.t
                + [{name: "DRILL_ID", value: $d}, {name: "MODE", value: $m}, {name: "SCENARIO", value: $s}])]}')
 az rest --method post --url "https://management.azure.com${job_id}/start?api-version=2024-03-01" --body "$body" -o none
 
-# WS1's load generator for this drill's metrics.orders lines (scorecard throughput, backlog, failed orders)
+# WS1's load generator for this drill's metrics.orders lines (scorecard throughput, backlog, failed orders). The
+# drill is already running, so a failure here must not hide its ID below
 if [ -x scripts/start-load.sh ]; then
-  ./scripts/start-load.sh "$DRILL_ID"
+  ./scripts/start-load.sh "$DRILL_ID" \
+    || echo "WARNING: no load for this drill; start it by hand: scripts/start-load.sh $DRILL_ID" >&2
 else
   echo "note: no scripts/start-load.sh yet (WS1): this drill's scorecard has no order metrics"
 fi
