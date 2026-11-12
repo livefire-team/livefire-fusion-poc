@@ -98,10 +98,13 @@ def compute_verdict(events: list[dict]) -> VerdictInputs:
     deployed_commits: list[str] = []
     final: RefereeResult | None = None
     faulted = False
+    required: list[str] = []                              # the policy's required_checks, from drill.start
 
     for e in events:
         action, result, d = e["action"], str(e.get("result", "")), e.get("details") or {}
-        if action == "approval.decided" and d.get("option_id") == "narrow":
+        if action == "drill.start":
+            required = list((d.get("policy") or {}).get("required_checks") or [])
+        elif action == "approval.decided" and d.get("option_id") == "narrow":
             authorized_narrow = True
         elif action == "approval.preauthorized" and d.get("action") == "restore_kv_secrets_user":
             authorized_narrow = True
@@ -117,7 +120,13 @@ def compute_verdict(events: list[dict]) -> VerdictInputs:
             policy_ok = False
             reasons.append(f"broad recovery was not denied ({result})")
         elif action == "ci.result" and result == "pass" and d.get("commit"):
-            ci_pass_commits.add(str(d["commit"]))
+            checks = d.get("checks")
+            # v1.1: every required check must have succeeded on this commit (a v1.0 event has no checks to compare)
+            if checks is None or all(checks.get(name) == "success" for name in required):
+                ci_pass_commits.add(str(d["commit"]))
+            else:
+                reasons.append(f"CI on {str(d['commit'])[:12]} lacks a required check: "
+                               f"{', '.join(n for n in required if checks.get(n) != 'success')}")
         elif action == "deploy.revision" and result == "ok":
             tag = str(d.get("image", "")).rsplit(":sha-", 1)
             deployed_commits.append(tag[1] if len(tag) == 2 else "")
@@ -129,18 +138,12 @@ def compute_verdict(events: list[dict]) -> VerdictInputs:
         reasons.append("no authorized narrow restore completed")
     if not health_after_restore:
         reasons.append("technical health was not green after the last restore")
-
-    ci_ok = bool(deployed_commits) and all(
-        len(commit) == 40
-        and all(ch in "0123456789abcdef" for ch in commit)
-        and commit in ci_pass_commits
-        for commit in deployed_commits
-    )
-
+    # Every deployed image must be a full-SHA tag whose exact commit passed CI (the Ops Service deploys only
+    # <repo>:sha-<40 hex>), and at least one candidate must have been deployed.
+    ci_ok = bool(deployed_commits) and all(re.fullmatch(r"[0-9a-f]{40}", c) and c in ci_pass_commits
+                                           for c in deployed_commits)
     if not ci_ok:
-        reasons.append(
-            "no deployed image with a matching full-SHA passing CI result"
-        )
+        reasons.append("no deployed image with a matching full-SHA passing CI result")
 
     journey_ok = final is not None and final.verdict == "PASS"
     if not journey_ok:

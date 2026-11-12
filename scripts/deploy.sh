@@ -2,8 +2,8 @@
 # One entry point for the G2 platform, in phases. Run from the repo root, signed in to the lab (az and azd).
 #   scripts/deploy.sh all                     infra, images, apps, verify (a fresh lab)
 #   scripts/deploy.sh infra                   azd provision: control plane and twin (the Ops Service waits for images)
-#   scripts/deploy.sh images [--build] [ref]  order-service, ops-service, referee, mcp-server, load-generator into
-#                                             the registry as :sha-<40 hex> of the last commit (at ref, default
+#   scripts/deploy.sh images [--build] [ref]  order-service, ops-service, referee, mcp-server, load-generator and
+#                                             drill-runner into the registry as :sha-<40 hex> of the last commit (at ref, default
 #                                             origin/main) that changed each one: imported from GHCR, or built here
 #                                             with --build
 #   scripts/deploy.sh apps                    azd provision with those images: ca-ops, the jobs, ca-mcp (WS3),
@@ -15,6 +15,11 @@
 #   scripts/deploy.sh github [owner/repo]     a repo's acr-push environment and variables (repo admin only)
 #   scripts/deploy.sh smoke [part] [--candidate <image>] [--fixed]
 #                                             run job-ops-smoke (part: all, auth, policy, drill, kill, baselines)
+#   scripts/deploy.sh foundry                 WS4 first pass: Foundry, the pinned model and the agents' MCP connections
+#                                             (needs MODEL_NAME and MODEL_VERSION, and ca-mcp)
+#   scripts/deploy.sh agents                  WS4: create and verify both agent versions, then pin them in azd
+#   scripts/deploy.sh runner                  WS4 second pass: job-drill-runner (needs the pins, RUNNER_IMAGE and the
+#                                             runner's GitHub credential in the control vault)
 #   scripts/deploy.sh verify                  internal ingress, the jobs, and the evidence store's write rules
 set -euo pipefail
 cd "$(dirname "$0")/.."
@@ -31,6 +36,7 @@ paths_for() {
     referee)       echo "referee journeys .github/workflows/referee.yml" ;;
     mcp-server)    echo "src/mcp-server .github/workflows/mcp-server.yml" ;;
     load-generator) echo "src/load-generator .github/workflows/load-generator.yml" ;;
+    drill-runner)  echo "src/drill-runner .github/workflows/drill-runner.yml" ;;
   esac
 }
 build_args() {  # build_args <component>: docker context and Dockerfile, relative to a checkout
@@ -40,6 +46,7 @@ build_args() {  # build_args <component>: docker context and Dockerfile, relativ
     referee)       echo ". -f referee/Dockerfile" ;;
     mcp-server)    echo "src/mcp-server -f src/mcp-server/Dockerfile" ;;
     load-generator) echo "src/load-generator -f src/load-generator/Dockerfile" ;;
+    drill-runner)  echo "src/drill-runner -f src/drill-runner/Dockerfile" ;;
   esac
 }
 env_name() {
@@ -47,10 +54,11 @@ env_name() {
     order-service) echo ORDER_IMAGE ;; ops-service) echo OPS_IMAGE ;; referee) echo REFEREE_IMAGE ;;
     mcp-server) echo MCP_IMAGE ;;
     load-generator) echo LOADGEN_IMAGE ;;
+    drill-runner) echo RUNNER_IMAGE ;;
   esac
 }
-optional() {  # WS3's ca-mcp (ADR-022) and WS1's caj-loadgen (ADR-021): the platform deploys without them
-  case "$1" in mcp-server|load-generator) return 0 ;; *) return 1 ;; esac
+optional() {  # WS3's ca-mcp (ADR-022), WS1's caj-loadgen (ADR-021), WS4's runner (ADR-026): the platform deploys without them
+  case "$1" in mcp-server|load-generator|drill-runner) return 0 ;; *) return 1 ;; esac
 }
 
 phase_infra() {
@@ -64,7 +72,7 @@ phase_images() {
   for a in "$@"; do case "$a" in --build) build=1 ;; *) ref="$a" ;; esac; done
   [ -n "${REGISTRY_NAME:-}" ] || { echo "no REGISTRY_NAME: run scripts/deploy.sh infra first"; exit 1; }
   git fetch -q origin
-  for c in order-service ops-service referee mcp-server load-generator; do
+  for c in order-service ops-service referee mcp-server load-generator drill-runner; do
     local full
     # shellcheck disable=SC2046  # paths_for prints several paths on purpose
     full="$(git log -1 --first-parent --format=%H "$ref" -- $(paths_for "$c"))"
@@ -130,7 +138,28 @@ mcp_missing() {
   for n in "${need[@]}"; do grep -qx "$n" <<<"$existing" || echo "secret $n in $CONTROL_KEYVAULT_NAME"; done
 }
 
-# Every provision in this script goes through here, so ca-mcp can never fail one (ADR-022)
+# WS4: job-drill-runner reads its keys from the control vault when it is created, so like ca-mcp it is left out
+# (RUNNER_IMAGE cleared) until its inputs exist, and the gap is named (ADR-026). Foundry needs no gate of its own:
+# main.bicep deploys it only with ca-mcp, whose keys are checked above.
+runner_missing() {
+  local need=(ops-runner-key) existing n
+  for n in MODEL_NAME MODEL_VERSION PLANNER_AGENT ENGINEER_AGENT MCP_ENGINEER_WRITE_PATHS; do
+    [ -n "${!n:-}" ] || echo "azd env value $n"
+  done
+  [ -n "${MCP_IMAGE:-}" ] || echo "ca-mcp (MCP_IMAGE): the agents' tools"
+  if [ "${RUNNER_GITHUB_AUTH:-app}" = app ]; then
+    need+=(gh-runner-private-key)
+    for n in RUNNER_GITHUB_APP_ID RUNNER_GITHUB_INSTALLATION_ID; do [ -n "${!n:-}" ] || echo "azd env value $n"; done
+  else
+    need+=(gh-runner-token)
+  fi
+  if ! existing="$(az keyvault secret list --vault-name "${CONTROL_KEYVAULT_NAME:-}" --query "[].name" -o tsv)"; then
+    echo "cannot list the secrets in ${CONTROL_KEYVAULT_NAME:-the control vault}; nothing provisioned"; return 2
+  fi
+  for n in "${need[@]}"; do grep -qx "$n" <<<"$existing" || echo "secret $n in $CONTROL_KEYVAULT_NAME"; done
+}
+
+# Every provision in this script goes through here, so ca-mcp and WS4 can never fail one (ADR-022, ADR-026)
 provision() {
   load
   if [ -n "${MCP_IMAGE:-}" ]; then
@@ -144,6 +173,15 @@ provision() {
       printf 'ca-mcp left out of this provision; missing:\n%s\n(see README-WS3.md, Deploy to Azure)\n' "$missing" >&2
       echo "a running ca-mcp loses its twin vault metadata access until a provision with MCP_IMAGE set" >&2
       azd env set MCP_IMAGE ""
+      MCP_IMAGE=""
+    fi
+  fi
+  if [ -n "${RUNNER_IMAGE:-}" ]; then
+    local rmissing rstatus=0; rmissing="$(runner_missing)" || rstatus=$?
+    if [ "$rstatus" -ne 0 ]; then printf '%s\n' "$rmissing" >&2; exit 1; fi
+    if [ -n "$rmissing" ]; then
+      printf 'job-drill-runner left out of this provision; missing:\n%s\n(see README-WS4.md)\n' "$rmissing" >&2
+      azd env set RUNNER_IMAGE ""
     fi
   fi
   azd provision
@@ -160,6 +198,52 @@ phase_apps() {
   [ -z "${MCP_URL:-}" ] || echo "MCP_URL=$MCP_URL"
   if [ -n "${CONTROL_CENTER_IMAGE:-}" ]; then echo "CONTROL_CENTER_URL=${CONTROL_CENTER_URL:-}"
   else echo "CONTROL_CENTER_IMAGE not set: the Control Center was left as it is (WS5 deploys it with scripts/deploy-cc.sh)"; fi
+}
+
+# ---- WS4 (ADR-026): two passes, with the agents created and pinned in between ----
+phase_foundry() {
+  load
+  [ -n "${MODEL_NAME:-}" ] && [ -n "${MODEL_VERSION:-}" ] \
+    || { echo "set the model first: azd env set MODEL_NAME gpt-5.1 && azd env set MODEL_VERSION 2025-11-13"; exit 1; }
+  [ -n "${MCP_IMAGE:-}" ] || { echo "Foundry follows ca-mcp: deploy it first (README-WS3.md)"; exit 1; }
+  say "azd provision (Foundry ${MODEL_NAME} ${MODEL_VERSION}, Prompt Shields ${PROMPT_SHIELDS:-on}, MCP connections)"
+  POSTPROVISION_BASELINE="${POSTPROVISION_BASELINE:-off}" provision   # WS4 doesn't touch the twin
+  load
+  [ -n "${FOUNDRY_PROJECT_ENDPOINT:-}" ] || { echo "Foundry was not deployed (was ca-mcp left out?)"; exit 1; }
+  echo "FOUNDRY_PROJECT_ENDPOINT=$FOUNDRY_PROJECT_ENDPOINT"
+  echo "MODEL_DEPLOYMENT=${MODEL_DEPLOYMENT:-}"
+  echo "next: scripts/deploy.sh agents"
+}
+
+phase_agents() {
+  load
+  [ -n "${FOUNDRY_PROJECT_ENDPOINT:-}" ] || { echo "run scripts/deploy.sh foundry first"; exit 1; }
+  local py="${PYTHON:-python3}" out planner engineer
+  "$py" -c 'import azure.ai.projects, yaml' 2>/dev/null \
+    || { echo "install the runner's packages first: $py -m pip install -r src/drill-runner/requirements.txt"; exit 1; }
+  say "create both agent versions from src/drill-runner/agents/*.yaml"
+  out="$(ENGINEER_WRITE_PATHS="${MCP_ENGINEER_WRITE_PATHS:-}" "$py" scripts/create_agents.py)"
+  echo "$out"
+  planner="$(sed -n 's/^PLANNER_AGENT=//p' <<<"$out")"; engineer="$(sed -n 's/^ENGINEER_AGENT=//p' <<<"$out")"
+  [ -n "$planner" ] && [ -n "$engineer" ] || { echo "create_agents.py printed no pins"; exit 1; }
+  say "verify $planner and $engineer"
+  ENGINEER_WRITE_PATHS="${MCP_ENGINEER_WRITE_PATHS:-}" "$py" scripts/create_agents.py --verify "$planner" "$engineer"
+  azd env set PLANNER_AGENT "$planner"
+  azd env set ENGINEER_AGENT "$engineer"
+  echo "pinned. next: scripts/agent-smoke.py, then scripts/deploy.sh runner"
+}
+
+phase_runner() {
+  load
+  [ -n "${RUNNER_IMAGE:-}" ] || { echo "no RUNNER_IMAGE: run scripts/deploy.sh images (or set it to <registry>/drill-runner:sha-<40 hex>)"; exit 1; }
+  say "azd provision (job-drill-runner on $RUNNER_IMAGE, agents ${PLANNER_AGENT:-unset} and ${ENGINEER_AGENT:-unset})"
+  POSTPROVISION_BASELINE="${POSTPROVISION_BASELINE:-off}" provision   # WS4 doesn't touch the twin
+  load
+  [ -n "${RUNNER_JOB_NAME:-}" ] || { echo "job-drill-runner was not deployed: see the missing list above"; exit 1; }
+  echo "RUNNER_JOB_NAME=$RUNNER_JOB_NAME"
+  az role assignment list --assignee "${RUNNER_PRINCIPAL_ID:-}" --all \
+    --query "[].{role: roleDefinitionName, scope: scope}" -o table
+  echo "next: scripts/start-drill.sh"
 }
 
 phase_policy() {
@@ -261,7 +345,7 @@ phase_verify() {
 
 case "${1:-}" in
   all) phase_infra; phase_images origin/main; phase_apps; phase_verify ;;
-  infra|images|apps|policy|github|smoke|verify) p="$1"; shift; "phase_$p" "$@" ;;
+  infra|images|apps|policy|github|smoke|verify|foundry|agents|runner) p="$1"; shift; "phase_$p" "$@" ;;
   policy-off) phase_policy_off ;;
-  *) sed -n '2,18p' "$0"; exit 2 ;;
+  *) sed -n '2,/^set -euo pipefail$/{/^set -euo/!p}' "$0"; exit 2 ;;
 esac

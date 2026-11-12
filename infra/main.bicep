@@ -58,6 +58,31 @@ param searchLocation string = ''
 @description('WS3: content_vector once WS4\'s embedding model exists; empty keeps keyword search')
 param searchVectorField string = ''
 
+// ---- WS4: Foundry and the Drill Runner (ADR-026). Two passes: Foundry once the model is set, the runner once the
+// agents are pinned and its image is in the registry. Empty values leave WS4 out, so it never fails a provision ----
+@description('WS4: the GPT-5.x model and exact version (e.g. gpt-5.1 / 2025-11-13). Empty: no Foundry')
+param modelName string = ''
+param modelVersion string = ''
+@description('WS4: model capacity in thousands of tokens per minute')
+param modelCapacity string = '50'
+@description('WS4: Prompt Shields on the model deployment (guide 7.2)')
+@allowed(['on', 'off'])
+param promptShields string = 'on'
+@description('WS4 second pass: pinned agents (name:version, from scripts/deploy.sh agents) and the runner image')
+param plannerAgent string = ''
+param engineerAgent string = ''
+@description('WS4: <registry>/drill-runner:sha-<40 hex>. Empty: no job-drill-runner')
+param runnerImage string = ''
+@description('WS4: the runner\'s GitHub credential: app (livefire-runner GitHub App) or token (fallback)')
+@allowed(['app', 'token'])
+param runnerGithubAuth string = 'app'
+param runnerGithubAppId string = ''
+param runnerGithubInstallationId string = ''
+@description('WS4: the scenario recovery target in seconds (blueprint 1.6); change only with the lead')
+param targetRecoveryS string = '1800'
+@allowed(['Advisory', 'Supervised', 'Autonomous Twin'])
+param runnerDefaultMode string = 'Autonomous Twin'
+
 @description('WS1: <registry>/load-generator:sha-<40 hex>. Empty: no caj-loadgen')
 param loadgenImage string = ''
 @description('WS1: the drill-<id> whose event log gets the metrics.orders lines. Empty or no drill- prefix: none')
@@ -70,6 +95,9 @@ var deployOps = !empty(opsImage) && !empty(refereeImage)
 // /recovery calls the Ops Service, so ca-mcp follows it
 var deployMcp = deployOps && !empty(mcpImage)
 var deployLoadgen = !empty(loadgenImage)
+// WS4's agents call ca-mcp, and the runner calls the Ops Service, so both follow ca-mcp
+var deployFoundry = deployMcp && !empty(modelName) && !empty(modelVersion)
+var deployRunner = deployFoundry && !empty(runnerImage) && !empty(plannerAgent) && !empty(engineerAgent)
 
 resource twinRg 'Microsoft.Resources/resourceGroups@2022-09-01' = {
   name: 'rg-lf-twin-${environmentName}'
@@ -234,6 +262,61 @@ module mcpTwinAccess 'modules/mcp-twin-access.bicep' = if (deployMcp) {
   }
 }
 
+// ---- WS4: Foundry (account, project, pinned model, Prompt Shields, one MCP connection per agent) ----
+resource controlKv 'Microsoft.KeyVault/vaults@2023-07-01' existing = {
+  scope: controlRg
+  name: controlKeyVaultName
+}
+
+module foundry 'modules/foundry.bicep' = if (deployFoundry) {
+  scope: controlRg
+  name: 'foundry'
+  params: {
+    location: location
+    modelName: modelName
+    modelVersion: modelVersion
+    modelCapacity: int(modelCapacity)
+    promptShields: promptShields
+    mcpUrl: mcp!.outputs.mcpUrl
+    plannerMcpKey: controlKv.getSecret('mcp-planner-key')   // read at deploy time; never in a file or the history
+    engineerMcpKey: controlKv.getSecret('mcp-engineer-key')
+    principalId: principalId
+    principalType: principalType
+  }
+}
+
+// ---- WS4: the Drill Runner job, one execution per drill (scripts/start-drill.sh) ----
+module drillRunner 'modules/drill-runner.bicep' = if (deployRunner) {
+  scope: controlRg
+  name: 'drill-runner'
+  params: {
+    location: location
+    environmentId: control.outputs.environmentId
+    image: runnerImage
+    registryServer: control.outputs.registryServer
+    pullIdentityId: control.outputs.pullIdentityId
+    keyVaultName: control.outputs.keyVaultName
+    evidenceAccountName: control.outputs.evidenceAccountName
+    evidenceBlobUrl: control.outputs.evidenceBlobUrl
+    foundryName: foundry!.outputs.foundryName
+    projectName: foundry!.outputs.projectName
+    projectEndpoint: foundry!.outputs.projectEndpoint
+    modelDeployment: foundry!.outputs.modelDeployment
+    plannerAgent: plannerAgent
+    engineerAgent: engineerAgent
+    opsUrl: ops!.outputs.opsUrl
+    githubRepo: mcpGithubRepo
+    githubAuth: runnerGithubAuth
+    githubAppId: runnerGithubAppId
+    githubInstallationId: runnerGithubInstallationId
+    imageRepo: '${control.outputs.registryServer}/order-service'
+    baseRef: mcpRepoRef
+    engineerWritePaths: mcpEngineerWritePaths
+    targetRecoveryS: targetRecoveryS
+    defaultMode: runnerDefaultMode
+  }
+}
+
 // ---- WS1: the load generator (ADR-015, ADR-021). Replaces the hand-deployed caj-loadgen of the same name ----
 module loadgenIdentity 'modules/loadgen-identity.bicep' = if (deployLoadgen) {
   scope: controlRg
@@ -295,6 +378,12 @@ output MCP_URL string = deployMcp ? mcp!.outputs.mcpUrl : ''
 output MCP_PRINCIPAL_ID string = deployMcp ? mcp!.outputs.mcpIdentityPrincipalId : ''
 output SEARCH_ENDPOINT string = deployMcp ? mcp!.outputs.searchEndpoint : ''
 output SEARCH_NAME string = deployMcp ? mcp!.outputs.searchName : ''
+// WS4 outputs: create_agents.py and agent-smoke.py read the first three; start-drill.sh the job name
+output FOUNDRY_NAME string = deployFoundry ? foundry!.outputs.foundryName : ''
+output FOUNDRY_PROJECT_ENDPOINT string = deployFoundry ? foundry!.outputs.projectEndpoint : ''
+output MODEL_DEPLOYMENT string = deployFoundry ? foundry!.outputs.modelDeployment : ''
+output RUNNER_JOB_NAME string = deployRunner ? drillRunner!.outputs.jobName : ''
+output RUNNER_PRINCIPAL_ID string = deployRunner ? drillRunner!.outputs.runnerPrincipalId : ''
 output LOADGEN_JOB_NAME string = deployLoadgen ? loadgen!.outputs.loadgenJobName : ''
 output LOADGEN_PRINCIPAL_ID string = deployLoadgen ? loadgenIdentity!.outputs.identityPrincipalId : ''
 

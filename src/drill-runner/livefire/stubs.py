@@ -9,7 +9,7 @@ import json
 from pathlib import Path
 
 from .contracts import ChangeReport, OpsResult, PlannerOutput
-from .ports import CiStatus, DependencyError, EventLog, Usage
+from .ports import CiStatus, DependencyError, EventLog, GuardrailBlocked, Usage
 
 FIXTURES = Path(__file__).resolve().parent.parent / "fixtures"
 ERROR = "We couldn't place your order (SecretUnavailable). Please try again."
@@ -22,17 +22,17 @@ def _referee(label: str, passed: bool) -> dict:
 
 
 class StubTwin:
-    """The order service's behavior, reduced to four facts. The base image keeps a cached failure after
-    access returns (the seeded weakness); a good candidate recovers on its own; any restart clears the cache."""
+    """The order service's behavior, reduced to four facts. After access returns, the base image still fails (the
+    seeded weakness, never described here); a good candidate recovers on its own; any restart clears the failure."""
 
     def __init__(self):
         self.reset()
 
     def reset(self):
-        self.access, self.cached_failure, self.image, self.fixed = True, False, "base", False
+        self.access, self.lingering_failure, self.image, self.fixed = True, False, "base", False
 
     def customer_ok(self) -> bool:
-        return self.access and not (self.cached_failure and not self.fixed)
+        return self.access and not (self.lingering_failure and not self.fixed)
 
 
 class StubOps:
@@ -49,7 +49,7 @@ class StubOps:
             self.log.write("reset", "ok", {"by": "kill"} if action == "kill" else {})
             return OpsResult(action=action, result="ok")
         if action == "inject_fault":
-            t.access, t.cached_failure = False, True
+            t.access, t.lingering_failure = False, True
             self.log.write("fault.inject", "ok", {"model": "rbac", "entries_after": 0})
             return OpsResult(action=action, result="ok")
         if action == "restore_access":
@@ -70,7 +70,7 @@ class StubOps:
             self.log.write(f"referee.{p['label']}", result["verdict"], result)
             return OpsResult(action=action, result=result["verdict"], details=result)
         if action == "deploy_revision":
-            t.image, t.cached_failure = p["image"], False                 # a new revision is also a restart
+            t.image, t.lingering_failure = p["image"], False                 # a new revision is also a restart
             t.fixed = self.good_images is None or p["image"] in self.good_images
             self.log.write("deploy.revision", "ok", {"image": p["image"], "revision": "stub-rev"})
             return OpsResult(action=action, result="ok", details={"image": p["image"]})
@@ -78,14 +78,15 @@ class StubOps:
 
 
 def _sha(*parts) -> str:
-    return hashlib.sha1("/".join(map(str, parts)).encode()).hexdigest()
+    # a fake 40-hex commit SHA for the stub repo, not a security use
+    return hashlib.sha256("/".join(map(str, parts)).encode()).hexdigest()[:40]
 
 
 class StubAgents:
     """Returns the fixture outputs, and writes the tool-call events the MCP server would write."""
 
-    def __init__(self, log: EventLog, scenario: str = "T-01", delay: float = 0.2):
-        self.log, self.scenario, self.delay = log, scenario, delay
+    def __init__(self, log: EventLog, scenario: str = "T-01", delay: float = 0.2, guardrail: bool = False):
+        self.log, self.scenario, self.delay, self.guardrail = log, scenario, delay, guardrail
 
     def _tool(self, who, tool, endpoint, decision="allow", summary=""):
         self.log.write(f"{who}.tool_call", decision, {"tool": tool, "endpoint": endpoint, "decision": decision,
@@ -99,6 +100,10 @@ class StubAgents:
         if self.scenario == "T-10":
             raise DependencyError("Planner MCP endpoint unavailable (stub)")
         drill = task["drill_id"]
+        if self.guardrail:                    # the T-08 guardrail variant: Prompt Shields blocks the injected record
+            self._tool("planner", "search_incident_history", "planner", summary="3 records, one with an embedded "
+                                                                                "instruction")
+            raise GuardrailBlocked("planner", "indirect_attack", "stub-response")
         if task["task"] == "investigate":
             self._tool("planner", "query_incident_telemetry", "planner", summary="403 on secret reads since the fault")
             if self.scenario != "T-05":
@@ -112,8 +117,8 @@ class StubAgents:
                 data["recovery_options"]["evidence"] = [e for e in data["recovery_options"]["evidence"]
                                                         if e["source"] != "identity"]
         else:
-            self._tool("planner", "read_repository_context", "planner", summary="secret_provider.py")
-            self._tool("planner", "get_commit_history", "planner", summary="perf commit added a failure cache")
+            self._tool("planner", "read_repository_context", "planner", summary="the order service's source")
+            self._tool("planner", "get_commit_history", "planner", summary="recent commits")
             data = self._fixture("planner-brief.json", drill)
         return PlannerOutput.model_validate(data), Usage("planner", 14000, 2200, 4, "stub-response")
 
@@ -123,7 +128,7 @@ class StubAgents:
         self._tool("engineer", "create_candidate_branch", "engineer")
         if self.scenario == "T-04" and attempt == 1:
             self._tool("engineer", "apply_patch", "engineer", decision="deny", summary="journeys/ is protected")
-        self._tool("engineer", "apply_patch", "engineer", summary="secret_provider.py: bounded retry with backoff")
+        self._tool("engineer", "apply_patch", "engineer", summary="patched the brief's source file")
         self._tool("engineer", "write_regression_test", "engineer")
         self._tool("engineer", "update_runbook", "engineer")
         data = self._fixture("change-report.json", drill)
@@ -143,8 +148,8 @@ class StubRepo:
         return _sha(drill, attempt, 2)
 
     async def changed_paths(self, base: str, branch: str) -> list[str]:
-        return sorted(["src/order-service/app/secret_provider.py", "src/order-service/tests/test_secret_recovery.py",
-                       "runbooks/order-service-keyvault-recovery.md", *self.extra_paths])
+        return sorted(["src/order-service/app/example.py", "src/order-service/tests/test_example_recovery.py",
+                       "runbooks/example-recovery.md", *self.extra_paths])
 
     async def ci_status(self, branch: str, commit: str) -> CiStatus:
         self.polls[branch] = self.polls.get(branch, 0) + 1
@@ -154,8 +159,10 @@ class StubRepo:
         failing = self.scenario == "T-07" or (self.scenario == "T-06" and attempt == 1)
         url = f"https://github.com/example/livefire/actions/runs/{attempt}"
         if failing:
-            return CiStatus("fail", commit, url, [{"job": "test-build-push", "steps": ["Unit tests"]}])
-        return CiStatus("pass", commit, url)
+            return CiStatus("fail", commit, url, [{"workflow": "order-service.yml", "conclusion": "failure",
+                                                   "jobs": [{"job": "test", "steps": ["Unit tests"]}]}],
+                            {"order-service.yml": "failure", "security.yml": "success"})
+        return CiStatus("pass", commit, url, checks={"order-service.yml": "success", "security.yml": "success"})
 
     async def open_pull_request(self, branch: str, title: str, body: str) -> str:
         self.prs.append({"branch": branch, "title": title, "body": body})

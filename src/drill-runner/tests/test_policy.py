@@ -21,6 +21,8 @@ def test_gate_matrix():
 
 def test_secret_like_values_are_caught():
     assert check_secrets({"note": "token ghp_" + "a" * 30})
+    key_prefix = "".join(chr(c) for c in (65, 99, 99, 111, 117, 110, 116, 75, 101, 121, 61))
+    assert check_secrets({"note": key_prefix + "abcdefgh1234"})
     fake_secret = "".join(["Account", "Key", "=", "abcdefgh", "1234"])
     assert check_secrets({"note": fake_secret})
     assert check_secrets({"note": "the app reads a secret named order-db-password"}) is None

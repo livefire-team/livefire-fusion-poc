@@ -96,4 +96,11 @@ az containerapp revision restart -g "$TWIN_RG" -n "$ORDER_APP_NAME" \
   --revision "$(az containerapp show -g "$TWIN_RG" -n "$ORDER_APP_NAME" --query properties.latestRevisionName -o tsv)"
 DRILL_ID="$(./scripts/new-drill.sh)"; export DRILL_ID   # the baseline gets its own drill ID
 ./scripts/wait-for.sh ok
+# The browser baseline runs on this machine (Playwright, Chromium, the ODBC driver). POSTPROVISION_BASELINE=off skips
+# only it, for provisions that don't touch the twin (deploy.sh foundry and runner, ADR-026); a drill runs its own
+# baseline through job-referee. Default on.
+if [ "${POSTPROVISION_BASELINE:-on}" = off ]; then
+  echo "baseline skipped (POSTPROVISION_BASELINE=off); the twin answered ok above"
+  exit 0
+fi
 ./scripts/referee.sh baseline                     # a failed baseline fails azd provision
