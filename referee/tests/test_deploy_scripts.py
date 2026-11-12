@@ -899,3 +899,47 @@ def test_a_provision_stops_on_a_value_pasted_with_curly_quotes(sandbox, phase):
     assert "not provisioned: these azd values hold curly quotes or other non-ASCII characters" in result.stderr
     assert "GITHUB_REPOS" in result.stderr and "livefire-team@1" not in result.stderr      # the key, not the value
     assert "azd provision" not in log_lines(sandbox)
+
+
+# ---- G3: a new identity's Key Vault access can lag its role assignment, so a fresh lab's first apps pass can fail
+# on that alone (seen in the first clean-lab build); provision retries that one error ----
+def run_flaky_provision(sandbox, message, fails):
+    log = (sandbox / "calls.log").as_posix()
+    count = (sandbox / "provisions").as_posix()
+    fake(sandbox / "bin" / "azd", f'''if [ "$1 $2" = "env get-values" ]; then cat <<'EOF'
+{APPS_VALUES}EOF
+elif [ "$1" = provision ]; then
+  n=$(cat {count} 2>/dev/null || echo 0); echo $((n+1)) > {count}; echo "azd provision" >> {log}
+  if [ "$n" -lt {fails} ]; then echo "ERROR: {message}"; exit 1; fi
+  echo "SUCCESS: provisioned"
+else echo "azd $*" >> {log}; fi
+''')
+    az = f'echo "az $*" >> LOG\ncase "$*" in "keyvault secret list"*) printf "%s\\\\n" {ALL_MCP_SECRETS} ;; esac\n'
+    fake(sandbox / "bin" / "az", az.replace("LOG", log))
+    env = {**os.environ, "PROVISION_RETRY_S": "0",
+           "PATH": f"{(sandbox / 'bin').as_posix()}{os.pathsep}{os.environ['PATH']}"}
+    return subprocess.run([BASH, copy_deploy(sandbox).as_posix(), "apps"], cwd=sandbox, env=env,
+                          capture_output=True, text=True, timeout=60)
+
+
+KV_LAG = ("Invalid value: referee-sql-password: Unable to get value using Managed identity /x for secret "
+          "referee-sql-password")
+
+
+def test_provision_retries_while_a_new_identitys_vault_access_applies(sandbox):
+    result = run_flaky_provision(sandbox, KV_LAG, fails=1)
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert log_lines(sandbox).count("azd provision") == 2
+    assert "Key Vault access hasn't applied yet" in result.stderr
+
+
+def test_provision_gives_up_after_three_tries(sandbox):
+    result = run_flaky_provision(sandbox, KV_LAG, fails=5)
+    assert result.returncode != 0
+    assert log_lines(sandbox).count("azd provision") == 3
+
+
+def test_provision_does_not_retry_other_failures(sandbox):
+    result = run_flaky_provision(sandbox, "InvalidTemplate: something else", fails=1)
+    assert result.returncode != 0
+    assert log_lines(sandbox).count("azd provision") == 1

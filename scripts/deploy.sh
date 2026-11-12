@@ -200,6 +200,27 @@ cc_missing() {
 # write a broken CI sign-in subject or Engineer path list into the lab. Ours are all plain ASCII, so it stops first
 pasted_values() { azd env get-values | LC_ALL=C grep '[^ -~]' | cut -d= -f1 || true; }
 
+# A new identity's Key Vault role takes a few minutes to apply, and Container Apps checks a job's Key Vault references
+# when it creates the job: on a fresh lab the first apps pass can fail on that alone (job-referee, 2026-11-12). That
+# one error is retried twice; any other failure stops at once
+azd_provision() {
+  local out try rc
+  out="$(mktemp)"
+  for try in 1 2 3; do
+    rc=0
+    azd provision 2>&1 | tee "$out" || rc=$?
+    [ "$rc" -ne 0 ] || break
+    if [ "$try" -lt 3 ] && grep -q "Unable to get value using Managed identity" "$out"; then
+      echo "a new identity's Key Vault access hasn't applied yet: provisioning again in ${PROVISION_RETRY_S:-90} s" >&2
+      sleep "${PROVISION_RETRY_S:-90}"
+    else
+      break
+    fi
+  done
+  rm -f "$out"
+  return "$rc"
+}
+
 # Every provision in this script goes through here, so ca-mcp, WS4 and WS5 can never fail one (ADR-022, ADR-026)
 provision() {
   local pasted; pasted="$(pasted_values)"
@@ -246,7 +267,7 @@ provision() {
       azd env set CONTROL_CENTER_IMAGE ""
     fi
   fi
-  azd provision
+  azd_provision
 }
 
 phase_apps() {
