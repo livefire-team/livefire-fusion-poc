@@ -69,6 +69,40 @@ if [ -n "${CONTROL_KEYVAULT_NAME:-}" ]; then
   }
   set_if_changed referee-sql-password "$REF_PW"
   set_if_changed ops-cleanup-sql-password "$CLEAN_PW"
+
+  # GitHub App keys (WS3's Planner and Engineer, WS4's runner) for a new environment, stored once (ADR-025): copied
+  # from another environment's control vault (SECRETS_SOURCE_VAULT, set by lab.sh new-env), or read from a private
+  # folder outside this repo (GITHUB_APP_KEYS: planner.pem, engineer.pem, runner.pem). A key passes through a
+  # private temporary file, never a command line or this log; the folder goes even if the hook is interrupted
+  keys_tmp="$(umask 077 && mktemp -d)"
+  trap 'rm -rf "$keys_tmp"' EXIT
+  copy_key() {  # copy_key <name>: from SECRETS_SOURCE_VAULT, exactly as stored there
+    local tmp="$keys_tmp/$1" rc=0
+    if az keyvault secret show --vault-name "$SECRETS_SOURCE_VAULT" -n "$1" --query value -o json 2>/dev/null \
+      | jq -j . > "$tmp" && [ -s "$tmp" ]; then
+      kv_try secret set --vault-name "$CONTROL_KEYVAULT_NAME" -n "$1" --file "$tmp" -o none || rc=$?
+    else
+      rc=1
+    fi
+    rm -f "$tmp"
+    return "$rc"
+  }
+  for pair in planner:gh-planner-private-key engineer:gh-engineer-private-key runner:gh-runner-private-key; do
+    name="${pair#*:}" file="${GITHUB_APP_KEYS:-}/${pair%%:*}.pem"
+    grep -qx "$name" <<<"$existing" && continue
+    if [ -n "${SECRETS_SOURCE_VAULT:-}" ]; then
+      if copy_key "$name"; then echo "copied $name from $SECRETS_SOURCE_VAULT"
+      else echo "WARNING: $name is not in $SECRETS_SOURCE_VAULT (or can't be read); deploy.sh names what it holds back" >&2; fi
+    elif [ -n "${GITHUB_APP_KEYS:-}" ] && [ -r "$file" ]; then
+      kv_try secret set --vault-name "$CONTROL_KEYVAULT_NAME" -n "$name" --file "$file" -o none
+      echo "stored $name from $file"
+    fi
+  done
+
+  # WS5's Control Center reads two secrets at deploy time (deploy.sh makes them too, before it provisions it)
+  if [ -n "${CONTROL_CENTER_SOURCE:-}${CONTROL_CENTER_IMAGE:-}" ]; then
+    ./scripts/cc-secrets.sh "$CONTROL_KEYVAULT_NAME" "${AZURE_ENV_NAME:-lab}" "${CONTROL_CENTER_AUTH_MODE:-passcode}"
+  fi
 fi
 
 # ---- WS3: the incident index the Planner searches, rebuilt on every provision ----
