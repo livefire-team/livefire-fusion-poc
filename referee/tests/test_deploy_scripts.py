@@ -68,6 +68,8 @@ def copy_repo_bits(sandbox):
     scripts = sandbox / "scripts"
     scripts.mkdir()
     shutil.copy(SCRIPTS / "postprovision.sh", scripts)
+    if (SCRIPTS / "cc-secrets.sh").exists():
+        shutil.copy(SCRIPTS / "cc-secrets.sh", scripts)
     fake(scripts / "new-drill.sh", "echo drill-test-0001\n")
     fake(scripts / "wait-for.sh", "exit 0\n")
     fake(scripts / "referee.sh", f'echo "referee $*" >> {(sandbox / "calls.log").as_posix()}\n')
@@ -348,7 +350,11 @@ def run_apps(sandbox, vault_secrets, phase="apps", extra=""):
     log = (sandbox / "calls.log").as_posix()
     fake(sandbox / "bin" / "azd", f'if [ "$1 $2" = "env get-values" ]; then cat <<\'EOF\'\n{APPS_VALUES}{extra}EOF\n'
                                   f'else echo "azd $*" >> {log}; fi\n')
-    az = f'echo "az $*" >> LOG\ncase "$*" in "keyvault secret list"*) printf "%s\\n" {vault_secrets} ;; esac\n'
+    added = (sandbox / "added").as_posix()
+    az = (f'echo "az $*" >> LOG\ncase "$*" in\n'
+          f'  "keyvault secret list"*) printf "%s\\n" {vault_secrets}; cat {added} 2>/dev/null || true ;;\n'
+          f'  "keyvault secret set"*) for a in "$@"; do [ "$prev" = -n ] && echo "$a" >> {added}; prev="$a"; done ;;\n'
+          f'esac\n')
     return run(sandbox, copy_deploy(sandbox).as_posix(), phase, az_body=az)
 
 
@@ -425,6 +431,8 @@ def copy_deploy(sandbox):
     scripts = sandbox / "scripts"
     scripts.mkdir(exist_ok=True)
     shutil.copy(SCRIPTS / "deploy.sh", scripts)
+    if (SCRIPTS / "cc-secrets.sh").exists():
+        shutil.copy(SCRIPTS / "cc-secrets.sh", scripts)
     return scripts / "deploy.sh"
 
 
@@ -571,15 +579,17 @@ def test_images_leaves_the_control_center_alone_without_a_source(sandbox, repo):
     assert not any("control-center" in c or "CONTROL_CENTER" in c for c in log_lines(sandbox))
 
 
-def test_apps_leaves_the_control_center_out_until_its_secrets_exist(sandbox):
-    extra = f"CONTROL_CENTER_IMAGE=acrlftest.azurecr.io/control-center:sha-{CC_SHA}\n"
+def test_apps_makes_the_missing_passcode_secrets_then_deploys_the_control_center(sandbox):
+    extra = f"CONTROL_CENTER_IMAGE=acrlftest.azurecr.io/control-center:sha-{CC_SHA}\nAZURE_ENV_NAME=lf-g3\n"
     result = run_apps(sandbox, ALL_MCP_SECRETS + " cc-session-secret", extra=extra)
     assert result.returncode == 0, result.stderr
-    assert "ca-control-center left out of this provision" in result.stderr
-    assert "secret cc-passcode-sha256 in kv-lfc-test" in result.stderr
-    assert "ca-mcp left out" not in result.stderr
+    assert "left out" not in result.stderr
     calls = log_lines(sandbox)
-    assert calls.index("azd env set CONTROL_CENTER_IMAGE ") < calls.index("azd provision")
+    made = next(i for i, c in enumerate(calls) if c.startswith("az keyvault secret set") and " -n cc-passcode-sha256 " in c)
+    assert made < calls.index("azd provision")
+    assert not any(" -n cc-session-secret " in c for c in calls if c.startswith("az keyvault secret set"))
+    assert not any(c.startswith("azd env set CONTROL_CENTER_IMAGE") for c in calls)
+    assert (sandbox / ".local" / "cc-passcode-lf-g3.txt").exists()
 
 
 def test_apps_deploys_the_control_center_when_its_secrets_exist(sandbox):
@@ -590,11 +600,17 @@ def test_apps_deploys_the_control_center_when_its_secrets_exist(sandbox):
     assert not any(c.startswith("azd env set CONTROL_CENTER_IMAGE") for c in log_lines(sandbox))
 
 
-def test_an_easy_auth_control_center_needs_its_client_secret_not_a_passcode(sandbox):
+def test_an_easy_auth_control_center_without_its_client_secret_is_left_out(sandbox):
     extra = (f"CONTROL_CENTER_IMAGE=acrlftest.azurecr.io/control-center:sha-{CC_SHA}\n"
              "CONTROL_CENTER_AUTH_MODE=easyauth\n")
-    result = run_apps(sandbox, ALL_MCP_SECRETS + " cc-session-secret cc-passcode-sha256", extra=extra)
+    result = run_apps(sandbox, ALL_MCP_SECRETS + " cc-session-secret", extra=extra)
+    assert result.returncode == 0, result.stderr
+    assert "ca-control-center left out of this provision" in result.stderr
     assert "secret cc-entra-client-secret in kv-lfc-test" in result.stderr
+    assert "scripts/deploy.sh images, then apps" in result.stderr
+    assert not any(" -n cc-passcode-sha256 " in c for c in log_lines(sandbox))   # no passcode for Easy Auth
+    calls = log_lines(sandbox)
+    assert calls.index("azd env set CONTROL_CENTER_IMAGE ") < calls.index("azd provision")
     result = run_apps(sandbox, ALL_MCP_SECRETS + " cc-session-secret cc-entra-client-secret", extra=extra)
     assert result.returncode == 0, result.stderr
     assert "left out" not in result.stderr
@@ -731,6 +747,22 @@ def test_all_without_a_model_deploys_the_platform_and_says_why_ws4_is_not_there(
     assert any(c.startswith("python scripts/evidence_check.py") for c in calls)
 
 
+def test_all_names_a_missing_runner_input_and_still_verifies(sandbox, repo):
+    global AZ_FRESH_LAB
+    saved = AZ_FRESH_LAB
+    AZ_FRESH_LAB = saved.replace(" gh-runner-private-key", "")
+    try:
+        result = run_all(sandbox, repo, FRESH_LAB)
+    finally:
+        AZ_FRESH_LAB = saved
+    assert result.returncode == 0, result.stderr
+    assert "job-drill-runner not deployed; missing:" in result.stdout
+    assert "secret gh-runner-private-key in kv-lfc-test" in result.stdout
+    calls = log_lines(sandbox)
+    assert len([c for c in calls if c.startswith("azd provision")]) == 2
+    assert any(c.startswith("python scripts/evidence_check.py") for c in calls)
+
+
 def test_all_stops_before_any_change_without_the_agent_packages(sandbox, repo):
     result = run_all(sandbox, repo, FRESH_LAB, python=FAKE_PYTHON.replace('"-c "*) exit 0 ;;', '"-c "*) exit 1 ;;'))
     assert result.returncode == 1
@@ -758,7 +790,7 @@ esac
 """
 FAKE_OPENSSL = """case "$1" in
   rand) echo "random-$2-$3" ;;
-  dgst) cat > /dev/null; echo "hash-of-the-passcode *stdin" ;;
+  dgst) read -r x || true; echo "hash-of-$x *stdin" ;;
 esac
 """
 
@@ -820,17 +852,17 @@ def test_hook_stores_the_app_keys_from_a_private_folder(sandbox):
     assert "stored gh-planner-private-key from" in result.stdout
 
 
-def test_hook_creates_the_control_center_secrets_once_and_keeps_the_passcode_private(sandbox):
+def test_hook_creates_the_control_center_secrets_and_keeps_the_passcode_private(sandbox):
     result = run_hook(sandbox, "CONTROL_CENTER_SOURCE=ghcr.io/livefire-team/control-center:sha-" + "c" * 40 + "\n")
     assert result.returncode == 0, result.stderr
-    sets = [c for c in log_lines(sandbox) if c.startswith("az keyvault secret set") and "kv-lfc-test" in c]
-    assert any(" -n cc-session-secret " in c for c in sets)
-    assert any(" -n cc-passcode-sha256 --value hash-of-the-passcode " in c for c in sets)
     passcode = sandbox / ".local" / "cc-passcode-lf-g3.txt"
     assert passcode.stat().st_mode & 0o777 == 0o600
-    secret = passcode.read_text().strip()
+    secret = passcode.read_text()
+    assert secret == "random--base64-18" and not secret.endswith("\n")
+    assert (sandbox / "stored-cc-passcode-sha256").read_text() == f"hash-of-{secret}"   # the hash of that passcode
+    assert (sandbox / "stored-cc-session-secret").read_text() == "random--base64-48"   # no newline
     seen = (sandbox / "calls.log").read_text() + result.stdout + result.stderr
-    assert secret and secret not in seen
+    assert secret not in seen and "random--base64-48" not in seen                       # never argv or a log
     assert ".local/cc-passcode-lf-g3.txt" in result.stdout
 
 
@@ -855,6 +887,7 @@ def test_hook_makes_no_passcode_for_an_easy_auth_control_center(sandbox):
     sets = [c for c in log_lines(sandbox) if c.startswith("az keyvault secret set")]
     assert any(" -n cc-session-secret " in c for c in sets)
     assert not any(" -n cc-passcode-sha256 " in c for c in sets)
+    assert (sandbox / "stored-cc-session-secret").exists()
 
 
 # ---- G3: a value pasted from a chat (curly quotes, a lost *) never reaches a provision ----

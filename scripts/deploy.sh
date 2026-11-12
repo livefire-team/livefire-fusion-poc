@@ -184,8 +184,8 @@ runner_missing() {
 }
 
 # WS5: ca-control-center reads its session secret, and the passcode's hash (or Easy Auth's client secret), from the
-# control vault at deploy time. postprovision.sh creates the passcode pair in a new environment; until they exist it
-# is left out
+# control vault at deploy time. cc-secrets.sh makes the passcode pair before each provision of it; Easy Auth's client
+# secret can't be made here, so without it the Control Center is left out
 cc_missing() {
   local need=(cc-session-secret) existing n
   if [ "${CONTROL_CENTER_AUTH_MODE:-passcode}" = passcode ]; then need+=(cc-passcode-sha256)
@@ -233,11 +233,16 @@ provision() {
     fi
   fi
   if [ -n "${CONTROL_CENTER_IMAGE:-}" ]; then
+    if [ -n "${CONTROL_KEYVAULT_NAME:-}" ] && ! ./scripts/cc-secrets.sh "$CONTROL_KEYVAULT_NAME" \
+      "${AZURE_ENV_NAME:-lab}" "${CONTROL_CENTER_AUTH_MODE:-passcode}"; then
+      echo "cannot make the Control Center's secrets in $CONTROL_KEYVAULT_NAME; nothing provisioned" >&2
+      exit 1
+    fi
     local cmissing cstatus=0; cmissing="$(cc_missing)" || cstatus=$?
     if [ "$cstatus" -ne 0 ]; then printf '%s\n' "$cmissing" >&2; exit 1; fi
     if [ -n "$cmissing" ]; then
-      printf 'ca-control-center left out of this provision; missing:\n%s\n(postprovision.sh creates them: rerun it)\n' \
-        "$cmissing" >&2
+      printf 'ca-control-center left out of this provision; missing:\n%s\n%s\n' "$cmissing" \
+        "(add it, then scripts/deploy.sh images, then apps)" >&2
       azd env set CONTROL_CENTER_IMAGE ""
     fi
   fi
@@ -331,7 +336,16 @@ phase_all() {
     fi
     if [ -n "$runner" ]; then
       azd env set RUNNER_IMAGE "$runner"
-      phase_runner
+      load
+      local rmissing rstatus=0; rmissing="$(runner_missing)" || rstatus=$?
+      if [ "$rstatus" -ne 0 ]; then printf '%s\n' "$rmissing" >&2; exit 1; fi
+      if [ -n "$rmissing" ]; then                # named and left out, like any other part; verify still runs
+        say "job-drill-runner not deployed; missing:"
+        printf '%s\n' "$rmissing"
+        azd env set RUNNER_IMAGE ""
+      else
+        phase_runner
+      fi
     else
       say "job-drill-runner not deployed: no drill-runner image (see images above)"
     fi

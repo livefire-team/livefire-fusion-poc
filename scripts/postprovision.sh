@@ -73,10 +73,11 @@ if [ -n "${CONTROL_KEYVAULT_NAME:-}" ]; then
   # GitHub App keys (WS3's Planner and Engineer, WS4's runner) for a new environment, stored once (ADR-025): copied
   # from another environment's control vault (SECRETS_SOURCE_VAULT, set by lab.sh new-env), or read from a private
   # folder outside this repo (GITHUB_APP_KEYS: planner.pem, engineer.pem, runner.pem). A key passes through a
-  # private temporary file, never a command line or this log
+  # private temporary file, never a command line or this log; the folder goes even if the hook is interrupted
+  keys_tmp="$(umask 077 && mktemp -d)"
+  trap 'rm -rf "$keys_tmp"' EXIT
   copy_key() {  # copy_key <name>: from SECRETS_SOURCE_VAULT, exactly as stored there
-    local tmp rc=0
-    tmp="$(umask 077 && mktemp)"
+    local tmp="$keys_tmp/$1" rc=0
     if az keyvault secret show --vault-name "$SECRETS_SOURCE_VAULT" -n "$1" --query value -o json 2>/dev/null \
       | jq -j . > "$tmp" && [ -s "$tmp" ]; then
       kv_try secret set --vault-name "$CONTROL_KEYVAULT_NAME" -n "$1" --file "$tmp" -o none || rc=$?
@@ -98,21 +99,9 @@ if [ -n "${CONTROL_KEYVAULT_NAME:-}" ]; then
     fi
   done
 
-  # WS5's Control Center reads two secrets at deploy time. A new passcode goes only to a private file for the
-  # presenter, never this log; WS5 rotates it after each walkthrough (deploy-cc.sh rotate-passcode)
+  # WS5's Control Center reads two secrets at deploy time (deploy.sh makes them too, before it provisions it)
   if [ -n "${CONTROL_CENTER_SOURCE:-}${CONTROL_CENTER_IMAGE:-}" ]; then
-    if ! grep -qx cc-session-secret <<<"$existing"; then
-      kv_try secret set --vault-name "$CONTROL_KEYVAULT_NAME" -n cc-session-secret --value "$(openssl rand -base64 48)" -o none
-      echo "created cc-session-secret"
-    fi
-    if [ "${CONTROL_CENTER_AUTH_MODE:-passcode}" = passcode ] && ! grep -qx cc-passcode-sha256 <<<"$existing"; then
-      mkdir -p .local
-      pass_file=".local/cc-passcode-${AZURE_ENV_NAME:-lab}.txt"
-      (umask 077 && openssl rand -base64 18 | tr '+/' '-_' > "$pass_file")
-      kv_try secret set --vault-name "$CONTROL_KEYVAULT_NAME" -n cc-passcode-sha256 \
-        --value "$(tr -d '\n' < "$pass_file" | openssl dgst -sha256 -r | cut -d' ' -f1)" -o none
-      echo "created cc-passcode-sha256; the passcode is in $pass_file (share it out of band)"
-    fi
+    ./scripts/cc-secrets.sh "$CONTROL_KEYVAULT_NAME" "${AZURE_ENV_NAME:-lab}" "${CONTROL_CENTER_AUTH_MODE:-passcode}"
   fi
 fi
 
