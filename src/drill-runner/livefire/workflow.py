@@ -76,13 +76,6 @@ class Run:
     async def op(self, action: str, timeout: float | None = None, **params):
         try:
             async with asyncio.timeout(timeout or self.budgets.wait_s + 60):
-                return await self.ops.call(action, **params)
-        except TimeoutError as exc:
-            raise DependencyError(f"Ops action {action} did not finish in time") from exc
-
-    async def op(self, action: str, timeout: float | None = None, **params):
-        try:
-            async with asyncio.timeout(timeout or self.budgets.wait_s + 60):
                 result = await self.ops.call(action, **params)
 
                 if action in ("reset_twin", "kill") and result.result != "ok":

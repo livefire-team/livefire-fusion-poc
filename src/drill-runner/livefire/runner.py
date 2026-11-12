@@ -108,9 +108,7 @@ def build_run(args) -> Run:
     store = store_from_env()
     expires = (datetime.now(timezone.utc) + timedelta(hours=3)).isoformat()
     policy = AutonomyPolicy(mode=Mode(args.mode), prove_durable=not args.no_prove, expires_at=expires)
-    cfg = DrillConfig(drill_id=args.drill_id, scenario=args.scenario, policy=policy,
-                      base_ref=os.environ.get("BASE_REF", "main"),
-                      image_repo=os.environ.get("IMAGE_REPO", "ghcr.io/example/order-service"))
+
     image_repo = os.environ.get("IMAGE_REPO", "").strip()
 
     if not image_repo:
@@ -121,9 +119,13 @@ def build_run(args) -> Run:
                 "IMAGE_REPO is required for live drills. "
                 "Use the registry configured by WS2."
             )
-    cfg = DrillConfig(drill_id=args.drill_id, scenario=args.scenario, policy=policy,
-                      base_ref=os.environ.get("BASE_REF", "main"),
-        image_repo=image_repo)
+    cfg = DrillConfig(
+        drill_id=args.drill_id,
+        scenario=args.scenario,
+        policy=policy,
+        base_ref=os.environ.get("BASE_REF", "main"),
+        image_repo=image_repo,
+    )
     log = EventLog(store, cfg.drill_id)
     if log.read():
         sys.exit(f"refused: {cfg.drill_id} already has events; every drill needs a new ID")

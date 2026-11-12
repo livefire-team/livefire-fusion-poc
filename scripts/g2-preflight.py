@@ -42,7 +42,6 @@ REQUIRED = (
     "infra/modules/drill-runner.bicep",
     "infra/main.ws4-snippet.bicep",
     ".github/workflows/drill-runner.yml",
-    "docs/WS4-G2-BUILD-STEPS.md",
     "docs/G2-ACCEPTANCE-MATRIX.md",
     "docs/G2-HANDOFFS.md",
 )
