@@ -470,6 +470,79 @@ Status values: Proposed | Accepted | Superseded | Rejected
   backends are tested only in the lab). WS4's `PROTECTED_PATHS` should match the longer protected list. The standalone repo is retired once this merges.
 - **Implemented in:** this PR (`src/mcp-server/`, `infra/modules/mcp*.bicep`, `.github/workflows/mcp-server.yml`)
 
+## ADR-023: The Functions fault injector and the Playwright Workspaces Referee stay on the roadmap
+- **Date:** 2026-11-10
+- **Status:** Accepted (WS2)
+- **Context:** The WS2 build guide set two G3 targets from blueprint §4.1: a typed Azure Functions fault injector and
+  the Referee on Azure App Testing Playwright Workspaces. The PoC plan replaced both: the Ops Service (an internal
+  Container App with a fixed list of actions) and a Container Apps Job running the pinned journey. The injector
+  design removes a role assignment (the `rbac` model), but the twin runs on the access-policy model (ADR-016). G3
+  (Nov 16) is the team gate: T-01 verified twice in a row from a clean lab.
+- **Options considered:** (1) build both; (2) Playwright Workspaces only, behind a `PLAYWRIGHT_SERVICE_URL` switch;
+  (3) neither, recorded as roadmap with the blueprint §9.4 fallbacks.
+- **Decision:** Option 3. The fault stays the Ops Service's `inject_fault` (on the access-policy entry) and the
+  Referee stays `job-referee` with its own Chromium (`browser: local-chromium`). Both are fallbacks blueprint §9.4
+  lists.
+- **Consequences:** No Function App, Playwright workspace, identity or role to add or prove. The Ops events get no
+  `injector` field and the Referee result keeps `browser: local-chromium`. Material for the judges and the customer
+  names the Ops Service and the Container Apps Job, not Functions or Playwright Workspaces. Either can be added later
+  behind the same contract without a change in WS4.
+- **Implemented in:** no code (this record only)
+
+## ADR-024: `deploy.sh all` is the one command that builds a fresh lab, WS4 and WS5 included
+- **Date:** 2026-11-11
+- **Status:** Accepted (WS2)
+- **Context:** The PoC plan's G3 bar starts "one command builds a fresh lab", and its bootstrap creates the model
+  deployment, both agents and their tools too. After ADR-026 a fresh lab needed `deploy.sh all`, then `foundry`,
+  `agents` and `runner`, then WS5's `deploy-cc.sh all` for the Control Center and its two secrets, and the three
+  GitHub App keys stored in the new control vault by hand. Every team signs in to the lab as the same user, and the
+  agents' packages pin different versions from the Referee's, so they live in their own virtual environment.
+- **Options considered:** (1) a documented sequence of the existing passes; (2) a new `bootstrap.sh`; (3) `deploy.sh
+  all` runs every pass whose inputs are set, in order.
+- **Decision:** Option 3. `all` runs infra, images, apps (which brings Foundry with `ca-mcp` once the model is set),
+  then `agents` (unless both pins are already set) and the runner's pass, then `verify`, and prints the time taken.
+  With `MODEL_NAME` set it first checks that `PYTHON` has the agents' packages, before any change. `images` also
+  imports WS5's Control Center from the exact build named in `CONTROL_CENTER_SOURCE`
+  (`ghcr.io/<owner>/control-center:sha-<40 hex>`), since it is built in WS5's repo. `ca-control-center` is left out
+  of a provision, with its image value cleared and the gap named, until its secrets are in the control vault (as
+  `ca-mcp`, ADR-022, and the runner, ADR-026). The post-provision hook creates the session secret and the passcode
+  hash for a new environment, and writes the passcode only to a git-ignored `.local/` file. Every provision stops
+  first if an azd value holds curly quotes or other non-ASCII characters, naming the key and never the value.
+- **Consequences:** One command, then two T-01 runs, is the G3 path. A part whose inputs are missing never fails the
+  lab; it is named and left out, as before. `all` still makes three provisions (infra, apps, runner) because the
+  registry must exist before images and the agents before the runner. Easy Auth needs WS5's `cc-entra-client-secret`
+  by hand. `deploy.sh` with an unknown phase now prints its usage on macOS too.
+- **Implemented in:** PR #51 (`ws2/g3-one-command`)
+
+## ADR-025: A clean lab is a second azd environment in the same lab, and every machine syncs before it provisions
+- **Date:** 2026-11-10 (sync added 2026-11-11)
+- **Status:** Accepted (WS2)
+- **Context:** G3 needs T-01 verified twice in a row from a clean lab. `lf-eh` holds every team's keys and URLs and
+  must stay up for daily integration. A new CloudLabs launch means a new subscription: new GitHub OIDC trust, new
+  repo variables and a new probe. The G2 rebuild in `lf-rb` took 10.4 minutes but needed hand steps, and its teardown
+  left a vault and a subscription-scope role behind. Each machine also keeps its own copy of an azd environment: on
+  2026-11-11 one machine's `lf-eh` lacked the values other teams' provisions had added, and three of its values had
+  been pasted with curly quotes, so a provision from it would have broken AI Search, CI's sign-in and the Engineer's
+  write paths.
+- **Options considered:** (1) rebuild `lf-eh` itself; (2) a new CloudLabs launch; (3) a second azd environment in
+  the same subscription, with the hand steps scripted.
+- **Decision:** Option 3, with `scripts/lab.sh`. `sync` compares the selected environment's values on this machine
+  with its last successful provision from any machine (the parameters, mapped back through `main.parameters.json`,
+  and the outputs; secure parameters carry no value there), names the keys that differ and never their values, and
+  takes the lab's with `--apply`. `new-env <name>` copies a fixed list of settings (never secrets, registry images,
+  agent pins or Bicep outputs), generates a SQL password, and sets `SECRETS_SOURCE_VAULT` to the source's control
+  vault, from which the hook copies the three GitHub App keys through a private temporary file. `teardown <name>
+  --yes` removes that environment's `id-lf-ops` subscription role (the deny policy is shared, so it stays), unlocks
+  the evidence, runs `azd down --force --purge` (again after a failure), purges a vault or Foundry account left
+  soft-deleted, and selects `lf-eh` again; it refuses `lf-eh`. `state` checks, read-only, that the twin is at its
+  baseline before and after a drill.
+- **Consequences:** `lf-eh` stays up while the clean lab runs. CI pushes to the one registry named in the repo's
+  `acr-push` environment, so during clean-lab runs a repo admin points it at the new environment with
+  `deploy.sh github` and back afterwards. The agents are created again in each new Foundry project. Both
+  environments share the subscription-wide deny policy and the model quota. A value only one machine holds (such as
+  `INCIDENT_CORPUS`, which is not a Bicep parameter) is not in the deployment history, so `sync` can't fill it.
+- **Implemented in:** PR #50 (`ws2/g3-lab-tools`)
+
 ## ADR-026: WS4's Foundry and Drill Runner deploy with the platform, in two gated passes
 - **Date:** 2026-11-12
 - **Status:** Proposed (WS4); needs WS2's review of the `main.bicep` and `deploy.sh` changes. Numbered after WS2's
