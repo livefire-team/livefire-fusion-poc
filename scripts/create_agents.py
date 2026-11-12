@@ -29,6 +29,16 @@ from livefire.agents import strict_schema  # noqa: E402
 ROLES = {"planner": "planner.yaml", "engineer": "engineer.yaml"}
 
 
+def tool_names(allowed) -> list[str]:
+    """The service returns allowed_tools as an MCPToolFilter ({'tool_names': [...]}), not the plain list sent."""
+    if allowed is None:
+        return []
+    if isinstance(allowed, (list, tuple)):
+        return list(allowed)
+    names = allowed.get("tool_names") if hasattr(allowed, "get") else getattr(allowed, "tool_names", None)
+    return list(names or [])
+
+
 def load(role: str, write_paths: str) -> tuple[dict, str]:
     spec = yaml.safe_load((RUNNER / "agents" / ROLES[role]).read_text())
     text = (RUNNER / "agents" / spec["instructions_file"]).read_text()
@@ -95,7 +105,7 @@ def main() -> int:
                 "instructions": hashlib.sha256((got.instructions or "").encode()).hexdigest()
                 == hashlib.sha256(instructions.encode()).hexdigest(),
                 "one tool only": len(got.tools) == 1,
-                "allowed_tools": list(tool.allowed_tools or []) == spec["mcp"]["allowed_tools"],
+                "allowed_tools": tool_names(tool.allowed_tools) == spec["mcp"]["allowed_tools"],
                 "require_approval never": tool.require_approval == "never",
                 "model": got.model == model,
             }

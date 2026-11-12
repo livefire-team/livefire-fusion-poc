@@ -442,6 +442,16 @@ Status values: not started | in progress | PR open | merged | blocked
 See `docs/ADR.md` (latest: ADR-022).
 
 ## Session log (newest first)
+- 2026-11-12: WS4 deployed to `lf-eh` from `main` (`f40239c`): Foundry `ais-lf-wwssez2am6724` / `proj-livefire`,
+  `gpt-5.1` 2025-11-13 (NoAutoUpgrade) with Prompt Shields `lf-shields` (Jailbreak and Indirect Attack blocking), both
+  MCP connections, agents `lf-planner:2` and `lf-engineer:1` (verify all ok), `job-drill-runner` with its four roles.
+  `agent-smoke.py` passed both Planner stages; ca-mcp recorded the calls as `planner.tool_call allow key:planner`.
+  Three fixes from that first deploy (this PR): `foundry.bicep` orders the account's children one at a time (the
+  project failed twice with RequestConflict), `create_agents.py --verify` reads `allowed_tools` as the service
+  returns it (an MCPToolFilter), and the Planner's brief must cite the failed journey (the first live brief failed
+  `check_brief`). Not yet: a live drill and the Engineer's first live call. `drill-runner.yml`'s GHCR publish fails
+  with `permission_denied: write_package` until an org admin gives this repo access to the package; the lab image
+  (`acr` job) is unaffected.
 - 2026-11-12: WS4 G2 integration completed on `feature/ws4-g2-integration` (PR #48, ADR-026). Merge leftovers
   from PR #44 fixed (duplicate `image_repo`, Ops status checks, `ci_ok`); contracts v1.1 (scorecard, operational debt,
   next-drill recommendation, `guardrail.blocked`); the Engineer write paths and the expected fix removed from tracked
