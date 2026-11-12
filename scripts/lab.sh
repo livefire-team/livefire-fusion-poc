@@ -24,34 +24,37 @@ usage() { sed -n '2,/^set -euo pipefail$/{/^set -euo/!p;}' "$0"; exit 2; }
 # deployment history is the one record they share: the last successful provision's parameters (mapped back to azd
 # names through main.parameters.json) and its outputs. Secure parameters carry no value there, so no secret is read.
 phase_sync() {
-  local apply="" name dep params outputs k v here n=0
+  local apply="" name dep params outputs k v d here n=0
   [ "${1:-}" != --apply ] || apply=1
   load
-  name="$(az deployment sub list --query "sort_by([?starts_with(name, '${AZURE_ENV_NAME}-') \
+  name="$(az deployment sub list --query "sort_by([?tags.\"azd-env-name\" == '${AZURE_ENV_NAME}' \
     && properties.provisioningState == 'Succeeded'], &properties.timestamp)[-1].name" -o tsv)"
   [ -n "$name" ] || { echo "no successful provision of $AZURE_ENV_NAME in this subscription"; exit 1; }
   dep="$(az deployment sub show -n "$name" --query "{p: properties.parameters, o: properties.outputs}" -o json)"
-  # One assignment each, so a failed jq stops here (bash 3.2 ignores all but the last command inside one $(...))
-  params="$(jq -r --argjson d "$dep" '.parameters | to_entries[]
-    | ((.value.value | tostring | capture("^\\$\\{(?<k>[A-Z0-9_]+)")) // {k: null}).k as $k
-    | select($k != null and $d.p[.key].value != null)
-    | "\($k)\t\($d.p[.key].value | tostring)"' infra/main.parameters.json)"
-  # ARM changes the case of output names (twiN_RG), so they are upper-cased back
-  outputs="$(jq -r '.o // {} | to_entries[] | "\(.key | ascii_upcase)\t\(.value.value | tostring)"' <<<"$dep")"
+  # One assignment each, so a failed jq stops here (bash 3.2 ignores all but the last command inside one $(...)).
+  # The deployment goes in on stdin, never on a command line. Each line: azd key, the lab's value, the default.
+  # ARM can change the case of names (twiN_RG), so parameters are matched in lower case and outputs upper-cased
+  params="$(jq -r --slurpfile m infra/main.parameters.json '(.p // {} | with_entries(.key |= ascii_downcase)) as $p
+    | $m[0].parameters | to_entries[]
+    | ((.value.value | tostring | capture("^\\$\\{(?<k>[A-Z0-9_]+)(=(?<d>[^}]*))?\\}")) // {k: null}) as $c
+    | ($p[.key | ascii_downcase].value) as $v
+    | select($c.k != null and $v != null)
+    | "\($c.k)\t\($v | tostring)\t\($c.d // "")"' <<<"$dep")"
+  outputs="$(jq -r '.o // {} | to_entries[] | "\(.key | ascii_upcase)\t\(.value.value | tostring)\t"' <<<"$dep")"
   say "$AZURE_ENV_NAME on this machine, against its last successful provision ($name)"
   # a value pasted from a chat: deploy.sh refuses to provision with one, so name it here too
   azd env get-values | { LC_ALL=C grep '[^ -~]' || true; } | cut -d= -f1 | while read -r k; do
     echo "WARNING: $k holds curly quotes or other non-ASCII characters (pasted from a chat?)"
   done
-  while IFS=$'\t' read -r k v; do
+  while IFS=$'\t' read -r k v d; do
     case "$k" in AZURE_*|SQL_ADMIN_PASSWORD) continue ;; esac  # azd's own, and the one secure value
-    here="${!k:-}"
+    here="${!k:-$d}"                         # unset here means main.parameters.json's default, as in a provision
     [ "$here" != "$v" ] || continue
     if [ -z "$v" ]; then
-      echo "info  $k is set here, empty in the lab: a provision from here would deploy it"
+      [ -z "${!k:-}" ] || echo "info  $k is set here, empty in the lab: a provision from here would deploy it"
       continue
     fi
-    if [ -z "$here" ]; then echo "missing here  $k"; else echo "differs       $k"; fi
+    if [ -z "${!k:-}" ]; then echo "missing here  $k"; else echo "differs       $k"; fi
     n=$((n + 1))
     [ -z "$apply" ] || azd env set "$k" "$v"
   done <<<"$params"$'\n'"$outputs"
@@ -130,7 +133,8 @@ phase_new_env() {
   if azd env list | awk 'NR > 1 { print $1 }' | grep -qx "$name"; then echo "$name already exists"; exit 1; fi
   from="${from:-$(selected_env)}"
   values="$(azd env get-values -e "$from")"
-  get() { sed -n "s/^$1=\"\(.*\)\"$/\1/p" <<<"$values"; }
+  # azd escapes " \ and $ in what it prints; evaluating the lines, as load does, gives the values back exactly
+  get() { ( eval "$values"; printf '%s' "${!1:-}" ); }
 
   say "azd environment $name, settings from $from"
   azd env new "$name" --subscription "$(get AZURE_SUBSCRIPTION_ID)" --location "$(get AZURE_LOCATION)"
@@ -140,7 +144,11 @@ phase_new_env() {
   done
   # the hook copies the GitHub App keys from here, so nobody handles the .pem files (ADR-025)
   azd env set -e "$name" SECRETS_SOURCE_VAULT "$(get CONTROL_KEYVAULT_NAME)"
-  azd env set -e "$name" SQL_ADMIN_PASSWORD "$(openssl rand -base64 24 | tr -d ';}!')"
+  # the password goes through a private file, never a command line
+  local tmp; tmp="$(umask 077 && mktemp)"
+  printf 'SQL_ADMIN_PASSWORD="%s"\n' "$(openssl rand -base64 24 | tr -d ';}!')" > "$tmp"
+  azd env set -e "$name" --file "$tmp"
+  rm -f "$tmp"
   # the new registry is empty until deploy.sh images, so the first provision pulls the same build from GHCR
   azd env set -e "$name" ORDER_IMAGE \
     "$(get ORDER_IMAGE | sed -E "s#^[^/]+/order-service:sha-([0-9a-f]{7}).*#ghcr.io/$GHCR_OWNER/order-service:sha-\1#")"
@@ -159,20 +167,30 @@ phase_teardown() {
   [ "$before" != "$name" ] || before="${PROTECTED_ENVS%% *}"
   azd env select "$name"
   # whatever happens below, the next command must not land in the half-deleted environment. Expanded now: the trap
-  # runs after this function has returned, when its locals are gone
+  # runs after this function has returned, when its locals are gone. It also fails the script unless the last line
+  # was reached: after an unbound variable, bash 3.2 would otherwise exit 0 from an EXIT trap
   # shellcheck disable=SC2064
-  trap "azd env select '$before'; echo '$before selected'" EXIT
+  trap "azd env select '$before'; echo '$before selected'; [ -n \"\${torn_down:-}\" ] || exit 1" EXIT
   load
+  # An environment whose first provision failed has no outputs: skip what isn't there, but still delete the rest
+  unlock() {
+    if [ -n "${EVIDENCE_BLOB_URL:-}" ]; then python scripts/evidence_unlock.py --yes
+    else echo "no evidence store in $name: nothing to unlock"; fi
+  }
 
   say "1. $name's id-lf-ops: its subscription-scope role goes (the deny policy is shared with lf-eh, so it stays)"
-  az role assignment delete --assignee "$OPS_PRINCIPAL_ID" --role "Role Based Access Control Administrator" \
-    --scope "/subscriptions/$AZURE_SUBSCRIPTION_ID" -o none || true
+  if [ -n "${OPS_PRINCIPAL_ID:-}" ]; then              # never an empty --assignee: that would match every holder
+    az role assignment delete --assignee "$OPS_PRINCIPAL_ID" --role "Role Based Access Control Administrator" \
+      --scope "/subscriptions/$AZURE_SUBSCRIPTION_ID" -o none || true
+  else
+    echo "no id-lf-ops in $name: nothing to remove"
+  fi
 
   say "2. evidence: the unlocked immutability policies go, then azd down"
-  python scripts/evidence_unlock.py --yes
+  unlock
   if ! azd down --force --purge; then
     echo "azd down failed: unlocking the evidence again (new versions may have been written) and retrying once" >&2
-    python scripts/evidence_unlock.py --yes
+    unlock
     azd down --force --purge
   fi
 
@@ -187,10 +205,11 @@ phase_teardown() {
   # a soft-deleted Foundry account keeps its model quota until it is purged
   if [ -n "${FOUNDRY_NAME:-}" ] && [ -n "$(az cognitiveservices account list-deleted \
     --query "[?name=='$FOUNDRY_NAME'].name" -o tsv)" ]; then
-    az cognitiveservices account purge -g "$CONTROL_RG" -n "$FOUNDRY_NAME" -l "$AZURE_LOCATION" -o none
+    az cognitiveservices account purge -g "${CONTROL_RG:-}" -n "$FOUNDRY_NAME" -l "$AZURE_LOCATION" -o none
     echo "purged Foundry account $FOUNDRY_NAME"
   fi
 
+  torn_down=1
   rm -rf ".azure/$name"
   echo "$name removed. If CI's acr-push still names its registry: azd env select lf-eh && scripts/deploy.sh github"
 }

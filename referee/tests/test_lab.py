@@ -28,6 +28,7 @@ AZURE_PRINCIPAL_TYPE="User"
 KEYVAULT_NAME="kv-lf-twin"
 KEYVAULT_ID="/subscriptions/0/resourceGroups/rg-lf-twin-lf-eh/providers/Microsoft.KeyVault/vaults/kv-lf-twin"
 CONTROL_KEYVAULT_NAME="kv-lfc-test"
+EVIDENCE_BLOB_URL="https://evidence.example/evidence"
 APP_IDENTITY_PRINCIPAL_ID="22222222-2222-2222-2222-222222222222"
 OPS_PRINCIPAL_ID="11111111-1111-1111-1111-111111111111"
 ORDER_APP_NAME="ca-order"
@@ -42,6 +43,7 @@ MODEL_VERSION="2025-11-13"
 PLANNER_AGENT="lf-planner:4"
 RUNNER_SOURCE="ghcr.io/livefire-team/drill-runner:sha-{"a" * 40}"
 SEARCH_LOCATION="eastus"
+SEARCH_VECTOR_FIELD="a\\"b"
 INCIDENT_CORPUS="/nowhere/incidents"
 RUNNER_GITHUB_APP_ID="5"
 CONTROL_CENTER_SOURCE="ghcr.io/livefire-team/control-center:sha-{"c" * 40}"
@@ -62,8 +64,8 @@ case "$1 $2" in
   "env select") echo "azd $*" >> "$D/calls.log"; echo "$3" > "$D/selected" ;;
   "env new") echo "azd $*" >> "$D/calls.log"; : > "$D/values/$3.env"; echo "$3" > "$D/selected" ;;
   "env set") echo "azd $*" >> "$D/calls.log"
-    if [ "$3" = -e ]; then e="$4"; k="$5"; v="$6"; else e="$(cat "$D/selected")"; k="$3"; v="$4"; fi
-    printf '%s="%s"\n' "$k" "$v" >> "$D/values/$e.env" ;;
+    if [ "$3" = -e ]; then e="$4"; shift 4; else e="$(cat "$D/selected")"; shift 2; fi
+    if [ "$1" = --file ]; then cat "$2" >> "$D/values/$e.env"; else printf '%s="%s"\n' "$1" "$2" >> "$D/values/$e.env"; fi ;;
   "down --force") echo "azd $* env=$(cat "$D/selected")" >> "$D/calls.log"
     n=$(cat "$D/down-calls" 2>/dev/null || echo 0); echo $((n+1)) > "$D/down-calls"
     [ "$n" -ge "$(cat "$D/down-fails" 2>/dev/null || echo 0)" ] ;;
@@ -196,6 +198,8 @@ def test_new_env_copies_the_settings_and_nothing_built_for_lf_eh(sandbox):
         assert k not in new, k
     assert new["SECRETS_SOURCE_VAULT"] == "kv-lfc-test"       # the hook copies the GitHub App keys from lf-eh's vault
     assert new["SQL_ADMIN_PASSWORD"] == "generated-value"
+    assert not any("generated-value" in c for c in calls(sandbox))          # the password never on a command line
+    assert new["SEARCH_VECTOR_FIELD"] == 'a"b'                              # azd's escaping undone, not copied
     assert new["ORDER_IMAGE"] == "ghcr.io/livefire-team/order-service:sha-1111111"
     assert "lf-eh-secret" not in result.stdout + result.stderr
     assert "WARNING: INCIDENT_CORPUS is not a folder here" in result.stderr
@@ -258,6 +262,28 @@ def test_teardown_removes_the_role_unlocks_evidence_then_deletes_and_selects_lf_
     assert not (sandbox / ".azure" / "lf-g3").exists()
 
 
+def test_teardown_of_an_environment_without_outputs_still_deletes_it(sandbox):
+    half = "".join(l + "\n" for l in LF_G3.splitlines()
+                   if not l.startswith(("OPS_PRINCIPAL_ID=", "EVIDENCE_BLOB_URL=", "CONTROL_KEYVAULT_NAME=")))
+    (sandbox / "values" / "lf-g3.env").write_text(half)
+    result = lab(sandbox, "teardown", "lf-g3", "--yes", az_body=AZ_TEARDOWN)
+    assert result.returncode == 0, result.stdout + result.stderr
+    log = calls(sandbox)
+    assert not any(c.startswith("az role assignment delete") for c in log)    # never with an empty --assignee
+    assert "python scripts/evidence_unlock.py --yes" not in log
+    assert any(c.startswith("azd down --force --purge") for c in log)
+    assert (sandbox / "selected").read_text().strip() == "lf-eh"
+
+
+def test_teardown_fails_when_a_step_fails(sandbox):
+    add_lf_g3(sandbox)
+    fake(sandbox / "bin" / "python", 'echo "Forbidden" >&2; exit 1\n')
+    result = lab(sandbox, "teardown", "lf-g3", "--yes", az_body=AZ_TEARDOWN)
+    assert result.returncode != 0
+    assert not any(c.startswith("azd down") for c in calls(sandbox))
+    assert (sandbox / "selected").read_text().strip() == "lf-eh"
+
+
 def test_teardown_unlocks_again_and_retries_a_failed_down_once(sandbox):
     add_lf_g3(sandbox)
     (sandbox / "down-fails").write_text("1")
@@ -289,9 +315,10 @@ DEPLOYMENT = {
         "modelName": {"value": "gpt-5.1"},
         "searchLocation": {"value": "eastus"},
         "mcpImage": {"value": "acrlftest.azurecr.io/mcp-server:sha-" + "9" * 40},
-        "loadgenDrillId": {"value": "drill-loadgen-1111"},
+        "loadgendrillid": {"value": "drill-loadgen-1111"},        # ARM may change a name's case
+        "promptShields": {"value": "on"},                        # the default: the same as unset here
         "controlCenterImage": {"value": ""},
-        "modelCapacity": {"value": 50},
+        "modelCapacity": {"value": 40},
     },
     "o": {
         "twiN_RG": {"type": "String", "value": "rg-lf-twin-lf-eh"},
@@ -324,19 +351,22 @@ def test_sync_names_what_differs_from_the_lab_and_changes_nothing(sandbox):
         assert f"missing here  {k}" in out, k
     assert "differs       LOADGEN_DRILL_ID" in out
     assert "info  CONTROL_CENTER_IMAGE is set here, empty in the lab" in out
-    for k in ("MODEL_NAME", "TWIN_RG", "ORDER_IMAGE", "AZURE_PRINCIPAL_ID", "AZURE_ENV_NAME", "SQL_ADMIN_PASSWORD"):
-        assert k not in out, k                                   # the same, azd's own, or secure
+    for k in ("MODEL_NAME", "TWIN_RG", "ORDER_IMAGE", "AZURE_PRINCIPAL_ID", "AZURE_ENV_NAME", "SQL_ADMIN_PASSWORD",
+              "PROMPT_SHIELDS"):
+        assert k not in out, k                                   # the same (or the default), azd's own, or secure
     assert "ca-mcp.example" not in out and "drill-loadgen-1111" not in out      # names only, never values
     assert "6 value(s) differ: rerun with --apply" in out
     assert not any(c.startswith("azd env set") for c in calls(sandbox))
-    assert "deployment sub list" in calls(sandbox)[0] and "Succeeded" in calls(sandbox)[0]
+    listing = calls(sandbox)[0]
+    assert "deployment sub list" in listing and "Succeeded" in listing and "azd-env-name" in listing
 
 
 def test_sync_apply_takes_the_labs_values(sandbox):
     result = lab(sandbox, "sync", "--apply", az_body=az_sync(sandbox))
     assert result.returncode == 0, result.stdout + result.stderr
     now = values_of(sandbox, "lf-eh")
-    assert now["SEARCH_LOCATION"] == "eastus" and now["MODEL_CAPACITY"] == "50"
+    assert now["SEARCH_LOCATION"] == "eastus" and now["MODEL_CAPACITY"] == "40"
+    assert "PROMPT_SHIELDS" not in now                     # a default is not written into the environment
     assert now["MCP_URL"] == "https://ca-mcp.example.azurecontainerapps.io"
     assert now["LOADGEN_DRILL_ID"] == "drill-loadgen-1111"
     assert now["CONTROL_CENTER_IMAGE"].startswith("acrlftest.azurecr.io/control-center")   # kept, only reported
