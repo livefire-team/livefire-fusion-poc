@@ -451,3 +451,87 @@ def test_policy_off_keeps_the_policy_while_the_role_is_still_there(sandbox):
     assert result.returncode != 0 and "still holds" in result.stdout
     assert not any(c.startswith("az policy assignment delete") for c in calls)
     assert "azd env set DENY_BROAD_POLICY off" not in calls
+
+
+# ---- WS4 (ADR-026): job-drill-runner only when its inputs exist; Foundry follows ca-mcp ----
+RUNNER_VALUES = """MODEL_NAME=gpt-5.1
+MODEL_VERSION=2025-11-13
+PLANNER_AGENT=lf-planner:1
+ENGINEER_AGENT=lf-engineer:1
+RUNNER_GITHUB_APP_ID=5
+RUNNER_GITHUB_INSTALLATION_ID=6
+RUNNER_IMAGE=acrlftest.azurecr.io/drill-runner:sha-1
+"""
+
+
+def test_runner_deploys_when_everything_is_there(sandbox):
+    result = run_apps(sandbox, ALL_MCP_SECRETS + " ops-runner-key gh-runner-private-key", extra=RUNNER_VALUES)
+    assert result.returncode == 0, result.stderr
+    assert "left out" not in result.stderr
+    calls = log_lines(sandbox)
+    assert "azd provision" in calls and not any(c.startswith("azd env set RUNNER_IMAGE") for c in calls)
+
+
+def test_runner_is_left_out_and_names_its_missing_github_key(sandbox):
+    result = run_apps(sandbox, ALL_MCP_SECRETS + " ops-runner-key", extra=RUNNER_VALUES)
+    assert result.returncode == 0, result.stderr
+    assert "job-drill-runner left out of this provision" in result.stderr
+    assert "secret gh-runner-private-key in kv-lfc-test" in result.stderr
+    assert "ca-mcp left out" not in result.stderr                   # WS3 is unaffected
+    calls = log_lines(sandbox)
+    assert calls.index("azd env set RUNNER_IMAGE ") < calls.index("azd provision")
+
+
+def test_runner_token_fallback_needs_the_token_secret_and_no_app_ids(sandbox):
+    extra = RUNNER_VALUES.replace("RUNNER_GITHUB_APP_ID=5\nRUNNER_GITHUB_INSTALLATION_ID=6\n", "")
+    result = run_apps(sandbox, ALL_MCP_SECRETS + " ops-runner-key gh-runner-token",
+                      extra=extra + "RUNNER_GITHUB_AUTH=token\n")
+    assert result.returncode == 0, result.stderr
+    assert "left out" not in result.stderr
+
+
+def test_runner_is_left_out_when_ca_mcp_is(sandbox):
+    result = run_apps(sandbox, "ops-agent-key ops-runner-key gh-runner-private-key", extra=RUNNER_VALUES)
+    assert result.returncode == 0, result.stderr
+    assert "ca-mcp left out" in result.stderr and "job-drill-runner left out" in result.stderr
+    assert "ca-mcp (MCP_IMAGE)" in result.stderr
+
+
+def test_runner_is_left_out_without_its_pins(sandbox):
+    extra = RUNNER_VALUES.replace("PLANNER_AGENT=lf-planner:1\n", "")
+    result = run_apps(sandbox, ALL_MCP_SECRETS + " ops-runner-key gh-runner-private-key", extra=extra)
+    assert "azd env value PLANNER_AGENT" in result.stderr and "job-drill-runner left out" in result.stderr
+
+
+def test_foundry_phase_needs_the_model_and_ca_mcp(sandbox):
+    result = run_apps(sandbox, ALL_MCP_SECRETS, phase="foundry")
+    assert result.returncode == 1 and "set the model first" in result.stdout
+    assert "azd provision" not in log_lines(sandbox)
+
+
+def test_runner_phase_needs_an_image(sandbox):
+    result = run_apps(sandbox, ALL_MCP_SECRETS, phase="runner")
+    assert result.returncode == 1 and "no RUNNER_IMAGE" in result.stdout
+
+
+def test_postprovision_can_skip_only_the_browser_baseline(sandbox, monkeypatch):
+    monkeypatch.setenv("POSTPROVISION_BASELINE", "off")
+    script = copy_repo_bits(sandbox)
+    result = run(sandbox, script.as_posix(), az_body=AZ_VAULT_HAS_RUNNER_KEY)
+    assert result.returncode == 0, result.stderr
+    calls = log_lines(sandbox)
+    assert "referee baseline" not in calls and "baseline skipped" in result.stdout
+    assert any(c.startswith("sqlcmd") for c in calls)                  # everything before it still ran
+    assert any("containerapp revision restart" in c for c in calls)
+
+
+def test_ws4_foundry_phase_skips_the_local_baseline(sandbox):
+    log = (sandbox / "calls.log").as_posix()
+    values = APPS_VALUES + RUNNER_VALUES + "FOUNDRY_PROJECT_ENDPOINT=https://ais.example/api/projects/p\n"
+    fake(sandbox / "bin" / "azd", f'if [ "$1 $2" = "env get-values" ]; then cat <<\'EOF\'\n{values}EOF\n'
+                                  f'else echo "azd $* baseline=${{POSTPROVISION_BASELINE:-unset}}" >> {log}; fi\n')
+    az = f'echo "az $*" >> LOG\ncase "$*" in "keyvault secret list"*) printf "%s\\n" {ALL_MCP_SECRETS} ;; esac\n'
+    result = run(sandbox, copy_deploy(sandbox).as_posix(), "foundry", az_body=az)
+    assert result.returncode == 0, result.stderr
+    assert "azd provision baseline=off" in log_lines(sandbox)
+    assert "FOUNDRY_PROJECT_ENDPOINT=https://ais.example/api/projects/p" in result.stdout

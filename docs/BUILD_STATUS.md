@@ -3,15 +3,12 @@
 > Purpose: if a session ends (usage limit, closed laptop), the next Claude session reads THIS file and continues
 > exactly where we stopped. Keep it accurate. Update after every step and PR, and before ending any session.
 
-**Last updated:** 2026-11-10 (WS2 G3 planned: the G3 guide and starter kit are on the WS2 Mac, outside git
-(ADR-004); three PRs to come: decisions, WS4 wiring, lab tools. Lab checked read-only: `ca-mcp`, Foundry and the
-Drill Runner are not deployed yet. G2 met 13 of 13; the deny policy is OFF since 2026-11-08)
-**Current gate target:** G3 (Mon Nov 16; moved from Nov 9)
-**Last updated:** 2026-11-10 (**WS1 G2 complete**: all checks met, evidence under "Done". WS2 G2: all 13 gate items met. Joint drill with WS5 done: Drill A and Drill B
-passed. The deny policy is OFF since 2026-11-08. WS1's twin revision test passed; PRs #32, #38 and WS3's #40
-merged. PR #41 merged (1299915): `main.bicep` deploys the load generator; deployed to `lf-eh` and WS1's item 4
-checks passed)
-**Current gate target:** G2 (Mon Nov 9; moved from Nov 2)
+**Last updated:** 2026-11-12 (WS2 G3 in progress: PRs #50 (`lab.sh`), #51 (`deploy.sh all` is the one command),
+#52 (ADR-023 to ADR-025) and #53 (`start-load.sh`) open for review; code freeze planned Fri Nov 13 noon. WS4's
+Foundry, agents and `job-drill-runner` are deployed in `lf-eh`; no drill through the runner yet. The WS2 Mac's azd
+copy of `lf-eh` was brought in step with the lab (`lab.sh sync --apply`). Deny policy still OFF. Earlier: WS1 G2
+complete 2026-11-10; WS2 G2 13 of 13)
+**Current gate target:** G3 (Mon Nov 16)
 
 ## FIRST THING THE NEXT SESSION SHOULD DO
 All WS1 PRs (#1-#14) are merged into `main` (2026-10-30, merge commits; last merge 8e37fd0); every `main` run is green.
@@ -338,29 +335,37 @@ Status values: not started | in progress | PR open | merged | blocked
     `ORDER_IMAGE` is a registry `sha-<40>` tag; the control vault name is fixed, so reprovisioning after `azd down`
     needs `--purge`. Not done on purpose: a `predown` hook that runs `policy-off`, because the policy is
     subscription-wide and a teardown of a second environment would remove it for `lf-eh` too.
-- WS2 G3 (Mon Nov 16), planned 2026-11-10. The bar is the PoC plan's G3: one command builds a fresh lab, T-01
-  verified twice in a row from a clean lab, and the T-02, T-03 and T-04 denials visible in the Control Center.
-  The guide (`ws2-g3-build-steps.md`) and the starter kit (`livefire-ws2-g3-starter.zip`, three patches on
-  `162f2dd`) are on the WS2 Mac only (ADR-004). On `162f2dd` with all three applied: `pytest referee/tests` 136
-  passed (21 new lab tests, 15 new deploy-script tests), `main.bicep` builds and lints clean, ShellCheck clean.
-  - PR 1, docs: ADR-023 (the Functions injector and Playwright Workspaces stay on the roadmap), ADR-024 (WS4's
-    Foundry and Drill Runner in `main.bicep`, from the private registry), ADR-025 (a clean lab is a second azd
-    environment, `lf-g3`); four glossary terms.
-  - PR 2: WS4's two modules (the runner pulls with `id-lf-acrpull`), `deploy.sh images` imports the runner and the
-    Control Center from an exact GHCR build, `deploy.sh` leaves the runner and the Control Center out until their
-    inputs exist (like `ca-mcp`), `smoke` retries a failed status call, WS4's `start-drill.sh`.
-  - PR 3: `scripts/lab.sh` (`state`, `new-env`, `teardown`); the post-provision hook stores the GitHub App keys from
-    `GITHUB_APP_KEYS` and creates WS5's two secrets in a fresh control vault.
-  - Read-only lab check 2026-11-10: running are `ca-order`, `ca-ops`, `ca-control-center`, `job-referee`,
-    `job-ops-smoke` and `caj-loadgen`. Not deployed: `ca-mcp` (no GitHub App credentials in the control vault yet),
-    Foundry and the Drill Runner (WS4's Bicep isn't in `main.bicep`). `CONTROL_CENTER_IMAGE` is not set, so
-    `deploy.sh apps` leaves the Control Center as WS5 deployed it. `gpt-5.1` (2025-11-13) GlobalStandard is offered
-    in eastus2 with enough quota. The `referee` image of PR #41's merge reached the lab registry but not GHCR (its
-    `publish` job: `permission_denied: write_package`); PR #42's publish worked.
-  - WS4's runner (`ws4-new` at `f55657a`) calls the Ops Service with the v1 names, which stay supported. Hand-offs
-    for WS4 are in the guide's section 1.
-  - Next, in order: the guide's section 1 asks (three GitHub Apps, WS1's write paths and pre-validated candidate,
-    WS4 status), section 2 carry-overs, then PRs 1-3.
+- WS2 G3 (Mon Nov 16). Bar: the PoC plan's G3 (one command builds a fresh lab; T-01 verified twice in a row from a
+  clean lab; the T-02, T-03 and T-04 denials visible in the Control Center). Decided with the owner: ADR-023 (the
+  Functions injector and Playwright Workspaces stay on the roadmap), ADR-024 (`deploy.sh all` runs every pass, WS4
+  and WS5 included), ADR-025 (clean lab = second azd environment `lf-g3`; every machine runs `lab.sh sync` before
+  it provisions); code merges planned for a Fri Nov 13 noon freeze. The v2 guide and starter kit are on the WS2 Mac
+  only (ADR-004). WS4 wired its own modules into `main.bicep` (PR #48, ADR-026), so WS2's planned wiring PR was dropped.
+  - Open PRs (2026-11-12), each with real test output; a review pass runs before any merge:
+    - #52 docs: ADR-023 to ADR-025 and eight glossary terms.
+    - #51 `deploy.sh all` chains infra, images, apps (Foundry with `ca-mcp`), agents (skipped when pinned) and the
+      runner, then verify; imports WS5's Control Center from `CONTROL_CENTER_SOURCE` (an exact GHCR build) and
+      leaves it out until its secrets exist; the hook copies the three GitHub App keys from `SECRETS_SOURCE_VAULT`
+      and creates WS5's two secrets; every provision refuses an azd value with curly quotes; `smoke` polls through
+      a failed status call; the usage text works on macOS (one test failed on macOS since #48). 52 deploy-script tests.
+    - #50 `scripts/lab.sh`: `sync` (this machine against the lab's last successful provision, key names only),
+      `state`, `new-env`, `teardown` (purges a soft-deleted vault or Foundry account). 22 tests.
+    - #53 `scripts/start-load.sh <drill-id>`: `caj-loadgen` for the drill that `start-drill.sh` starts (WS1's
+      question of 2026-11-08); `start-drill.sh` still prints the drill ID when the load can't start. 12 tests.
+    - With #50 to #52 applied together: `pytest referee/tests` 153 passed (109 on `main`).
+  - Lab, checked 2026-11-11/12 (read-only unless noted): twin at baseline (`lab.sh state`); `ca-mcp` (key mode, GitHub
+    Apps) with AI Search in eastus (no capacity in eastus2); Foundry with `gpt-5.1` 2025-11-13, 50K, Prompt Shields;
+    agents pinned and `job-drill-runner` deployed by WS4 (#49 brings `main` in line with what WS4 deployed). The WS5
+    Control Center still runs its G2 build. The three GitHub Apps exist and the Engineer App bypasses
+    `candidate-branches`. Each machine keeps its own azd copy and every team signs in as the same lab user: the WS2
+    Mac's copy was 30 values behind and held three values pasted with curly quotes; `lab.sh sync --apply` fixed it
+    (backup of the old copy in `.azure/`, git-ignored), and `INCIDENT_CORPUS` was set by hand.
+  - `drill-runner`'s GHCR `publish` failed (`permission_denied: write_package`: the package was created by
+    `ws4-new`); the lab registry has the image. An org admin must give this repo Write access to the package, then
+    `gh run rerun 43141120000 --failed` before the run's image artifact expires (2026-11-13 02:25 UTC).
+  - WS4's packages live in `~/.venvs/ws4` on the WS2 Mac (`PYTHON` for `deploy.sh agents`/`all`); 67 runner tests pass.
+  - Next: reviews and merges of #50 to #53 (and WS4's #49) by Fri noon; WS5 deploys its G3 build to `lf-eh`; first
+    T-00 and T-01 through the runner; deny policy on for T-02; Sat: `lf-g3` with `deploy.sh all`, T-01 twice.
 - Last commands run (WS2 Mac, with `.venv` active, `REQUESTS_CA_BUNDLE` set, on `main` at 1299915): `az acr import`
   of `load-generator:sha-8339b92`; `azd env set LOADGEN_IMAGE` and `LOADGEN_DRILL_ID`; `azd provision --preview`;
   `scripts/deploy.sh apps` (exit 0); `az role assignment list --assignee <LOADGEN_PRINCIPAL_ID> --all`;
@@ -466,9 +471,24 @@ Status values: not started | in progress | PR open | merged | blocked
 - [x] WS5: metric names (orders_completed, orders_failed{reason}, loadgen_orders_sent, loadgen_orders_dropped, loadgen_backlog_size) and the `metrics.orders` fields (the Control Center reads them, 2026-11-09)
 
 ## Decisions log pointer
-See `docs/ADR.md` (latest: ADR-022).
+See `docs/ADR.md` (latest: ADR-026; ADR-023 to ADR-025 in PR #52).
 
 ## Session log (newest first)
+- 2026-11-12 (WS2): G3 v2 plan after PR #48: one command via `deploy.sh all`, `lab.sh sync` before every provision,
+  freeze Fri noon. PRs #50 to #53 opened (153 referee tests with #50 to #52; 12 more in #53). WS2 Mac's azd copy
+  synced with the lab; WS4 venv created. Found: `drill-runner` GHCR publish refused (org admin action), WS5's G3
+  Control Center not deployed, deny policy off.
+- 2026-11-12: WS4 G2 integration completed on `feature/ws4-g2-integration` (PR #48, ADR-026). Merge leftovers
+  from PR #44 fixed (duplicate `image_repo`, Ops status checks, `ci_ok`); contracts v1.1 (scorecard, operational debt,
+  next-drill recommendation, `guardrail.blocked`); the Engineer write paths and the expected fix removed from tracked
+  prompts, fixtures, stubs and code (ADR-004): they are configuration now. Foundry (with Prompt Shields) and
+  `job-drill-runner` wired into `main.bicep` behind gates; `deploy.sh foundry|agents|runner`; `drill-runner.yml`
+  pushes to the lab registry; `security.yml` audits and scans the runner; `start-drill.sh` added. 62 drill-runner
+  tests and 28 deploy-script tests pass; Bandit and Semgrep clean; `main.bicep` builds and lints clean. Still
+  external: the `livefire-runner` GitHub App and its key, WS1's `start-load.sh`, WS2's deny policy (off).
+  Then the remaining G2/G3 code items: the Autonomous Twin broad test, `settle_s`, required checks recorded in the
+  policy and re-checked by the verdict, `guardrail.blocked` with filter and response_id, the stub T-08 guardrail
+  variant, the `lf-shields` policy name, and `docs/decisions.md` (D-001 to D-003, proposed for the lead). 67 tests.
 - 2026-11-10: WS2 G3 planned with the owner (PoC plan G3 bar; injector and Workspaces cut; WS2 wires WS4; clean lab
   in a second azd environment). Lab and the WS3/WS4 repos checked read-only. Guide and starter kit written outside
   git; 136 tests pass with the kit applied.

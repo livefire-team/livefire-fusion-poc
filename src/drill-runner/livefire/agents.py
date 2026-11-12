@@ -7,7 +7,23 @@ from dataclasses import dataclass
 from pydantic import BaseModel, ValidationError
 
 from .contracts import ChangeReport, PlannerOutput
-from .ports import DependencyError, Usage
+from .ports import DependencyError, GuardrailBlocked, Usage
+
+_FILTER_CODES = ("content_filter", "ResponsibleAIPolicyViolation", "jailbreak", "indirect_attack")
+
+
+def guardrail_reason(source) -> str | None:
+    """Why the deployment's guardrail stopped a call, or None. Azure reports a blocked prompt as an error with code
+    content_filter (inner code ResponsibleAIPolicyViolation), and a blocked completion as an incomplete response."""
+    incomplete = getattr(getattr(source, "incomplete_details", None), "reason", None)
+    if incomplete == "content_filter":
+        return "the response was cut by the content filter"
+    error = getattr(source, "error", None)                # a response object with status failed
+    code = getattr(error, "code", None) if error is not None else getattr(source, "code", None)
+    text = f"{code or ''} {getattr(source, 'body', '') or ''} {source if isinstance(source, Exception) else ''}"
+    if any(c.lower() in text.lower() for c in _FILTER_CODES):
+        return (code or "content_filter")[:80]
+    return None
 
 # Keywords the model-facing schema keeps. Everything else (lengths, patterns, defaults) is still enforced,
 # by Pydantic, after the response arrives. Keeping the schema minimal makes it valid in strict mode everywhere.
@@ -88,8 +104,12 @@ class FoundryAgents:
         for attempt in range(2):                          # one repair turn if the output fails validation
             try:
                 response = await asyncio.to_thread(self._respond, role, text, previous)
-            except Exception as exc:                      # network, auth, 5xx, tool-call timeout
+            except Exception as exc:                      # network, auth, 5xx, tool-call timeout, guardrail
+                if reason := guardrail_reason(exc):
+                    raise GuardrailBlocked(role, reason) from exc
                 raise DependencyError(f"Foundry call for the {role} failed: {exc}") from exc
+            if reason := guardrail_reason(response):
+                raise GuardrailBlocked(role, reason, getattr(response, "id", "") or "")
             usage.input_tokens += getattr(response.usage, "input_tokens", 0) or 0
             usage.output_tokens += getattr(response.usage, "output_tokens", 0) or 0
             usage.tool_calls += sum(1 for item in response.output if getattr(item, "type", "") == "mcp_call")

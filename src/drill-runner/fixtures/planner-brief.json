@@ -4,26 +4,26 @@
   "remediation_brief": {
     "incident_id": "drill-fixture",
     "evidence_references": [
-      {"source": "referee", "ref": "after-restore", "note": "Journey still fails at place-order with SecretUnavailable after access returned"},
-      {"source": "telemetry", "ref": "dependency_failures", "note": "No new Key Vault calls after the restore: failures served from memory"},
-      {"source": "commit", "ref": "src/order-service/app/secret_provider.py", "note": "A performance change cached failed secret reads"}
+      {"source": "referee", "ref": "after-restore", "note": "The journey still fails at place-order after access returned"},
+      {"source": "telemetry", "ref": "dependency_failures", "note": "Placeholder: what the telemetry showed after the restore"},
+      {"source": "repository", "ref": "src/order-service/app/example.py", "note": "Placeholder: the code the evidence points to"}
     ],
-    "supported_hypothesis": "The secret provider caches a failed read and keeps serving the failure after access is restored, so infrastructure is green while orders fail.",
+    "supported_hypothesis": "Placeholder hypothesis: the application does not recover on its own after access is restored, so infrastructure is green while orders fail.",
     "rejected_hypotheses": ["Role not yet propagated: the identity snapshot shows the role and the vault accepts reads"],
-    "affected_components": ["src/order-service/app/secret_provider.py"],
-    "required_behavior": "A failed secret read must not be cached as final. Retry with bounded backoff and refresh after access returns, without a restart.",
+    "affected_components": ["src/order-service/app/example.py"],
+    "required_behavior": "Placeholder: after access is restored, the next order succeeds without a restart.",
     "acceptance_criteria": [
       "A regression test fails on the current code and passes on the candidate",
       "After access is restored, the next order succeeds without restarting the app",
       "The runbook adds a customer-journey check after any access restore"
     ],
     "allowed_repository_paths": [
-      "src/order-service/app/secret_provider.py",
-      "src/order-service/tests/test_secret_recovery.py",
-      "runbooks/order-service-keyvault-recovery.md"
+      "src/order-service/app/example.py",
+      "src/order-service/tests/test_example_recovery.py",
+      "runbooks/example-recovery.md"
     ],
     "prohibited_changes": ["journeys/", "infra/", ".github/", "Any change to the referee or its assertions"],
-    "residual_risks": ["Other secrets read at startup only may behave the same way"],
+    "residual_risks": ["Placeholder residual risk"],
     "confidence": 0.8
   }
 }

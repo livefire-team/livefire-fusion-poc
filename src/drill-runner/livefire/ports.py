@@ -21,6 +21,14 @@ class DependencyError(RuntimeError):
     """A required dependency failed or returned an invalid contract. Ends the drill as ESCALATED_DEPENDENCY."""
 
 
+class GuardrailBlocked(RuntimeError):
+    """v1.1: the model deployment's guardrail (Prompt Shields) blocked an agent call. Ends ESCALATED_SECURITY."""
+
+    def __init__(self, agent: str, detail: str, response_id: str = ""):
+        super().__init__(f"the guardrail blocked the {agent}: {detail}")
+        self.agent, self.detail, self.response_id = agent, detail, response_id
+
+
 # ---------------------------------------------------------------- event log
 
 class EventLog:
@@ -62,27 +70,13 @@ class HttpOps:
         for attempt in range(2):                          # one retry for a transient failure, then stop (T-10)
             try:
                 r = await self.http.post(f"/actions/{action}", json={"drill_id": self.drill_id, **body})
-
                 if r.status_code in (401, 403):
-                    raise DependencyError(
-                        f"Ops Service rejected the runner's key ({r.status_code})"
-                    )
-
-                if r.status_code == 409:
-                    payload = r.json()
-                    if payload.get("result") == "stopped":
-                        raise DependencyError(
-                            f"Ops action {action} was stopped; refusing to retry"
-                        )
-
+                    raise DependencyError(f"Ops Service rejected the runner's key ({r.status_code})")
                 if r.status_code == 422:
-                    return OpsResult(
-                        action=action,
-                        result="refused",
-                        details=r.json(),
-                    )
-
-                r.raise_for_status()
+                    return OpsResult(action=action, result="refused", details=r.json().get("details", {}))
+                if r.status_code == 409 and r.json().get("result") == "stopped":
+                    raise DependencyError(f"Ops action {action} was stopped by the kill switch; not retried")
+                r.raise_for_status()                      # 409 busy and 503 error: retried once below
                 return OpsResult.model_validate(r.json())
             except (httpx.TransportError, httpx.HTTPStatusError) as exc:
                 last = exc
@@ -131,6 +125,7 @@ class CiStatus:
     commit: str = ""               # full head SHA the run tested
     url: str = ""
     failed: list[dict] = field(default_factory=list)
+    checks: dict[str, str] = field(default_factory=dict)   # v1.1: workflow file -> conclusion (or pending/missing)
 
 
 class RepoPort(Protocol):
@@ -146,8 +141,9 @@ class GitHubRepo:
     API = "https://api.github.com"
     WORKFLOW_FILES = ("order-service.yml", "security.yml")
 
-    def __init__(self, repo: str, token_provider, transport=None):
+    def __init__(self, repo: str, token_provider, transport=None, workflows: list[str] | None = None):
         self.repo, self.token = repo, token_provider
+        self.workflows = tuple(workflows or self.WORKFLOW_FILES)   # the policy's required_checks
         self.http = httpx.AsyncClient(base_url=self.API, timeout=30, transport=transport)
 
     async def _call(self, method: str, url: str, **kw) -> dict:
@@ -168,12 +164,15 @@ class GitHubRepo:
         return sorted({f["filename"] for f in data.get("files", [])} |
                       {f["previous_filename"] for f in data.get("files", []) if f.get("previous_filename")})
 
+
     async def ci_status(self, branch: str, commit: str) -> CiStatus:
+        """Every required workflow (the policy's required_checks) must pass on this exact commit and branch."""
         pending = False
         failed = []
         urls = []
+        checks: dict[str, str] = {}
 
-        for workflow in self.WORKFLOW_FILES:
+        for workflow in self.workflows:
             data = await self._call(
                 "GET",
                 f"/repos/{self.repo}/actions/workflows/{workflow}/runs",
@@ -196,20 +195,53 @@ class GitHubRepo:
 
             if run is None:
                 pending = True
+                checks[workflow] = "missing"
                 continue
 
-            urls.append(run.get("html_url", ""))
+            run_url = run.get("html_url", "")
+            if run_url:
+                urls.append(run_url)
 
             if run.get("status") != "completed":
                 pending = True
+                checks[workflow] = "pending"
                 continue
 
-            if run.get("conclusion") != "success":
-                failed.append({
-                    "workflow": workflow,
-                    "conclusion": run.get("conclusion", "unknown"),
-                    "url": run.get("html_url", ""),
-                })
+            conclusion = run.get("conclusion")
+            checks[workflow] = conclusion or "unknown"
+
+            if conclusion == "success":
+                continue
+
+            failure = {
+                "workflow": workflow,
+                "conclusion": conclusion or "unknown",
+                "url": run_url,
+            }
+
+            # Retrieve failed job details when GitHub provides a run ID.
+            # Missing IDs must not turn a known CI failure into an exception.
+            run_id = run.get("id")
+            if conclusion == "failure" and run_id is not None:
+                jobs_data = await self._call(
+                    "GET",
+                    f"/repos/{self.repo}/actions/runs/{run_id}/jobs",
+                )
+                jobs = jobs_data.get("jobs", [])
+                failure["jobs"] = [
+                    {
+                        "job": job.get("name", "unknown"),
+                        "steps": [
+                            step.get("name", "unknown")
+                            for step in job.get("steps", [])
+                            if step.get("conclusion") == "failure"
+                        ],
+                    }
+                    for job in jobs
+                    if job.get("conclusion") == "failure"
+                ]
+
+            failed.append(failure)
 
         if failed:
             state = "fail"
@@ -221,9 +253,11 @@ class GitHubRepo:
         return CiStatus(
             state=state,
             commit=commit,
-            url=", ".join(url for url in urls if url),
+            url=", ".join(urls),
             failed=failed,
+            checks=checks,
         )
+
 
     async def open_pull_request(self, branch: str, title: str, body: str) -> str:
         pr = await self._call("POST", f"/repos/{self.repo}/pulls",

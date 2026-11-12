@@ -1,32 +1,54 @@
-"""Typed handoffs between the agents, the workflow, the Ops Service and the UI. Version 1.0, frozen at G1.
+"""Typed handoffs between the agents, the workflow, the Ops Service and the UI. Version 1.1 (additive over 1.0).
 
 Change rules: WS4 approves every change, bumps CONTRACT_VERSION, and tells every affected workstream the same day.
 """
+import os
 from datetime import datetime
 from enum import Enum
-from fnmatch import fnmatch
+import re
 from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
-CONTRACT_VERSION = "1.0"
+CONTRACT_VERSION = "1.1"
 DRILL_ID = r"^drill-[A-Za-z0-9-]{1,64}$"
 BRANCH = r"^candidate/drill-[A-Za-z0-9-]{1,64}-[12]$"
 SHA = r"^[0-9a-f]{7,40}$"
 
-# Must match the Engineer endpoint's write allowlist in contracts/mcp-tools.md (WS3).
-ENGINEER_WRITE_PATHS = (
-    "src/order-service/app/secret_provider.py",
-    "src/order-service/tests/test_*.py",
-    "runbooks/*.md",
-)
 # Must match PROTECTED in WS3's guard.py. Nothing may change these, whatever an allowlist says.
 PROTECTED_PATHS = ("journeys/", "infra/", ".github/", "sql/", "policy/", "contracts/", "scripts/",
-                   "src/control-center/", "src/mcp-server/", "src/drill-runner/")
+                   "src/control-center/", "src/mcp-server/", "src/drill-runner/", "src/ops-service/", "referee/",
+                   "docs/", "azure.yaml", ".gitleaks.toml")
+
+
+def engineer_write_paths() -> tuple[str, ...]:
+    """The files a candidate may change: ENGINEER_WRITE_PATHS, comma-separated patterns. It is configuration (the
+    azd value MCP_ENGINEER_WRITE_PATHS, the same list WS3's server and CI's CANDIDATE_ALLOWED_PATHS hold), never a
+    list in this public repo (ADR-004). Unset: nothing is writable."""
+    patterns = tuple(p.strip() for p in os.environ.get("ENGINEER_WRITE_PATHS", "").split(",") if p.strip())
+    for p in patterns:
+        if p.startswith(("/", "*")) or ".." in p or p.startswith(PROTECTED_PATHS):
+            raise ValueError(f"ENGINEER_WRITE_PATHS: {p!r} is unsafe or names a protected path")
+    return patterns
+
+
+def _glob(pattern: str) -> re.Pattern:
+    """WS3's matching rule (guard.py): * stays within one folder, ** crosses folders."""
+    out, i = "", 0
+    while i < len(pattern):
+        if pattern.startswith("**", i):
+            out, i = out + ".*", i + 2
+        elif pattern[i] == "*":
+            out, i = out + "[^/]*", i + 1
+        else:
+            out, i = out + re.escape(pattern[i]), i + 1
+    return re.compile(out + r"\Z")
 
 
 def engineer_may_write(path: str) -> bool:
-    return not path.startswith(PROTECTED_PATHS) and any(fnmatch(path, p) for p in ENGINEER_WRITE_PATHS)
+    if path.startswith(("/", *PROTECTED_PATHS)) or ".." in path.split("/"):
+        return False
+    return any(_glob(p).match(path) for p in engineer_write_paths())
 
 
 class Strict(BaseModel):
@@ -190,7 +212,6 @@ class ChangeReport(Strict):
     @field_validator("commits")
     @classmethod
     def commits_are_shas(cls, value):
-        import re
         if not all(re.fullmatch(SHA, c) for c in value):
             raise ValueError("commits must be git SHAs")
         return value
@@ -243,6 +264,10 @@ class Budgets(Strict):
     approval_timeout_s: int = Field(default=900, ge=30)
     ci_timeout_s: int = Field(default=900, ge=60)
     agent_timeout_s: int = Field(default=600, ge=30)
+    # v1.1: after health shows the fault, the app may still be running on a value it read before the fault (its
+    # refresh interval, SECRET_REFRESH_SECONDS). Without this wait the during-fault check can pass, and the
+    # durability check can restore before the candidate ever met the fault, proving nothing.
+    settle_s: int = Field(default=15, ge=0, le=300)
 
 
 class AutonomyPolicy(Strict):
@@ -254,6 +279,9 @@ class AutonomyPolicy(Strict):
         default_factory=lambda: ["restore_kv_secrets_user", "deploy_candidate_to_twin"])
     min_confidence: float = Field(default=0.6, ge=0, le=1)
     prove_durable: bool = True        # after the fix passes, fault and restore again; the fix must recover alone
+    # v1.1: the CI workflows a candidate's exact commit must pass. Recorded in the policy on drill.start, so the
+    # verdict can be recomputed from the event log alone (ci.result carries each one's conclusion).
+    required_checks: list[str] = Field(default_factory=lambda: ["order-service.yml", "security.yml"], min_length=1)
     budgets: Budgets = Field(default_factory=Budgets)
     expires_at: str
 
@@ -272,9 +300,9 @@ class DrillConfig(Strict):
     scenario: Scenario = "T-01"
     policy: AutonomyPolicy
     base_ref: str = "main"                     # the pinned commit the twin and the candidate start from
-    image_repo: str = Field(
-        pattern=r"^[a-z0-9][a-z0-9.-]*(?::[0-9]{1,5})?/(?:[a-z0-9._-]+/)*order-service$"
-    )
+    # Where CI publishes candidate images, as the Ops Service deploys them: <registry>/order-service
+    image_repo: str = Field(pattern=r"^[a-z0-9][a-z0-9.-]*(?::[0-9]{1,5})?/(?:[a-z0-9._-]+/)*order-service$")
+    target_recovery_s: int = Field(default=1800, ge=60)   # v1.1: the scenario's recovery target (blueprint 1.6)
 
 
 # ---------------------------------------------------------------- the verdict and the evidence package
@@ -293,6 +321,31 @@ class VerdictInputs(Strict):
     def verified(self) -> bool:
         return all([self.authorized_action_completed, self.policy_passed, self.technical_health_passed,
                     self.ci_gates_passed, self.journey_passed, self.persisted_order_assertion_passed])
+
+
+class DebtItem(Strict):
+    """v1.1: one operational-debt finding (blueprint 2.2). Composed by the workflow, never by a model."""
+    kind: Literal["application-resilience", "regression-coverage", "runbook", "knowledge"]
+    finding: str = Field(min_length=1, max_length=400)
+    evidence_refs: list[str] = Field(min_length=1, max_length=8)
+    artifact: str = Field(max_length=300)          # path@branch, PR URL, or package.json
+    residual_risk: str = Field(max_length=400)
+    status: Literal["candidate", "proposed", "recorded", "unresolved"]
+
+
+class Scorecard(Strict):
+    """v1.1, blueprint 1.6: computed only from events.jsonl (including WS1's metrics.orders)."""
+    target_recovery_s: int                         # the scenario target, copied from drill.start
+    verified_recovery_s: float | None              # first fault.inject -> first passing final referee run
+    false_green_s: float | None                    # first wait.ok after the restore -> that passing run
+    failed_orders: int | None                      # metrics.orders failed_total at recovery minus at the fault
+    peak_backlog: int | None
+    orders_per_min_before: float | None
+    orders_per_min_after: float | None
+    decision_latency_s: float                      # sum of approval.decided latency_s
+    policy_denials: int
+    durable_improvements: list[str]                # patch, regression test, runbook, debt record
+    cost: dict[str, float]                         # tokens, est_cost_usd, tool_calls, browser_min, twin_min
 
 
 class EvidencePackage(Strict):
@@ -317,3 +370,7 @@ class EvidencePackage(Strict):
     events_sha256: str
     events_count: int
     residual_risks: list[str]
+    # v1.1, all optional so a v1.0 package still validates
+    scorecard: Scorecard | None = None
+    operational_debt: list[DebtItem] = Field(default_factory=list)
+    next_drill_recommendation: str = ""
