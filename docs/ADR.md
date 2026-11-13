@@ -572,6 +572,25 @@ Status values: Proposed | Accepted | Superseded | Rejected
 - **Implemented in:** PR #48 (`infra/modules/foundry.bicep`, `drill-runner.bicep`, `main.bicep`, `scripts/deploy.sh`,
   `.github/workflows/drill-runner.yml`, `src/drill-runner/`)
 
+## ADR-027: order-service CI runs on runbook changes, so every candidate head commit is checked
+- **Date:** 2026-11-13
+- **Status:** Proposed
+- **Context:** The first live T-01 drill (`drill-20261113-201634`, Autonomous Twin) ended ESCALATED_DEPENDENCY, "CI
+  did not finish in time". The Engineer's last commit on the candidate branch changed only `runbooks/`, and
+  `order-service.yml` runs only for `src/order-service/**`, so it never ran on the branch's head commit. The Drill
+  Runner requires every `required_checks` workflow to pass on that exact commit, and the Ops Service deploys only the
+  `:sha-<full sha>` image that run builds, so the CI gate waited until `ci_timeout_s`. The earlier candidate commits
+  had passed.
+- **Options considered:** (1) add `runbooks/**` to the workflow's paths; (2) drop the paths filter for pushes;
+  (3) have the runner check the last commit that touched the code; (4) tell the Engineer to commit the runbook first.
+- **Decision:** Option 1, for pushes and pull requests. Every folder the Engineer may write to is then under the
+  workflow's paths. (3) breaks the full-SHA rule (the deployed image must be the head commit's); (4) relies on a
+  model's ordering.
+- **Consequences:** A runbook-only merge to `main` also builds and publishes the order-service image (same code, new
+  tag). The fix reaches drills once it is on `main`, because candidate branches start from `BASE_REF`. If the
+  Engineer's write paths ever include another folder, add it here too.
+- **Implemented in:** branch `ws4/start-drill-presets` (`.github/workflows/order-service.yml`)
+
 ## ADR-00N: <short title>
 - **Date:**
 - **Status:** Proposed

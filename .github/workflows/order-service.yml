@@ -7,12 +7,14 @@ name: order-service
 # registry as :sha-<full sha>, the only form the Ops Service deploys, once the acr-push environment is set up for the
 # current lab (scripts/deploy.sh github). A candidate push first runs `candidate-scope`, which fails the run if the
 # candidate changed a file outside its allowed paths (ADR-020). Actions are pinned to full commit SHAs (ADR-011).
+# runbooks/** is in the paths because a candidate's last commit can be its runbook update: the Drill Runner needs this
+# workflow, and its image, on the candidate's exact head commit (ADR-027).
 on:
   push:
     branches: [main, 'candidate/**']
-    paths: ['src/order-service/**', '.github/workflows/order-service.yml', 'scripts/candidate-scope.sh']
+    paths: ['src/order-service/**', 'runbooks/**', '.github/workflows/order-service.yml', 'scripts/candidate-scope.sh']
   pull_request:
-    paths: ['src/order-service/**', '.github/workflows/order-service.yml', 'scripts/candidate-scope.sh']
+    paths: ['src/order-service/**', 'runbooks/**', '.github/workflows/order-service.yml', 'scripts/candidate-scope.sh']
   workflow_dispatch:
 
 permissions:
