@@ -1,4 +1,4 @@
-"""Typed handoffs between the agents, the workflow, the Ops Service and the UI. Version 1.1 (additive over 1.0).
+"""Typed handoffs between the agents, the workflow, the Ops Service and the UI. Version 1.2 (additive over 1.1).
 
 Change rules: WS4 approves every change, bumps CONTRACT_VERSION, and tells every affected workstream the same day.
 """
@@ -6,14 +6,22 @@ import os
 from datetime import datetime
 from enum import Enum
 import re
-from typing import Literal
+from typing import Annotated, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
-CONTRACT_VERSION = "1.1"
+CONTRACT_VERSION = "1.2"
 DRILL_ID = r"^drill-[A-Za-z0-9-]{1,64}$"
 BRANCH = r"^candidate/drill-[A-Za-z0-9-]{1,64}-[12]$"
 SHA = r"^[0-9a-f]{7,40}$"
+
+# Every agent-written string has a length cap, and a field that carries another agent's text (the Engineer quoting
+# the brief's acceptance criteria) allows at least as much as its source (ADR-028). The caps reach the model as
+# field descriptions (agents.strict_schema), because strict structured outputs drop length keywords.
+LONG_TEXT = 800
+Item = Annotated[str, Field(min_length=1, max_length=LONG_TEXT)]
+ShortItem = Annotated[str, Field(min_length=1, max_length=300)]
+PathItem = Annotated[str, Field(min_length=1, max_length=200)]
 
 # Must match PROTECTED in WS3's guard.py. Nothing may change these, whatever an allowlist says.
 PROTECTED_PATHS = ("journeys/", "infra/", ".github/", "sql/", "policy/", "contracts/", "scripts/",
@@ -138,8 +146,8 @@ class RecoveryOption(Strict):
 class RecoveryOptions(Strict):
     """The Planner's first output: what broke and how it could be restored."""
     drill_id: str = Field(pattern=DRILL_ID)
-    hypothesis: str = Field(min_length=1, max_length=600)
-    rejected_hypotheses: list[str] = Field(max_length=5)
+    hypothesis: str = Field(min_length=1, max_length=LONG_TEXT)
+    rejected_hypotheses: list[Item] = Field(max_length=5)
     confidence: float = Field(ge=0, le=1)
     options: list[RecoveryOption] = Field(min_length=1, max_length=2)
     recommended: Literal["broad", "narrow"]
@@ -159,14 +167,14 @@ class RemediationBrief(Strict):
     """The Planner's output after a False Green; the Engineer's complete handoff (blueprint 5.2)."""
     incident_id: str = Field(pattern=DRILL_ID)
     evidence_references: list[EvidenceRef] = Field(min_length=2, max_length=12)
-    supported_hypothesis: str = Field(min_length=1, max_length=800)
-    rejected_hypotheses: list[str] = Field(max_length=5)
-    affected_components: list[str] = Field(min_length=1, max_length=5)
-    required_behavior: str = Field(min_length=1, max_length=800)
-    acceptance_criteria: list[str] = Field(min_length=1, max_length=8)
-    allowed_repository_paths: list[str] = Field(min_length=1, max_length=5)
-    prohibited_changes: list[str] = Field(min_length=1, max_length=8)
-    residual_risks: list[str] = Field(max_length=6)
+    supported_hypothesis: str = Field(min_length=1, max_length=LONG_TEXT)
+    rejected_hypotheses: list[Item] = Field(max_length=5)
+    affected_components: list[PathItem] = Field(min_length=1, max_length=5)
+    required_behavior: str = Field(min_length=1, max_length=LONG_TEXT)
+    acceptance_criteria: list[Item] = Field(min_length=1, max_length=8)
+    allowed_repository_paths: list[PathItem] = Field(min_length=1, max_length=5)
+    prohibited_changes: list[ShortItem] = Field(min_length=1, max_length=8)
+    residual_risks: list[Item] = Field(max_length=6)
     confidence: float = Field(ge=0, le=1)
 
     @model_validator(mode="after")
@@ -192,9 +200,9 @@ class PlannerOutput(Strict):
 
 
 class ChangeMapping(Strict):
-    change: str = Field(min_length=1, max_length=300)
-    evidence_ref: str = Field(min_length=1, max_length=200)
-    acceptance_criterion: str = Field(min_length=1, max_length=300)
+    change: str = Field(min_length=1, max_length=600)
+    evidence_ref: str = Field(min_length=1, max_length=200)                 # as long as EvidenceRef.ref
+    acceptance_criterion: str = Field(min_length=1, max_length=LONG_TEXT)   # as long as a brief criterion
 
 
 class ChangeReport(Strict):
@@ -202,12 +210,12 @@ class ChangeReport(Strict):
     drill_id: str = Field(pattern=DRILL_ID)
     attempt: int = Field(ge=1, le=2)
     branch: str = Field(pattern=BRANCH)
-    commits: list[str] = Field(min_length=1, max_length=10)
-    changed_paths: list[str] = Field(min_length=1, max_length=3)
+    commits: list[Annotated[str, Field(pattern=SHA)]] = Field(min_length=1, max_length=10)
+    changed_paths: list[PathItem] = Field(min_length=1, max_length=3)
     regression_test_path: str = Field(max_length=200)
     runbook_path: str = Field(max_length=200)
     evidence_to_change: list[ChangeMapping] = Field(min_length=1, max_length=10)
-    notes: str = Field(max_length=600)
+    notes: str = Field(max_length=1000)
 
     @field_validator("commits")
     @classmethod

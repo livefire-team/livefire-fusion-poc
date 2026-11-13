@@ -373,7 +373,7 @@
   "description": "evidence/<drill_id>/package.json: the sealed summary of one drill (blueprint 8.1, A.9).",
   "properties": {
     "contract_version": {
-      "default": "1.1",
+      "default": "1.2",
       "title": "Contract Version",
       "type": "string"
     },

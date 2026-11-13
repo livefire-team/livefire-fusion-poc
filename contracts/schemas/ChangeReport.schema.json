@@ -4,7 +4,7 @@
       "additionalProperties": false,
       "properties": {
         "change": {
-          "maxLength": 300,
+          "maxLength": 600,
           "minLength": 1,
           "title": "Change",
           "type": "string"
@@ -16,7 +16,7 @@
           "type": "string"
         },
         "acceptance_criterion": {
-          "maxLength": 300,
+          "maxLength": 800,
           "minLength": 1,
           "title": "Acceptance Criterion",
           "type": "string"
@@ -52,6 +52,7 @@
     },
     "commits": {
       "items": {
+        "pattern": "^[0-9a-f]{7,40}$",
         "type": "string"
       },
       "maxItems": 10,
@@ -61,6 +62,8 @@
     },
     "changed_paths": {
       "items": {
+        "maxLength": 200,
+        "minLength": 1,
         "type": "string"
       },
       "maxItems": 3,
@@ -88,7 +91,7 @@
       "type": "array"
     },
     "notes": {
-      "maxLength": 600,
+      "maxLength": 1000,
       "title": "Notes",
       "type": "string"
     }

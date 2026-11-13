@@ -442,6 +442,11 @@ Status values: not started | in progress | PR open | merged | blocked
 See `docs/ADR.md` (latest: ADR-022).
 
 ## Session log (newest first)
+- 2026-11-13: Second suite on `lf-eh` (after ADR-027): baseline and advisory as designed; autonomous
+  `drill-20261113-213408` ESCALATED_DEPENDENCY, "the engineer returned an invalid contract twice": the brief's
+  criteria (up to 565 characters) didn't fit the change report's 300. Contracts v1.2 (ADR-028) align the caps, show
+  them to the model, and record `agent.output_invalid`. Needs `deploy.sh agents`, a new runner image and `deploy.sh
+  runner` after the merge.
 - 2026-11-13: `scripts/start-drill.sh` starts named drills (`--list`: baseline, supervised, autonomous, advisory,
   broad, quick, kill), waits with `--wait`, and runs `repeat <n>` and `suite [--no-clicks]` one drill at a time.
   First suite on `lf-eh`: `drill-20261113-200733` BASELINE_VERIFIED, `drill-20261113-201038` ESCALATED_POLICY

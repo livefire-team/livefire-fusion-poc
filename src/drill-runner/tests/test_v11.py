@@ -57,7 +57,7 @@ def test_verified_package_carries_scorecard_debt_and_next_drill(tmp_path):
     s = drill(run, store, ["broad", "narrow", "deploy", "open_pr"])
     assert s.terminal == Verdict.VERIFIED, s.reason
     package = json.loads((tmp_path / run.cfg.drill_id / "package.json").read_text())
-    assert package["contract_version"] == "1.1"
+    assert package["contract_version"] == contracts.CONTRACT_VERSION
     card = package["scorecard"]
     assert card["target_recovery_s"] == 1800
     assert card["verified_recovery_s"] is not None and card["false_green_s"] is not None

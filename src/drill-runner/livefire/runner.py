@@ -145,7 +145,7 @@ def build_run(args) -> Run:
         from .github_auth import token_provider_from_env
         ops = HttpOps(os.environ["OPS_URL"], os.environ["OPS_KEY"], cfg.drill_id)
         agents = FoundryAgents(os.environ["FOUNDRY_PROJECT_ENDPOINT"], os.environ["PLANNER_AGENT"],
-                               os.environ["ENGINEER_AGENT"])
+                               os.environ["ENGINEER_AGENT"], log=log)
         repo = GitHubRepo(os.environ["GITHUB_REPO"], token_provider_from_env(),
                           workflows=cfg.policy.required_checks)
         meta = {"agents": {"planner": os.environ["PLANNER_AGENT"], "engineer": os.environ["ENGINEER_AGENT"]},

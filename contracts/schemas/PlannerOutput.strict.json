@@ -16,19 +16,24 @@
           "description": "The Planner's first output: what broke and how it could be restored.",
           "properties": {
             "drill_id": {
-              "type": "string"
+              "type": "string",
+              "description": "Limits: must match ^drill-[A-Za-z0-9-]{1,64}$."
             },
             "hypothesis": {
-              "type": "string"
+              "type": "string",
+              "description": "Limits: 1 to 800 characters."
             },
             "rejected_hypotheses": {
               "items": {
-                "type": "string"
+                "type": "string",
+                "description": "Limits: 1 to 800 characters."
               },
-              "type": "array"
+              "type": "array",
+              "description": "Limits: at most 5 items."
             },
             "confidence": {
-              "type": "number"
+              "type": "number",
+              "description": "Limits: from 0 to 1."
             },
             "options": {
               "items": {
@@ -42,7 +47,8 @@
                     "type": "string"
                   },
                   "label": {
-                    "type": "string"
+                    "type": "string",
+                    "description": "Limits: 1 to 120 characters."
                   },
                   "action": {
                     "enum": [
@@ -52,7 +58,8 @@
                     "type": "string"
                   },
                   "risk": {
-                    "type": "string"
+                    "type": "string",
+                    "description": "Limits: 1 to 300 characters."
                   },
                   "evidence": {
                     "items": {
@@ -72,10 +79,12 @@
                           "type": "string"
                         },
                         "ref": {
-                          "type": "string"
+                          "type": "string",
+                          "description": "Limits: 1 to 200 characters."
                         },
                         "note": {
-                          "type": "string"
+                          "type": "string",
+                          "description": "Limits: 1 to 300 characters."
                         }
                       },
                       "required": [
@@ -85,7 +94,8 @@
                       ],
                       "type": "object"
                     },
-                    "type": "array"
+                    "type": "array",
+                    "description": "Limits: 1 to 6 items."
                   }
                 },
                 "required": [
@@ -97,7 +107,8 @@
                 ],
                 "type": "object"
               },
-              "type": "array"
+              "type": "array",
+              "description": "Limits: 1 to 2 items."
             },
             "recommended": {
               "enum": [
@@ -124,10 +135,12 @@
                     "type": "string"
                   },
                   "ref": {
-                    "type": "string"
+                    "type": "string",
+                    "description": "Limits: 1 to 200 characters."
                   },
                   "note": {
-                    "type": "string"
+                    "type": "string",
+                    "description": "Limits: 1 to 300 characters."
                   }
                 },
                 "required": [
@@ -137,7 +150,8 @@
                 ],
                 "type": "object"
               },
-              "type": "array"
+              "type": "array",
+              "description": "Limits: 1 to 10 items."
             }
           },
           "required": [
@@ -163,7 +177,8 @@
           "description": "The Planner's output after a False Green; the Engineer's complete handoff (blueprint 5.2).",
           "properties": {
             "incident_id": {
-              "type": "string"
+              "type": "string",
+              "description": "Limits: must match ^drill-[A-Za-z0-9-]{1,64}$."
             },
             "evidence_references": {
               "items": {
@@ -183,10 +198,12 @@
                     "type": "string"
                   },
                   "ref": {
-                    "type": "string"
+                    "type": "string",
+                    "description": "Limits: 1 to 200 characters."
                   },
                   "note": {
-                    "type": "string"
+                    "type": "string",
+                    "description": "Limits: 1 to 300 characters."
                   }
                 },
                 "required": [
@@ -196,52 +213,68 @@
                 ],
                 "type": "object"
               },
-              "type": "array"
+              "type": "array",
+              "description": "Limits: 2 to 12 items."
             },
             "supported_hypothesis": {
-              "type": "string"
+              "type": "string",
+              "description": "Limits: 1 to 800 characters."
             },
             "rejected_hypotheses": {
               "items": {
-                "type": "string"
+                "type": "string",
+                "description": "Limits: 1 to 800 characters."
               },
-              "type": "array"
+              "type": "array",
+              "description": "Limits: at most 5 items."
             },
             "affected_components": {
               "items": {
-                "type": "string"
+                "type": "string",
+                "description": "Limits: 1 to 200 characters."
               },
-              "type": "array"
+              "type": "array",
+              "description": "Limits: 1 to 5 items."
             },
             "required_behavior": {
-              "type": "string"
+              "type": "string",
+              "description": "Limits: 1 to 800 characters."
             },
             "acceptance_criteria": {
               "items": {
-                "type": "string"
+                "type": "string",
+                "description": "Limits: 1 to 800 characters."
               },
-              "type": "array"
+              "type": "array",
+              "description": "Limits: 1 to 8 items."
             },
             "allowed_repository_paths": {
               "items": {
-                "type": "string"
+                "type": "string",
+                "description": "Limits: 1 to 200 characters."
               },
-              "type": "array"
+              "type": "array",
+              "description": "Limits: 1 to 5 items."
             },
             "prohibited_changes": {
               "items": {
-                "type": "string"
+                "type": "string",
+                "description": "Limits: 1 to 300 characters."
               },
-              "type": "array"
+              "type": "array",
+              "description": "Limits: 1 to 8 items."
             },
             "residual_risks": {
               "items": {
-                "type": "string"
+                "type": "string",
+                "description": "Limits: 1 to 800 characters."
               },
-              "type": "array"
+              "type": "array",
+              "description": "Limits: at most 6 items."
             },
             "confidence": {
-              "type": "number"
+              "type": "number",
+              "description": "Limits: from 0 to 1."
             }
           },
           "required": [

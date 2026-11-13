@@ -99,13 +99,15 @@
           "type": "string"
         },
         "hypothesis": {
-          "maxLength": 600,
+          "maxLength": 800,
           "minLength": 1,
           "title": "Hypothesis",
           "type": "string"
         },
         "rejected_hypotheses": {
           "items": {
+            "maxLength": 800,
+            "minLength": 1,
             "type": "string"
           },
           "maxItems": 5,
@@ -183,6 +185,8 @@
         },
         "rejected_hypotheses": {
           "items": {
+            "maxLength": 800,
+            "minLength": 1,
             "type": "string"
           },
           "maxItems": 5,
@@ -191,6 +195,8 @@
         },
         "affected_components": {
           "items": {
+            "maxLength": 200,
+            "minLength": 1,
             "type": "string"
           },
           "maxItems": 5,
@@ -206,6 +212,8 @@
         },
         "acceptance_criteria": {
           "items": {
+            "maxLength": 800,
+            "minLength": 1,
             "type": "string"
           },
           "maxItems": 8,
@@ -215,6 +223,8 @@
         },
         "allowed_repository_paths": {
           "items": {
+            "maxLength": 200,
+            "minLength": 1,
             "type": "string"
           },
           "maxItems": 5,
@@ -224,6 +234,8 @@
         },
         "prohibited_changes": {
           "items": {
+            "maxLength": 300,
+            "minLength": 1,
             "type": "string"
           },
           "maxItems": 8,
@@ -233,6 +245,8 @@
         },
         "residual_risks": {
           "items": {
+            "maxLength": 800,
+            "minLength": 1,
             "type": "string"
           },
           "maxItems": 6,

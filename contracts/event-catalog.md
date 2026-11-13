@@ -1,4 +1,9 @@
-# Event catalog, v1.1
+# Event catalog, v1.2
+
+v1.2 (2026-11-13, additive, ADR-028): new `agent.output_invalid`; `verdict.reason` for an agent's second invalid
+output names the first failing field. Agent outputs (`PlannerOutput`, `ChangeReport`) cap every list item's length,
+and `ChangeReport` allows the brief's full text: `evidence_to_change[].acceptance_criterion` 800 (was 300),
+`change` 600 (was 300), `notes` 1000 (was 600).
 
 v1.1 (2026-11-12, additive): `drill.start` adds `target_recovery_s` and `agent_kind`; `ci.result` adds `checks`;
 `package.ready` adds the scorecard summary, the operational-debt counts and the next-drill recommendation; new
@@ -30,6 +35,7 @@ Events the Drill Runner writes:
 | usage | ok | agent, tokens, input_tokens, output_tokens, tool_calls, est_cost_usd, response_id |
 | verdict | terminal state | reason, inputs, attempts, tokens, est_cost_usd |
 | package.ready | ok, error | path, sha256, events_sha256; v1.1: verified_recovery_s, target_recovery_s, operational_debt ({kind: count}), next_drill_recommendation |
+| agent.output_invalid | invalid | v1.2: agent, attempt (1, or 2 for the repair turn), response_id, errors [{loc, type, msg}] (at most 10; field paths and rule messages, never the output's content), error_count. A second invalid output ends the drill ESCALATED_DEPENDENCY |
 | guardrail.blocked | blocked | v1.1: agent, filter (for example `indirect_attack`), response_id. Prompt Shields on the model deployment refused a call; the drill ends ESCALATED_SECURITY |
 | package.pr | ok, rejected, no_decision, error | url, branch, approver |
 | drill.end | ok, cleanup_failed | terminal, cleanup, pr_url |

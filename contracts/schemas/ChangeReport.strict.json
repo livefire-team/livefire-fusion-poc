@@ -3,44 +3,56 @@
   "description": "The Engineer's output: what it changed on the candidate branch, and why.",
   "properties": {
     "drill_id": {
-      "type": "string"
+      "type": "string",
+      "description": "Limits: must match ^drill-[A-Za-z0-9-]{1,64}$."
     },
     "attempt": {
-      "type": "integer"
+      "type": "integer",
+      "description": "Limits: from 1 to 2."
     },
     "branch": {
-      "type": "string"
+      "type": "string",
+      "description": "Limits: must match ^candidate/drill-[A-Za-z0-9-]{1,64}-[12]$."
     },
     "commits": {
       "items": {
-        "type": "string"
+        "type": "string",
+        "description": "Limits: must match ^[0-9a-f]{7,40}$."
       },
-      "type": "array"
+      "type": "array",
+      "description": "Limits: 1 to 10 items."
     },
     "changed_paths": {
       "items": {
-        "type": "string"
+        "type": "string",
+        "description": "Limits: 1 to 200 characters."
       },
-      "type": "array"
+      "type": "array",
+      "description": "Limits: 1 to 3 items."
     },
     "regression_test_path": {
-      "type": "string"
+      "type": "string",
+      "description": "Limits: at most 200 characters."
     },
     "runbook_path": {
-      "type": "string"
+      "type": "string",
+      "description": "Limits: at most 200 characters."
     },
     "evidence_to_change": {
       "items": {
         "additionalProperties": false,
         "properties": {
           "change": {
-            "type": "string"
+            "type": "string",
+            "description": "Limits: 1 to 600 characters."
           },
           "evidence_ref": {
-            "type": "string"
+            "type": "string",
+            "description": "Limits: 1 to 200 characters."
           },
           "acceptance_criterion": {
-            "type": "string"
+            "type": "string",
+            "description": "Limits: 1 to 800 characters."
           }
         },
         "required": [
@@ -50,10 +62,12 @@
         ],
         "type": "object"
       },
-      "type": "array"
+      "type": "array",
+      "description": "Limits: 1 to 10 items."
     },
     "notes": {
-      "type": "string"
+      "type": "string",
+      "description": "Limits: at most 1000 characters."
     }
   },
   "required": [
