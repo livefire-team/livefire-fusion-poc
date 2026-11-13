@@ -189,3 +189,75 @@ def test_start_drill_list_names_every_drill(sandbox):
     assert result.returncode == 0
     for drill in ("baseline", "supervised", "autonomous", "advisory", "broad", "quick", "kill"):
         assert f"\n{drill} " in result.stdout
+
+
+# ---- --wait: a drill passes only if its own event log shows it ended exactly as designed ----
+
+def ev(action, result="ok", **details):
+    return {"action": action, "result": result, "details": details}
+
+
+def end(terminal, cleanup="ok", reason=""):
+    return [ev("verdict", terminal, reason=reason), ev("drill.end", terminal=terminal, cleanup=cleanup)]
+
+
+BROAD = ev("recover.broad", "denied", code="AuthorizationFailed")
+PERSON = ev("approval.decided", option_id="narrow", method="passcode")
+TIMEOUT = ev("approval.decided", "timeout", option_id="timeout", method="timeout")
+
+
+def wait_az(events, status="Succeeded"):
+    """A fake az that also reports the execution's status and serves this drill's event log."""
+    return az_body().replace('esac\n', f'''  "containerapp job execution show"*) echo {status} ;;
+  "storage blob download"*)
+    for a in "$@"; do [ "$prev" = -f ] && cp EVENTS "$a"; prev="$a"; done ;;
+esac
+''', 1)
+
+
+def run_wait(sandbox, drill, events, status="Succeeded"):
+    (sandbox / "events.jsonl").write_text("".join(json.dumps(e) + "\n" for e in events))
+    values = VALUES + 'EVIDENCE_BLOB_URL="https://stlftest.blob.core.windows.net/evidence"\n'
+    az = wait_az(events, status).replace("EVENTS", (sandbox / "events.jsonl").as_posix())
+    os.environ["POLL_S"] = "0"
+    try:
+        return run(sandbox, "start-drill.sh", drill, "--wait", az=az, values=values)
+    finally:
+        del os.environ["POLL_S"]
+
+
+@pytest.mark.parametrize("drill,events,status", [
+    ("baseline", end("BASELINE_VERIFIED"), "Succeeded"),
+    ("autonomous", [BROAD] + end("VERIFIED"), "Succeeded"),
+    ("quick", [BROAD] + end("VERIFIED"), "Succeeded"),
+    ("supervised", [PERSON, PERSON] + end("VERIFIED"), "Succeeded"),
+    ("broad", [PERSON, BROAD, PERSON, PERSON] + end("VERIFIED"), "Succeeded"),
+    ("advisory", end("ESCALATED_POLICY", reason="Advisory policy does not allow the workflow to execute recovery"),
+     "Failed"),
+    ("kill", [ev("kill.requested", by="Tester")] + end("KILLED"), "Failed"),
+])
+def test_wait_passes_a_drill_that_ended_as_designed(sandbox, drill, events, status):
+    result = run_wait(sandbox, drill, events, status)
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert "as designed" in result.stdout and result.stdout.rstrip().endswith("RESULT rc=0")
+
+
+@pytest.mark.parametrize("drill,events,why", [
+    ("autonomous", [BROAD] + end("ESCALATED_DEPENDENCY", reason="CI did not finish in time"), "designed to end VERIFIED"),
+    ("autonomous", end("VERIFIED"), "broad option was not tried and refused"),
+    ("autonomous", [BROAD] + end("VERIFIED", cleanup="error"), "twin was not put back"),
+    ("advisory", end("ESCALATED_POLICY", reason="the only option offered was denied by policy"), "another reason"),
+    ("advisory", end("ESCALATED_DEPENDENCY", reason="Ops action reset_twin returned error"), "designed to end"),
+    ("kill", end("ESCALATED_BUDGET"), "designed to end KILLED"),
+    ("supervised", [TIMEOUT] + end("ESCALATED_POLICY"), "timed out"),
+    ("broad", [PERSON, PERSON] + end("VERIFIED"), "broad option was not tried and refused"),
+])
+def test_wait_fails_a_drill_that_did_not_end_as_designed(sandbox, drill, events, why):
+    result = run_wait(sandbox, drill, events, "Failed")
+    assert result.returncode == 3, result.stdout + result.stderr
+    assert why in result.stderr and "not as designed" in result.stdout
+
+
+def test_wait_says_when_it_cannot_read_the_event_log(sandbox):
+    result = run_wait(sandbox, "autonomous", [BROAD], "Failed")              # no drill.end
+    assert result.returncode == 4 and "no drill.end" in result.stderr

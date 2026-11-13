@@ -88,7 +88,9 @@ is missing, rather than fail the lab's deployment.
 5. **A drill.** `scripts/start-drill.sh --list` shows the named drills (`baseline`, `supervised`, `autonomous`,
    `advisory`, `broad`, `quick`, `kill`); start one with `scripts/start-drill.sh <drill>`, then open the printed
    Control Center link. `scripts/start-drill.sh suite` runs every drill once, one at a time, and asks before each one
-   that needs a person at the Control Center (`--no-clicks` skips those). `scripts/start-drill.sh repeat 10` runs ten Autonomous Twin drills one after another (the
+   that needs a person at the Control Center (`--no-clicks` skips those). With `--wait` (and so in `suite` and `repeat`)
+   a drill passes only if its event log shows it ended exactly as designed: its terminal state (advisory
+   ESCALATED_POLICY, kill KILLED, the rest VERIFIED or BASELINE_VERIFIED), the twin put back, and its own marks. `scripts/start-drill.sh repeat 10` runs ten Autonomous Twin drills one after another (the
    repeatability evaluation). Live, the scenario is T-00, T-01, T-02 (`broad`) or T-09 (`kill`); the others change
    behaviour only on stubs.
 
