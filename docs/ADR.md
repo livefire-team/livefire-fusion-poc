@@ -591,6 +591,28 @@ Status values: Proposed | Accepted | Superseded | Rejected
   Engineer's write paths ever include another folder, add it here too.
 - **Implemented in:** branch `ws4/start-drill-presets` (`.github/workflows/order-service.yml`)
 
+## ADR-028: Agent output limits match across handoffs, reach the model, and are recorded when broken
+- **Date:** 2026-11-13
+- **Status:** Proposed
+- **Context:** Drill `drill-20261113-213408` (Autonomous Twin) ended ESCALATED_DEPENDENCY, "the engineer returned an
+  invalid contract twice", after the Engineer had pushed a fix, a regression test and a runbook update. The Planner's
+  brief had acceptance criteria of 339 to 565 characters (the brief had no per-item cap), and the Engineer must map
+  each change to a criterion in a field capped at 300. The strict schema Foundry enforces drops length keywords, so
+  the model never saw a cap, and the runner kept no record of which field failed.
+- **Options considered:** (1) raise the cap only; (2) have the Engineer cite criteria by index (a contract shape
+  change for WS5); (3) align the caps, show every cap to the model, and record failures.
+- **Decision:** Option 3, contracts v1.2 (additive). Every agent-written list item has a cap; a field that carries
+  another agent's text allows at least its source's cap (`acceptance_criterion` 800 = a brief criterion);
+  `strict_schema` writes each field's limits into its description ("Limits: 1 to 800 characters.") so strict mode
+  stays valid; the repair turn tells the model to keep them. Each rejected output writes `agent.output_invalid`
+  (field paths and rule messages, no content), and the final reason names the first failing field. A test fails if
+  any free-text field or list reaches the model without a visible limit.
+- **Consequences:** New agent versions are needed (`scripts/deploy.sh agents`: the schema's descriptions changed) and
+  a new runner image. A Planner that writes past the new caps now gets a repair turn instead of passing a brief the
+  Engineer can't quote.
+- **Implemented in:** branch `ws4/agent-contract-limits` (`src/drill-runner/livefire/contracts.py`, `agents.py`,
+  `runner.py`, `agents/*.md`, `contracts/schemas/`, `tests/test_v12.py`)
+
 ## ADR-00N: <short title>
 - **Date:**
 - **Status:** Proposed
