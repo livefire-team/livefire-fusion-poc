@@ -442,6 +442,12 @@ Status values: not started | in progress | PR open | merged | blocked
 See `docs/ADR.md` (latest: ADR-022).
 
 ## Session log (newest first)
+- 2026-11-13: `scripts/start-drill.sh` starts named drills (`--list`: baseline, supervised, autonomous, advisory,
+  broad, quick, kill), waits with `--wait`, and runs `repeat <n>` and `suite [--no-clicks]` one drill at a time.
+  First suite on `lf-eh`: `drill-20261113-200733` BASELINE_VERIFIED, `drill-20261113-201038` ESCALATED_POLICY
+  (Advisory, as designed), `drill-20261113-201634` ESCALATED_DEPENDENCY: the agents investigated, restored narrowly
+  and pushed a candidate, but order-service CI never ran on its runbook-only head commit. Fixed by ADR-027
+  (`runbooks/**` in `order-service.yml`'s paths); takes effect for drills once merged to `main`.
 - 2026-11-12: WS4 deployed to `lf-eh` from `main` (`f40239c`): Foundry `ais-lf-wwssez2am6724` / `proj-livefire`,
   `gpt-5.1` 2025-11-13 (NoAutoUpgrade) with Prompt Shields `lf-shields` (Jailbreak and Indirect Attack blocking), both
   MCP connections, agents `lf-planner:2` and `lf-engineer:1` (verify all ok), `job-drill-runner` with its four roles.
