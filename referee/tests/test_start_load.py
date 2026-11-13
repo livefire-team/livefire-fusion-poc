@@ -146,3 +146,46 @@ def test_start_drill_still_prints_the_drill_when_the_load_cannot_start(sandbox):
     assert result.returncode == 0, result.stdout + result.stderr
     assert "WARNING: no load for this drill" in result.stderr
     assert "started: Supervised, T-01" in result.stdout and "Watch it:" in result.stdout
+
+
+def env_of(sandbox):
+    runner = json.loads((sandbox / "body-job-drill-runner.json").read_text())
+    return {e["name"]: e.get("value") or e.get("secretRef") for e in runner["containers"][0]["env"]}
+
+
+@pytest.mark.parametrize("drill,mode,scenario,prove", [
+    ("baseline", "Supervised", "T-00", "1"), ("supervised", "Supervised", "T-01", "1"),
+    ("autonomous", "Autonomous Twin", "T-01", "1"), ("advisory", "Advisory", "T-01", "1"),
+    ("broad", "Supervised", "T-02", "1"), ("quick", "Autonomous Twin", "T-01", "0"),
+    ("kill", "Supervised", "T-09", "1")])
+def test_start_drill_named_drills_set_mode_scenario_and_durability(sandbox, drill, mode, scenario, prove):
+    result = run(sandbox, "start-drill.sh", drill)
+    assert result.returncode == 0, result.stdout + result.stderr
+    env = env_of(sandbox)
+    assert (env["MODE"], env["SCENARIO"], env["PROVE_DURABLE"]) == (mode, scenario, prove)
+    assert f"started: {mode}, {scenario}" in result.stdout and f"({drill} drill)" in result.stdout
+
+
+def test_start_drill_keeps_the_template_and_its_secret_references(sandbox):
+    (sandbox / "template.json").write_text(json.dumps({**TEMPLATE, "env": TEMPLATE["env"] + [
+        {"name": "MODE", "value": "Supervised"}, {"name": "PROVE_DURABLE", "value": "1"}]}))
+    assert run(sandbox, "start-drill.sh", "quick").returncode == 0
+    runner = json.loads((sandbox / "body-job-drill-runner.json").read_text())
+    names = [e["name"] for e in runner["containers"][0]["env"]]
+    assert sorted(names) == sorted(set(names))                       # each value once
+    assert env_of(sandbox)["APPLICATIONINSIGHTS_CONNECTION_STRING"] == "appinsights-connection-string"
+
+
+@pytest.mark.parametrize("args", [("Supervised", "T-05"), ("nope",), ("repeat", "2", "supervised"),
+                                  ("repeat", "x"), ("suite", "--bogus")])
+def test_start_drill_refuses_bad_requests_before_calling_azure(sandbox, args):
+    result = run(sandbox, "start-drill.sh", *args)
+    assert result.returncode == 2, result.stdout + result.stderr
+    assert not any(c.startswith("az rest") for c in calls(sandbox))
+
+
+def test_start_drill_list_names_every_drill(sandbox):
+    result = run(sandbox, "start-drill.sh", "--list")
+    assert result.returncode == 0
+    for drill in ("baseline", "supervised", "autonomous", "advisory", "broad", "quick", "kill"):
+        assert f"\n{drill} " in result.stdout

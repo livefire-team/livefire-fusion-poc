@@ -164,7 +164,10 @@ else
   echo "note: no scripts/start-load.sh yet (WS1): this drill's scorecard has no order metrics"
 fi
 
-echo "$DRILL_ID started: $NAME ($MODE, $SCENARIO$([ "$PROVE" = 0 ] && echo ', no durability proof'))"
+label="$MODE, $SCENARIO"
+[ "$PROVE" = 1 ] || label="$label, no durability proof"
+[ "$NAME" = "$MODE" ] || label="$label ($NAME drill)"
+echo "$DRILL_ID started: $label"
 [ -z "$HINT" ] || echo "To do:    $HINT"
 echo "Watch it: ${CONTROL_CENTER_URL:-<control center>}/drills/$DRILL_ID"
 echo "Logs:     az containerapp job logs show -n $JOB -g $CONTROL_RG --container drill-runner --follow"
