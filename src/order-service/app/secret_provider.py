@@ -61,21 +61,26 @@ class SecretProvider:
         self._refresh = refresh_seconds
         self._value = None
         self._fetched_at = 0.0
-        self._failed = False
+        self._failure_until = 0.0
         self._lock = threading.Lock()
 
     def get(self) -> str:
         with self._lock:
-            if self._failed:
+            now = time.monotonic()
+            if now < self._failure_until:
                 raise SecretUnavailable("secret unavailable (cached failure)")
-            if self._value is not None and time.monotonic() - self._fetched_at < self._refresh:
+            if self._value is not None and now - self._fetched_at < self._refresh:
                 return self._value
             try:
-                self._value = self._fetch()
-                self._fetched_at = time.monotonic()
-                return self._value
+                value = self._fetch()
             except Exception as exc:
-                # Cache auth failures so we stop hammering Key Vault after it refuses us.
+                # Cache auth failures for a short window so we stop hammering Key Vault after it refuses us.
                 if self._value is not None and is_auth_failure(exc):
-                    self._failed = True
+                    self._failure_until = now + self._refresh
                 raise SecretUnavailable(str(exc)) from exc
+            else:
+                self._value = value
+                self._fetched_at = now
+                # Any successful fetch clears previous auth failures.
+                self._failure_until = 0.0
+                return self._value
