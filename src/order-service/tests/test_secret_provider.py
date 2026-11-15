@@ -37,8 +37,9 @@ def test_refreshes_after_window():
 
 
 def test_auth_failure_without_cached_value_is_backed_off_and_recovers(monkeypatch):
-    # First call sees an auth failure; subsequent calls within the refresh window
-    # should not hammer the source, but a later call should retry and succeed.
+    # First call sees an auth failure; subsequent calls in the short backoff
+    # window should not hammer the source, and a later call should retry and
+    # succeed once access is restored.
     src = Source(PermissionError("403"), "pw1")
     provider = SecretProvider(src, refresh_seconds=60)
 
@@ -53,13 +54,13 @@ def test_auth_failure_without_cached_value_is_backed_off_and_recovers(monkeypatc
         provider.get()
     assert src.calls == 1
 
-    fake_time[0] = 1.0
+    fake_time[0] = 0.5
     with pytest.raises(SecretUnavailable):
         provider.get()
     # Still only one Key Vault call during the backoff window.
     assert src.calls == 1
 
-    fake_time[0] = 61.0
+    fake_time[0] = 2.0
     assert provider.get() == "pw1"
     assert src.calls == 2
 
@@ -90,7 +91,7 @@ def test_auth_failure_after_cached_value_uses_cached_and_recovers(monkeypatch):
 
     # During the backoff window we keep serving the cached value without
     # further calls to the source.
-    fake_time[0] = 62.0
+    fake_time[0] = 61.5
     assert provider.get() == "pw1"
     assert src.calls == 2
 
