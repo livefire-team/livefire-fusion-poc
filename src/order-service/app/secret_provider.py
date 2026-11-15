@@ -61,21 +61,36 @@ class SecretProvider:
         self._refresh = refresh_seconds
         self._value = None
         self._fetched_at = 0.0
-        self._failed = False
+        self._auth_failure = False
         self._lock = threading.Lock()
 
     def get(self) -> str:
         with self._lock:
-            if self._failed:
-                raise SecretUnavailable("secret unavailable (cached failure)")
-            if self._value is not None and time.monotonic() - self._fetched_at < self._refresh:
+            now = time.monotonic()
+
+            # Serve a healthy cached value inside the refresh window.
+            if self._value is not None and not self._auth_failure and now - self._fetched_at < self._refresh:
                 return self._value
+
+            # After an auth failure, limit retries so we don't hammer Key Vault.
+            if self._auth_failure and now - self._fetched_at < self._refresh:
+                if self._value is not None:
+                    # Continue serving the last known good secret while backing off.
+                    return self._value
+                raise SecretUnavailable("secret unavailable (recent auth failure)")
+
             try:
-                self._value = self._fetch()
-                self._fetched_at = time.monotonic()
+                value = self._fetch()
+                self._value = value
+                self._fetched_at = now
+                self._auth_failure = False
                 return self._value
             except Exception as exc:
-                # Cache auth failures so we stop hammering Key Vault after it refuses us.
-                if self._value is not None and is_auth_failure(exc):
-                    self._failed = True
+                if is_auth_failure(exc):
+                    # Remember the failure time so we stop hammering Key Vault after it refuses us.
+                    self._auth_failure = True
+                    self._fetched_at = now
+                    if self._value is not None:
+                        # Keep serving the cached secret and let a later refresh retry.
+                        return self._value
                 raise SecretUnavailable(str(exc)) from exc
