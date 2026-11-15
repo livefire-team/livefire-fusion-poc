@@ -10,6 +10,7 @@ from azure.keyvault.secrets import SecretClient
 
 SECRET_SOURCE = os.environ.get("SECRET_SOURCE", "keyvault")   # "keyvault" or "file:<path>" for local runs
 SECRET_NAME = os.environ.get("SECRET_NAME", "db-password")
+AUTH_FAILURE_BACKOFF_SECONDS = 1.0
 
 
 class SecretUnavailable(Exception):
@@ -73,7 +74,7 @@ class SecretProvider:
                 return self._value
 
             # After an auth failure, limit retries so we don't hammer Key Vault.
-            if self._auth_failure and now - self._fetched_at < self._refresh:
+            if self._auth_failure and now - self._fetched_at < AUTH_FAILURE_BACKOFF_SECONDS:
                 if self._value is not None:
                     # Continue serving the last known good secret while backing off.
                     return self._value
