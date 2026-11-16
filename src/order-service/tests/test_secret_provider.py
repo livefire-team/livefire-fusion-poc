@@ -41,3 +41,20 @@ def test_first_read_failure_is_not_cached():
     with pytest.raises(SecretUnavailable):
         provider.get()
     assert provider.get() == "pw1"
+
+
+def test_recovers_after_auth_failure_without_restart():
+    src = Source("pw1", PermissionError("403"), "pw2")
+    provider = SecretProvider(src, refresh_seconds=0)
+
+    # Initial successful read caches the secret.
+    assert provider.get() == "pw1"
+
+    # An auth failure surfaces as SecretUnavailable.
+    with pytest.raises(SecretUnavailable):
+        provider.get()
+
+    # Once access is restored, the provider retries and returns the secret again
+    # without requiring a process restart.
+    assert provider.get() == "pw2"
+    assert src.calls == 3
