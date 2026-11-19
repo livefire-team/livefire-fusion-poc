@@ -1,5 +1,5 @@
 # Order service: Key Vault access recovery
-Version 1. Owner: order-service team.
+Version 2. Owner: order-service team.
 
 ## When to use
 Orders fail and the order service logs `SecretUnavailable`, or
@@ -15,4 +15,9 @@ Orders fail and the order service logs `SecretUnavailable`, or
    --assignee-object-id <app-principal-id> --assignee-principal-type ServicePrincipal`
 4. Wait until `/health/dependencies` reports `"keyvault":"ok"`.
    Role changes can take several minutes.
-5. Recovery is complete when `/health/dependencies` returns HTTP 200.
+5. When `/health/dependencies` returns HTTP 200 with body `{"keyvault":"ok","sql":"ok"}`,
+   run a synthetic order-placement check (for example, the referee journey or
+   a `POST /api/orders` call with a valid `sku`).
+6. Recovery is complete only when both `/health/dependencies` reports
+   `"keyvault":"ok"` and the order-placement check returns HTTP 201
+   with a non-empty confirmation.
